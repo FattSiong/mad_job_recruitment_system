@@ -1,20 +1,23 @@
 import 'package:flutter/material.dart';
+import 'core/screens/temp_main_screen.dart';
 
 void main() {
-  runApp(const MainApp());
+  runApp(const RecruitmentApp());
 }
 
-class MainApp extends StatelessWidget {
-  const MainApp({super.key});
+class RecruitmentApp extends StatelessWidget {
+  const RecruitmentApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      home: Scaffold(
-        body: Center(
-          child: Text('Tiong Fatt Siong'),
-        ),
+    return MaterialApp(
+      title: 'Recruitment Platform',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        useMaterial3: true,
       ),
+      // Point the home property to your new temporary main screen
+      home: const TempMainScreen(),
     );
   }
 }
