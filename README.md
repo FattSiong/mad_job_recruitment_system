@@ -1,1 +1,0 @@
-# MAD_job_recruitment_system
