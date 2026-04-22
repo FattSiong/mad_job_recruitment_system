@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/constants/supabase_constants.dart';
-import 'core/screens/temp_main_screen.dart';
+import 'shared_widgets/auth_gate.dart';
 
 // Change main() to be an async function
 Future<void> main() async {
@@ -29,7 +29,7 @@ class RecruitmentApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
-      home: const TempMainScreen(),
+      home: const AuthGate(),
     );
   }
 }

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../../services/auth_service.dart';
+import '../../../core/screens/temp_main_screen.dart';
 import 'create_job_screen.dart'; // Import the screen we just made
 import 'register_company_screen.dart';
+
 
 class EmployerDashboard extends StatelessWidget {
   const EmployerDashboard({super.key});
@@ -27,10 +30,25 @@ class EmployerDashboard extends StatelessWidget {
                 },
                 child: const Text('Register Company'),
               ),
+              IconButton(
+                icon: const Icon(Icons.logout),
+                onPressed: () async {
+                  // 1. Tell Supabase to destroy the saved session
+                  await AuthService().signOut();
+
+                  // 2. Kick them back to the login screen and clear the route history
+                  if (context.mounted) {
+                    Navigator.of(context).pushAndRemoveUntil(
+                      // MaterialPageRoute(builder: (context) => const LoginScreen()),
+                      MaterialPageRoute(builder: (context) => const TempMainScreen()),
+                          (Route<dynamic> route) => false,
+                    );
+                  }
+                },
+              )
             ],
           ),
         ),
-      // Add this button to navigate to the creation form!
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           Navigator.push(
