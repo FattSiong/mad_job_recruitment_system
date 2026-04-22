@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'temp_auth_screen.dart';
+import '../../shared_widgets/login_screen.dart';
+import '../../modules/community/screens/community_dashboard.dart';
 
 class TempMainScreen extends StatelessWidget {
   const TempMainScreen({super.key});
@@ -7,9 +8,7 @@ class TempMainScreen extends StatelessWidget {
   void _goToAuth(BuildContext context, String role) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => TempAuthScreen(selectedRole: role),
-      ),
+      MaterialPageRoute(builder: (context) => LoginScreen()),
     );
   }
 
@@ -42,7 +41,12 @@ class TempMainScreen extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             ElevatedButton(
-              onPressed: () => _goToAuth(context, 'Community'),
+              onPressed: () => {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => CommunityDashboard()),
+                ),
+              },
               child: const Text('Go to Community Auth'),
             ),
           ],
