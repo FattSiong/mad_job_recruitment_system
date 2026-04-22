@@ -35,61 +35,6 @@ class _RegisterCompanyScreenState extends State<RegisterCompanyScreen> {
     }
   }
 
-  // void _previewDocument(BuildContext context) {
-  //   if (_selectedFile == null) return;
-  //
-  //   // 1. Grab the file path and make it lowercase to check the extension safely
-  //   final filePath = _selectedFile!.path.toLowerCase();
-  //
-  //   // 2. Determine what type of file we are dealing with
-  //   final isImage =
-  //       filePath.endsWith('.jpg') ||
-  //       filePath.endsWith('.jpeg') ||
-  //       filePath.endsWith('.png');
-  //   final isPdf = filePath.endsWith('.pdf');
-  //
-  //   showDialog(
-  //     context: context,
-  //     builder: (context) {
-  //       return AlertDialog(
-  //         title: const Text('Document Preview'),
-  //         content: SizedBox(
-  //           width: double.maxFinite,
-  //           height: MediaQuery.of(context).size.height * 0.6,
-  //           // 3. Show the correct widget based on the file type!
-  //           child: isImage
-  //               ? Image.file(
-  //                   _selectedFile!,
-  //                   fit: BoxFit
-  //                       .contain, // Ensures the image fits inside the box without stretching
-  //                 )
-  //               : isPdf
-  //               // 👉 CHANGED HERE: We read the file into raw bytes immediately
-  //               ? SfPdfViewer.memory(
-  //                   _selectedFile!.readAsBytesSync(),
-  //                   onDocumentLoadFailed:
-  //                       (PdfDocumentLoadFailedDetails details) {
-  //                         print('🔥🔥🔥 PDF Load Error: ${details.error}');
-  //                       },
-  //                 )
-  //               : const Center(
-  //                   child: Text(
-  //                     'Unsupported file format.\nPlease select a PDF, JPG, or PNG.',
-  //                     textAlign: TextAlign.center,
-  //                   ),
-  //                 ),
-  //         ),
-  //         actions: [
-  //           TextButton(
-  //             onPressed: () => Navigator.pop(context),
-  //             child: const Text('Close'),
-  //           ),
-  //         ],
-  //       );
-  //     },
-  //   );
-  // }
-
   void _previewDocument(BuildContext context) {
     if (_selectedFile == null) return;
 
