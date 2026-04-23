@@ -1,8 +1,10 @@
+import 'package:flutter/cupertino.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/company_model.dart';
 import '../models/job_model.dart';
 import '../models/company_member_model.dart';
 import 'dart:io';
+import '../core/constants/table_constants.dart';
 
 class EmployerService {
   // Get the single instance of our Supabase client
@@ -16,7 +18,7 @@ class EmployerService {
       // 2. Insert the JSON version of our Dart model
       // 3. .select() asks Supabase to hand the newly created row back to us
       final response = await _supabase
-          .from('Job') // Make sure this matches your exact table name in Supabase
+          .from(TableConstants.job) // Make sure this matches your exact table name in Supabase
           .insert(newJob.toJson())
           .select()
           .single(); // We only expect one row back
@@ -40,7 +42,7 @@ class EmployerService {
     try {
       // 1. Insert the company and get the generated row back
       final response = await _supabase
-          .from('Company')
+          .from(TableConstants.company)
           .insert(newCompany.toJson())
           .select()
           .single();
@@ -56,7 +58,7 @@ class EmployerService {
         );
 
         await _supabase
-            .from('CompanyMember')
+            .from(TableConstants.companyMember)
             .insert(newMember.toJson());
       }
 
@@ -91,6 +93,47 @@ class EmployerService {
     } catch (e) {
       print('Error uploading document: $e');
       return null;
+    }
+  }
+
+  /// Fetches companies based on the user's role.
+  /// Admins see all companies. Employers only see their own.
+  Future<List<CompanyModel>> getCompanies(String userId, String role) async {
+    try {
+      if (role == 'admin') {
+        // Admins fetch everything to moderate
+        final response = await _supabase
+            .from(TableConstants.company)
+            .select()
+            .order('createdAt', ascending: false); // Optional: newest first
+
+        return (response as List).map((json) => CompanyModel.fromJson(json)).toList();
+
+      } else if (role == 'employer') {
+        // 1. Find all company IDs this specific employer belongs to
+        final memberResponse = await _supabase
+            .from(TableConstants.companyMember)
+            .select('companyID')
+            .eq('employerID', userId);
+
+        if (memberResponse.isEmpty) return [];
+
+        // Extract just the IDs into a list
+        final List<dynamic> companyIds = memberResponse.map((m) => m['companyID']).toList();
+
+        // 2. Fetch the actual company details for those IDs
+        final companyResponse = await _supabase
+            .from(TableConstants.company)
+            .select()
+            .filter('companyID', 'in', companyIds);
+
+        return (companyResponse as List).map((json) => CompanyModel.fromJson(json)).toList();
+      }
+
+      return []; // Return empty if role is not recognized
+    } catch (e) {
+      print('Error fetching companies: $e');
+      return [];
     }
   }
 }
