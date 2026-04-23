@@ -4,6 +4,7 @@ import '../../../services/auth_service.dart';
 import '../../../core/screens/temp_main_screen.dart';
 import 'create_job_screen.dart';
 import 'company_list_screen.dart'; // 👉 Make sure to import the new screen
+import 'manage_job_screen.dart';
 
 class EmployerDashboard extends StatelessWidget {
   const EmployerDashboard({super.key});
@@ -87,8 +88,12 @@ class EmployerDashboard extends StatelessWidget {
                     title: 'Manage Jobs',
                     icon: Icons.work,
                     onTap: () {
-                      // TODO: Navigate to Job List Screen
-                      print('Navigate to Job List');
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ManageJobsScreen(),
+                        ),
+                      );
                     },
                   ),
 

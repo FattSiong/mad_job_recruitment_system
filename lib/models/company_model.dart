@@ -6,8 +6,10 @@ class CompanyModel {
   final String? verificationDocumentURL;
   final bool isVerified;
   final String verificationStatus;
-  final double? latitude;  // 👉 New
-  final double? longitude; // 👉 New
+  final double? latitude;
+  final double? longitude;
+  final String currentPlanType;
+  final DateTime? subscriptionEndAt;
 
   CompanyModel({
     this.companyID,
@@ -17,8 +19,10 @@ class CompanyModel {
     this.verificationDocumentURL,
     this.isVerified = false,
     this.verificationStatus = 'pending',
-    this.latitude,  // 👉 New
-    this.longitude, // 👉 New
+    this.latitude,
+    this.longitude,
+    this.currentPlanType = 'FREE',
+    this.subscriptionEndAt,
   });
 
   factory CompanyModel.fromJson(Map<String, dynamic> json) {
@@ -30,9 +34,12 @@ class CompanyModel {
       verificationDocumentURL: json['verificationDocumentURL'] as String?,
       isVerified: json['isVerified'] as bool? ?? false,
       verificationStatus: (json['verificationStatus'] ?? json['verificationstatus']) as String? ?? 'pending',
-      // 👉 New: Safely parse numbers to double
       latitude: json['latitude'] != null ? (json['latitude'] as num).toDouble() : null,
       longitude: json['longitude'] != null ? (json['longitude'] as num).toDouble() : null,
+      currentPlanType: json['currentPlanType'] as String? ?? 'FREE',
+      subscriptionEndAt: json['subscriptionEndAt'] != null
+          ? DateTime.tryParse(json['subscriptionEndAt'])
+          : null,
     );
   }
 
@@ -44,8 +51,10 @@ class CompanyModel {
       'verificationDocumentURL': verificationDocumentURL,
       'isVerified': isVerified,
       'verificationStatus': verificationStatus,
-      'latitude': latitude,  // 👉 New
-      'longitude': longitude, // 👉 New
+      'latitude': latitude,
+      'longitude': longitude,
+      'currentPlanType': currentPlanType,
+      'subscriptionEndAt': subscriptionEndAt?.toIso8601String(),
     };
   }
 }

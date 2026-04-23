@@ -5,6 +5,9 @@ import '../models/job_model.dart';
 import '../models/company_member_model.dart';
 import 'dart:io';
 import '../core/constants/table_constants.dart';
+import 'dart:convert';
+import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class EmployerService {
   // Get the single instance of our Supabase client
@@ -135,5 +138,81 @@ class EmployerService {
       print('Error fetching companies: $e');
       return [];
     }
+  }
+
+  /// Fetches all jobs posted by a specific employer
+  Future<List<JobModel>> getEmployerJobs(String employerId) async {
+    try {
+      final response = await _supabase
+          .from(TableConstants.job)
+          .select()
+          .eq('employerID', employerId)
+          .order('createdAt', ascending: false); // Show the newest jobs first
+
+      return (response as List).map((json) => JobModel.fromJson(json)).toList();
+    } catch (e) {
+      print('Error fetching jobs: $e');
+      return [];
+    }
+  }
+
+  /// Simulated AI Salary Suggestion
+  Future<Map<String, String>> getAiSalarySuggestion(String jobTitle, String jobDescription, int minExperience, String jobType) async {
+    try {
+      // 1. Retrieve the hidden API key
+      final apiKey = 'AIzaSyCPF5BiUdWIoroAWm42IhiUfxDMkQzFJ6U';
+
+      // 2. Initialize the Flash model
+      final model = GenerativeModel(
+        model: 'gemini-3-flash-preview',
+        apiKey: apiKey,
+      );
+
+      String prompt;
+
+      if (jobType == 'Part-time') {
+        prompt = '''
+        You are an expert HR recruiter in Malaysia. 
+        Analyze the following part-time job details and suggest a realistic HOURLY salary rate in RM.
+        
+        Job Title: "$jobTitle"
+        Minimum Experience Required: $minExperience years
+        Description: "$jobDescription"
+        
+        Return ONLY a valid JSON object with the "min" key containing the hourly rate, and the "max" key completely empty.
+        Example: {"min": "15", "max": ""}
+        ''';
+      } else {
+        prompt = '''
+        You are an expert HR recruiter in Malaysia. 
+        Analyze the following full-time job details and suggest a realistic MONTHLY salary range in RM.
+        
+        Job Title: "$jobTitle"
+        Minimum Experience Required: $minExperience years
+        Description: "$jobDescription"
+        
+        Return ONLY a valid JSON object with exactly two keys: "min" and "max". 
+        Example: {"min": "4000", "max": "6000"}
+        ''';
+      }
+
+      // 4. Send to Gemini
+      final response = await model.generateContent([Content.text(prompt)]);
+      final String? responseText = response.text;
+
+      if (responseText != null && responseText.isNotEmpty) {
+        // Parse the JSON string into a Dart Map
+        final Map<String, dynamic> jsonMap = jsonDecode(responseText.trim());
+        return {
+          'min': jsonMap['min'].toString(),
+          'max': jsonMap['max'].toString(),
+        };
+      }
+    } catch (e) {
+      print('AI Error: $e');
+    }
+
+    // 5. Fallback just in case the AI fails or the user has no internet
+    return {'min': '3000', 'max': '4500'};
   }
 }

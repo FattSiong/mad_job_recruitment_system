@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/constants/supabase_constants.dart';
 import 'shared_widgets/auth_gate.dart';
@@ -7,6 +8,8 @@ import 'shared_widgets/auth_gate.dart';
 Future<void> main() async {
   // 1. You must include this line before initializing Supabase
   WidgetsFlutterBinding.ensureInitialized();
+
+  await dotenv.load(fileName: ".env");
 
   // 2. Wake up the database connection using your keys
   await Supabase.initialize(

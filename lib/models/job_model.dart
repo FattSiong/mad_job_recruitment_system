@@ -9,6 +9,8 @@ class JobModel {
   final String salaryRange;
   final String status; // e.g., 'active', 'draft', 'archived'
   final DateTime? createdAt;
+  final int minExperienceYears;
+  final String jobType;
 
   JobModel({
     this.jobID,
@@ -21,6 +23,8 @@ class JobModel {
     required this.salaryRange,
     this.status = 'active',
     this.createdAt,
+    this.minExperienceYears = 0,
+    this.jobType = 'Full-ime',
   });
 
   // 1. Convert from Supabase JSON to Dart Object (When reading data)
@@ -36,6 +40,8 @@ class JobModel {
       salaryRange: json['salaryRange'] as String,
       status: json['status'] as String,
       createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt']) : null,
+      minExperienceYears: json['minExperienceYears'] as int? ?? 0,
+      jobType: json['jobType'] as String? ?? 'Full-time',
     );
   }
 
@@ -50,6 +56,8 @@ class JobModel {
       'longitude': longitude,
       'salaryRange': salaryRange,
       'status': status,
+      'minExperienceYears': minExperienceYears,
+      'jobType': jobType,
     }; // Notice we don't send jobID or createdAt; Supabase handles those automatically!
   }
 }
