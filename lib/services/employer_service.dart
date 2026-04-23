@@ -21,14 +21,14 @@ class EmployerService {
       // 2. Insert the JSON version of our Dart model
       // 3. .select() asks Supabase to hand the newly created row back to us
       final response = await _supabase
-          .from(TableConstants.job) // Make sure this matches your exact table name in Supabase
+          .from(TableConstants
+          .job) // Make sure this matches your exact table name in Supabase
           .insert(newJob.toJson())
           .select()
           .single(); // We only expect one row back
 
       // Convert the successful database response back into a Dart Model
       return JobModel.fromJson(response);
-
     } on PostgrestException catch (e) {
       // This catches database-specific errors (like missing foreign keys)
       print('Database Error creating job: ${e.message}');
@@ -41,7 +41,8 @@ class EmployerService {
   }
 
   /// Registers a new company AND links the creating employer to it.
-  Future<CompanyModel?> registerCompany(CompanyModel newCompany, String employerId) async {
+  Future<CompanyModel?> registerCompany(CompanyModel newCompany,
+      String employerId) async {
     try {
       // 1. Insert the company and get the generated row back
       final response = await _supabase
@@ -76,10 +77,13 @@ class EmployerService {
     }
   }
 
-  Future<String?> uploadVerificationDocument(File documentFile, String companyName) async {
+  Future<String?> uploadVerificationDocument(File documentFile,
+      String companyName) async {
     try {
       // Create a unique file name using the timestamp to prevent overwriting
-      final fileName = '${companyName.replaceAll(' ', '_')}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      final fileName = '${companyName.replaceAll(' ', '_')}_${DateTime
+          .now()
+          .millisecondsSinceEpoch}.pdf';
 
       // Upload to the 'verification_documents' bucket
       await _supabase.storage
@@ -92,7 +96,6 @@ class EmployerService {
           .getPublicUrl(fileName);
 
       return publicUrl;
-
     } catch (e) {
       print('Error uploading document: $e');
       return null;
@@ -110,19 +113,22 @@ class EmployerService {
             .select()
             .order('createdAt', ascending: false); // Optional: newest first
 
-        return (response as List).map((json) => CompanyModel.fromJson(json)).toList();
-
+        return (response as List)
+            .map((json) => CompanyModel.fromJson(json))
+            .toList();
       } else if (role == 'employer') {
         // 1. Find all company IDs this specific employer belongs to
         final memberResponse = await _supabase
             .from(TableConstants.companyMember)
             .select('companyID')
-            .eq('employerID', userId);
+            .eq('employerID', userId)
+            .eq('status','active');
 
         if (memberResponse.isEmpty) return [];
 
         // Extract just the IDs into a list
-        final List<dynamic> companyIds = memberResponse.map((m) => m['companyID']).toList();
+        final List<dynamic> companyIds = memberResponse.map((
+            m) => m['companyID']).toList();
 
         // 2. Fetch the actual company details for those IDs
         final companyResponse = await _supabase
@@ -130,12 +136,30 @@ class EmployerService {
             .select()
             .filter('companyID', 'in', companyIds);
 
-        return (companyResponse as List).map((json) => CompanyModel.fromJson(json)).toList();
+        return (companyResponse as List).map((json) =>
+            CompanyModel.fromJson(json)).toList();
       }
 
       return []; // Return empty if role is not recognized
     } catch (e) {
       print('Error fetching companies: $e');
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getCompanyMembers(String companyId) async {
+    try {
+      // We query the CompanyMember table and join it with your public Employer profile table
+      // Note: Ensure your public profile table is named 'Employer' and has 'name' and 'email'
+      final response = await _supabase
+          .from('CompanyMember')
+          .select('companyRole, status, employerID, Employer(fullName, email)')
+          .eq('companyID', companyId)
+          .order('companyRole', ascending: false); // This puts 'owner' at the top of the list!
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Fetch members error: $e');
       return [];
     }
   }
@@ -156,8 +180,54 @@ class EmployerService {
     }
   }
 
+  Future<List<CompanyModel>> getMyAcceptedCompanies() async {
+    try {
+      final currentUser = _supabase.auth.currentUser;
+      if (currentUser == null) return [];
+
+      // Query the CompanyMember table and join the actual Company data
+      final response = await _supabase
+          .from('CompanyMember')
+          .select('status, Company(*)') // Pulls everything from the linked Company table
+          .eq('employerID', currentUser.id)
+          .eq('status', 'active'); // 👉 SECURITY CHECK: Must be accepted
+
+      // Parse the joined data back into your CompanyModel list
+      final List<CompanyModel> companies = [];
+      for (var row in response) {
+        if (row['Company'] != null) {
+          companies.add(CompanyModel.fromJson(row['Company']));
+        }
+      }
+
+      return companies;
+    } catch (e) {
+      print('Fetch accepted companies error: $e');
+      return [];
+    }
+  }
+
+  /// Fetches all jobs for a specific company
+  Future<List<JobModel>> getJobsByCompanyId(String companyId) async {
+    try {
+      final response = await _supabase
+          .from('Job') // Use TableConstants.job if you have it
+          .select()
+          .eq('companyID', companyId);
+      // Optional: .order('created_at', ascending: false) to show newest first
+
+      return response.map((json) => JobModel.fromJson(json)).toList();
+    } catch (e) {
+      print('Fetch jobs by company error: $e');
+      return [];
+    }
+  }
+
+
+
   /// Simulated AI Salary Suggestion
-  Future<Map<String, String>> getAiSalarySuggestion(String jobTitle, String jobDescription, int minExperience, String jobType) async {
+  Future<Map<String, String>> getAiSalarySuggestion(String jobTitle,
+      String jobDescription, int minExperience, String jobType) async {
     try {
       // 1. Retrieve the hidden API key
       final apiKey = 'AIzaSyCPF5BiUdWIoroAWm42IhiUfxDMkQzFJ6U';
@@ -214,5 +284,141 @@ class EmployerService {
 
     // 5. Fallback just in case the AI fails or the user has no internet
     return {'min': '3000', 'max': '4500'};
+  }
+
+  Future<bool> updateJobStatus(String jobId, String newStatus) async {
+    try {
+      await _supabase
+          .from(
+          'Job') // Or TableConstants.job if you are using your constants file
+          .update({'status': newStatus})
+          .eq('jobID', jobId);
+      return true;
+    } catch (e) {
+      print('Error updating job status: $e');
+      return false;
+    }
+  }
+
+  /// Updates an existing job posting in the database.
+  Future<bool> updateJobPosting(JobModel updatedJob) async {
+    try {
+      // Safety check to ensure we know which row to update
+      if (updatedJob.jobID == null) return false;
+
+      await _supabase
+          .from('Job') // Use TableConstants.job if you implemented it
+          .update(updatedJob.toJson())
+          .eq('jobID', updatedJob.jobID!);
+
+      return true;
+    } catch (e) {
+      print('Error updating job: $e');
+      return false;
+    }
+  }
+
+  Future<String> sendInvitation(String companyId, String inviteeEmail) async {
+    try {
+      final currentUser = _supabase.auth.currentUser;
+      if (currentUser == null) return 'Not authenticated';
+
+      // Verify the current user is the owner
+      final ownerCheck = await _supabase
+          .from('CompanyMember')
+          .select('companyRole')
+          .eq('companyID', companyId)
+          .eq('employerID', currentUser.id)
+          .maybeSingle();
+
+      if (ownerCheck == null || ownerCheck['companyRole'] != 'owner') {
+        return 'Only owners can invite members.';
+      }
+
+      // Call the secure database function to check auth.users
+      final inviteeId = await _supabase.rpc(
+          'get_user_id_by_email',
+          params: {'lookup_email': inviteeEmail.trim().toLowerCase()}
+      );
+
+      if (inviteeId == null) {
+        return 'No account found with this email. They must register first.';
+      }
+
+      // Prevent inviting yourself
+      if (inviteeId == currentUser.id) {
+        return 'You cannot invite yourself.';
+      }
+
+      // Check if they are already in the company (accepted or pending)
+      final existingMember = await _supabase
+          .from('CompanyMember')
+          .select('status')
+          .eq('companyID', companyId)
+          .eq('employerID', inviteeId)
+          .maybeSingle();
+
+      if (existingMember != null) {
+        return 'This user is already in the company or has a pending invite.';
+      }
+
+      // Insert the new member with a 'pending' status
+      await _supabase.from('CompanyMember').insert({
+        'companyID': companyId,
+        'employerID': inviteeId,
+        'companyRole': 'member',
+        'status': 'pending',
+      });
+
+      return 'Success';
+    } catch (e) {
+      print('Invite error: $e');
+      return 'An error occurred. Please try again.';
+    }
+  }
+
+  /// 2. FETCH PENDING INVITATIONS
+  Future<List<Map<String, dynamic>>> getMyPendingInvitations() async {
+    try {
+      final currentUser = _supabase.auth.currentUser;
+      if (currentUser == null) return [];
+
+      final response = await _supabase
+          .from('CompanyMember')
+          .select('*, Company(name)')
+          .eq('employerID', currentUser.id)
+          .eq('status', 'pending');
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Fetch invites error: $e');
+      return [];
+    }
+  }
+
+  /// 3. RESPOND TO INVITATION
+  Future<bool> respondToInvitation(String companyId, bool isAccepted) async {
+    try {
+      final currentUser = _supabase.auth.currentUser;
+      if (currentUser == null) return false;
+
+      if (isAccepted) {
+        await _supabase
+            .from('CompanyMember')
+            .update({'status': 'active'})
+            .eq('companyID', companyId)
+            .eq('employerID', currentUser.id);
+      } else {
+        await _supabase
+            .from('CompanyMember')
+            .delete()
+            .eq('companyID', companyId)
+            .eq('employerID', currentUser.id);
+      }
+      return true;
+    } catch (e) {
+      print('Respond error: $e');
+      return false;
+    }
   }
 }

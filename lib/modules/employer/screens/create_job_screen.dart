@@ -6,7 +6,9 @@ import '../../../models/company_model.dart';
 import '../../../services/employer_service.dart';
 
 class CreateJobScreen extends StatefulWidget {
-  const CreateJobScreen({super.key});
+  final CompanyModel? preselectedCompany;
+
+  const CreateJobScreen({super.key, this.preselectedCompany});
 
   @override
   State<CreateJobScreen> createState() => _CreateJobScreenState();
@@ -42,9 +44,20 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
 
   // 1. Fetch only the employer's VERIFIED companies for the dropdown
   Future<void> _loadVerifiedCompanies() async {
+    // 👉 NEW: If they came from the Company Jobs Screen, lock in the preselected company!
+    if (widget.preselectedCompany != null) {
+      setState(() {
+        _myCompanies = [widget.preselectedCompany!];
+        _selectedCompanyID = widget.preselectedCompany!.companyID;
+        _isLoadingCompanies = false;
+      });
+      return;
+    }
+
     final currentUser = Supabase.instance.client.auth.currentUser;
     if (currentUser == null) return;
 
+    // We still use getMyAcceptedCompanies or getCompanies depending on your service method name
     final allCompanies = await _employerService.getCompanies(currentUser.id, 'employer');
 
     if (mounted) {
@@ -64,7 +77,6 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
 
   // 2. AI Salary Feature
   Future<void> _suggestSalary() async {
-    // 👉 NEW: Block access if they are not Premium
     if (!_hasActiveSubscription) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -74,7 +86,6 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
             label: 'UPGRADE',
             textColor: Colors.white,
             onPressed: () {
-              // TODO: Route to your Payment/Subscription Screen
               print('Route to billing');
             },
           ),
@@ -96,8 +107,8 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
 
     final suggestionMap = await _employerService.getAiSalarySuggestion(
       _titleController.text.trim(),
-      _descriptionController.text.trim(), // Passes the description
-      parsedExperience,                   // Passes the years of experience
+      _descriptionController.text.trim(),
+      parsedExperience,
       _selectedJobType,
     );
 
@@ -129,18 +140,13 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
     // 1. Check if the plan is anything other than FREE
     if (company.currentPlanType.toUpperCase() == 'FREE') return false;
 
-    // 2. Check if the subscription date has expired
-    // if (company.subscriptionEndAt == null) return false;
-    // if (company.subscriptionEndAt!.isBefore(DateTime.now())) return false;
-
-    return true; // Passed all checks!
+    return true;
   }
 
   // 4. Submit Job to Database
   Future<void> _submitJob() async {
     final currentUser = Supabase.instance.client.auth.currentUser;
 
-    // 1. Basic Empty Checks
     if (_selectedCompanyID == null ||
         _titleController.text.trim().isEmpty ||
         _descriptionController.text.trim().isEmpty ||
@@ -151,7 +157,6 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
       return;
     }
 
-    // 2. Extract and Parse Numbers safely
     final minStr = _minSalaryController.text.trim();
     final maxStr = _maxSalaryController.text.trim();
 
@@ -159,7 +164,6 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
     final int? maxSalary = int.tryParse(maxStr);
     final int parsedExperience = int.tryParse(_experienceController.text.trim()) ?? 0;
 
-    // 3. Logical Salary Validation
     if (minSalary != null && maxSalary != null) {
       if (minSalary > maxSalary) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -168,24 +172,21 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
             backgroundColor: Colors.red,
           ),
         );
-        return; // Stop the submission
+        return;
       }
     }
 
     setState(() => _isSubmitting = true);
 
-    // Build the final salary string
     String? finalSalaryRange;
 
-    if (_selectedJobType == 'Part Time') {
-      // 👉 NEW: Part Time Formatting
+    if (_selectedJobType == 'Part-time') {
       if (minSalary != null) {
         finalSalaryRange = 'RM $minSalary / hr';
       } else {
         finalSalaryRange = '';
       }
     } else {
-      // 👉 Original: Full Time Formatting
       if (minSalary != null && maxSalary != null) {
         finalSalaryRange = 'RM $minSalary - RM $maxSalary';
       } else if (minSalary != null) {
@@ -195,7 +196,6 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
       }
     }
 
-    // 5. Create and save the model
     final newJob = JobModel(
       companyID: _selectedCompanyID!,
       employerID: currentUser!.id,
@@ -254,21 +254,31 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
           : ListView(
         padding: const EdgeInsets.all(24.0),
         children: [
-          // Company Selection Dropdown
-          DropdownButtonFormField<String>(
-            initialValue: _selectedCompanyID,
-            decoration: const InputDecoration(
-              labelText: 'Select Company',
-              border: OutlineInputBorder(),
+          // 👉 NEW: Dynamic UI for Company Selection
+          if (widget.preselectedCompany != null)
+            InputDecorator(
+              decoration: const InputDecoration(
+                labelText: 'Posting for Company',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.business),
+              ),
+              child: Text(widget.preselectedCompany!.name, style: const TextStyle(fontSize: 16)),
+            )
+          else
+            DropdownButtonFormField<String>(
+              initialValue: _selectedCompanyID,
+              decoration: const InputDecoration(
+                labelText: 'Select Company',
+                border: OutlineInputBorder(),
+              ),
+              items: _myCompanies.map((company) {
+                return DropdownMenuItem(
+                  value: company.companyID,
+                  child: Text(company.name),
+                );
+              }).toList(),
+              onChanged: (value) => setState(() => _selectedCompanyID = value),
             ),
-            items: _myCompanies.map((company) {
-              return DropdownMenuItem(
-                value: company.companyID,
-                child: Text(company.name),
-              );
-            }).toList(),
-            onChanged: (value) => setState(() => _selectedCompanyID = value),
-          ),
           const SizedBox(height: 16),
 
           // Job Title
@@ -301,7 +311,7 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
 
           TextField(
             controller: _experienceController,
-            keyboardType: TextInputType.number, // Forces the number keypad
+            keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             decoration: const InputDecoration(
               labelText: 'Minimum Working Experience (Years)',
@@ -322,17 +332,14 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   decoration: InputDecoration(
-                    // 👉 NEW: Dynamic label based on Job Type
                     labelText: _selectedJobType == 'Part-time' ? 'Hourly Rate' : 'Min Salary',
                     prefixText: 'RM ',
-                    // 👉 NEW: Show the /hr suffix for Part Time
                     suffixText: _selectedJobType == 'Part-time' ? ' / hr' : null,
                     border: const OutlineInputBorder(),
                   ),
                 ),
               ),
 
-              // 👉 NEW: Only show the Max field if it's Full Time
               if (_selectedJobType == 'Full-time') ...[
                 const SizedBox(width: 8),
                 Expanded(
