@@ -65,7 +65,32 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     }
   }
 
+  bool _validateQuestions() {
+    for (var q in _questions) {
+      final answer = _answers[q.questionID!];
+
+      if (answer == null) return false; // Unanswered
+      if (answer is String && answer.trim().isEmpty) return false; // Empty text box
+    }
+    return true;
+  }
+
   Future<void> _submitApplication() async {
+    // --- RESUME VALIDATION ---
+    if (_resumeSelection == 'new' && _newResumeFile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a resume file to upload.'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    if (_resumeSelection == 'existing' && _existingResumeUrl == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No existing resume found. Please upload a new one.'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     final success = await _appController.submitApplication(
@@ -175,9 +200,19 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                     ? null
                     : () {
                   if (hasQuestions && _currentPage == 0) {
+                    // --- QUESTION VALIDATION ---
+                    if (!_validateQuestions()) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Please answer all pre-screening questions before continuing.'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return; // Stop them from going to the next page
+                    }
                     _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.ease);
                   } else {
-                    _submitApplication();
+                    _submitApplication(); // This will handle the Resume validation
                   }
                 },
                 style: ElevatedButton.styleFrom(

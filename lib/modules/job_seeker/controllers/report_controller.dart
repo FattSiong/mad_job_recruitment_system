@@ -3,7 +3,7 @@ import '../../../models/reported_job_model.dart'; // 👉 Import the model
 
 class ReportController {
   final _supabase = Supabase.instance.client;
-  final String _mockSeekerID = '773ed23f-95ca-4853-ae50-06bd5e411bad';
+  String get _currentSeekerID => Supabase.instance.client.auth.currentUser!.id;
 
   Future<bool> submitJobReport({
     required String jobId,
@@ -14,7 +14,7 @@ class ReportController {
       // 1. Package the data into the Model
       final newReport = ReportedJobModel(
         jobID: jobId,
-        seekerID: _mockSeekerID,
+        seekerID: _currentSeekerID,
         reportCategory: category,
         additionalDetails: (details != null && details.trim().isNotEmpty) ? details.trim() : null,
       );

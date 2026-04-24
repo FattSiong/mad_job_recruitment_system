@@ -6,7 +6,7 @@ import '../../../models/application_answer_model.dart';     // 👉 New Model
 
 class ApplicationController {
   final _supabase = Supabase.instance.client;
-  final String _mockSeekerID = '773ed23f-95ca-4853-ae50-06bd5e411bad';
+  String get _currentSeekerID => Supabase.instance.client.auth.currentUser!.id;
 
   // 👉 Now returns a list of strict Models instead of raw Maps
   Future<List<PreScreeningQuestionModel>> getQuestions(String jobId) async {
@@ -23,7 +23,7 @@ class ApplicationController {
 
   Future<String?> getSeekerResume() async {
     try {
-      final response = await _supabase.from('JobSeeker').select('resumeURL').eq('seekerID', _mockSeekerID).maybeSingle();
+      final response = await _supabase.from('JobSeeker').select('resumeURL').eq('seekerID', _currentSeekerID).maybeSingle();
       return response?['resumeURL'] as String?;
     } catch (e) {
       return null;
@@ -33,7 +33,7 @@ class ApplicationController {
   Future<String?> _uploadFile(File file, String bucketName) async {
     try {
       final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.path.split('/').last}';
-      final filePath = '$_mockSeekerID/$fileName';
+      final filePath = '$_currentSeekerID/$fileName';
 
       await _supabase.storage.from(bucketName).upload(filePath, file);
       return _supabase.storage.from(bucketName).getPublicUrl(filePath);
@@ -51,18 +51,20 @@ class ApplicationController {
   }) async {
     try {
       String finalResumeUrl = existingResumeUrl ?? '';
+
+      // 1. Upload the new file if provided, but DO NOT update the JobSeeker table
       if (newResumeFile != null) {
         final uploadedUrl = await _uploadFile(newResumeFile, 'resumes');
         if (uploadedUrl != null) {
           finalResumeUrl = uploadedUrl;
-          await _supabase.from('JobSeeker').update({'resumeURL': finalResumeUrl}).eq('seekerID', _mockSeekerID);
+          // ❌ REMOVED: await _supabase.from('JobSeeker').update({'resumeURL': finalResumeUrl}).eq('seekerID', _currentSeekerID);
         }
       }
 
-      // 👉 1. Use Model for JobApplicant
+      // 2. Use Model for JobApplicant
       final newApplicant = JobApplicantModel(
         jobID: jobId,
-        seekerID: _mockSeekerID,
+        seekerID: _currentSeekerID, // Make sure you are using the dynamic ID here
         submittedResumeURL: finalResumeUrl,
         applicationStatus: 'pending',
       );
@@ -74,7 +76,7 @@ class ApplicationController {
 
       final String applicantId = applicantResponse['applicantID'];
 
-      // 👉 2. Use Model for ApplicationAnswers
+      // 3. Use Model for ApplicationAnswers
       for (var entry in answers.entries) {
         final questionId = entry.key;
         final answerValue = entry.value;

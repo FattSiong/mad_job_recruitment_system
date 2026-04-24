@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/ui_constants.dart';
+import '../../../core/screens/temp_main_screen.dart';
 import '../../../models/job_model.dart';
+import '../../../services/auth_service.dart';
 import '../controllers/job_discovery_controller.dart';
 import '../widgets/job_card.dart';
 import 'job_details_screen.dart';
@@ -61,6 +63,19 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
       appBar: AppBar(
         title: const Text('Job Discovery'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Logout',
+            onPressed: () async {
+              await AuthService().signOut();
+              if (context.mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (context) => const TempMainScreen()),
+                      (Route<dynamic> route) => false,
+                );
+              }
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.map),
             tooltip: 'Map View',
