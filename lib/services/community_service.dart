@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/community_post_model.dart';
 import '../models/message_model.dart';
 import 'dart:io'; // Make sure this is at the top of the file
 
@@ -66,13 +67,14 @@ class CommunityService {
 
 // Add this to your CommunityService class:
 
-  Future<List<Map<String, dynamic>>> getCommunityPosts() async {
+  Future<List<CommunityPostModel>> getCommunityPosts() async {
     final response = await _supabase
         .from('CommunityPost')
         .select('''
           postID,
           authorID,
           content,
+          mediaURL,     -- 👈 Added this so images show up!
           createdAt,
           User: "User"!CommunityPost_authorID_fkey (username, role),
           "PostComment" ("commentID"),
@@ -82,7 +84,8 @@ class CommunityService {
         .eq('status', 'active')
         .order('createdAt', ascending: false);
 
-    return List<Map<String, dynamic>>.from(response);
+    // This one magical line converts all the messy JSON into your clean Dart Object
+    return response.map((data) => CommunityPostModel.fromJson(data)).toList();
   }
 
   // --- Add these inside CommunityService ---
