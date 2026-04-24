@@ -4,7 +4,7 @@ class TableConstants {
   static const String jobSeeker = 'JobSeeker';
   static const String employer = 'Employer';
   static const String job = 'Job';
-  static const String favoriteJob = 'FavoriteJob';
+  static const String bookmarkedJob = 'BookmarkedJob';
   static const String company = 'Company';
   static const String companyMember = 'CompanyMember';
   static const String paymentSubscription = 'PaymentSubscription';
