@@ -9,7 +9,7 @@ class AdminDashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Admin / Moderation Module')),
+      // appBar: AppBar(title: const Text('Admin / Moderation Module')),
 //       body: Center(
 //         child: Column(
 //           mainAxisAlignment: MainAxisAlignment.center,
