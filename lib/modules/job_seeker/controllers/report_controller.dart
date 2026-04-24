@@ -1,5 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../models/reported_job_model.dart'; // 👉 Import the model
+import '../../../models/reported_job_model.dart';
 
 class ReportController {
   final _supabase = Supabase.instance.client;

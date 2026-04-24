@@ -1,6 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../models/job_applicant_model.dart'; // 👉 New Model
-import '../../../models/job_model.dart';           // 👉 New Model
+import '../../../models/job_applicant_model.dart';
+import '../../../models/job_model.dart';
 
 class AppliedJobsController {
   final _supabase = Supabase.instance.client;

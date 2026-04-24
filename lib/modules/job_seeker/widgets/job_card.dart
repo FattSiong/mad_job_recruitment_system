@@ -1,116 +1,104 @@
 import 'package:flutter/material.dart';
 import '../../../models/job_model.dart';
-import '../controllers/bookmarked_controller.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/location_helper.dart';
 
-class JobCard extends StatefulWidget {
+class JobCard extends StatelessWidget {
   final JobModel job;
   final VoidCallback onTap;
 
-  const JobCard({
-    super.key,
-    required this.job,
-    required this.onTap,
-  });
+  const JobCard({super.key, required this.job, required this.onTap});
 
-  @override
-  State<JobCard> createState() => _JobCardState();
-}
-
-class _JobCardState extends State<JobCard> {
-  final BookmarkedController _bookmarkedController = BookmarkedController();
-
-  bool _isBookmarked = false;
-  bool _isLoading = true; // Prevents spam-clicking while checking the database
-
-  @override
-  void initState() {
-    super.initState();
-    _checkInitialBookmarkState();
-  }
-
-  // Check Supabase when the card first loads
-  Future<void> _checkInitialBookmarkState() async {
-    if (widget.job.jobID == null) return;
-
-    final isBookmarked = await _bookmarkedController.isJobBookmarked(widget.job.jobID!);
-
-    if (mounted) {
-      setState(() {
-        _isBookmarked = isBookmarked;
-        _isLoading = false;
-      });
-    }
-  }
-
-  // Handle the button tap
-  Future<void> _handleBookmarkTap() async {
-    if (widget.job.jobID == null || _isLoading) return;
-
-    // Immediately toggle the UI for a snappy user experience
-    setState(() {
-      _isBookmarked = !_isBookmarked;
-      _isLoading = true;
-    });
-
-    // Update the database in the background
-    final newState = await _bookmarkedController.toggleBookmark(widget.job.jobID!, !_isBookmarked);
-
-    if (mounted) {
-      setState(() {
-        _isBookmarked = newState;
-        _isLoading = false;
-      });
-
-      // Show a quick popup so the user knows it worked
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_isBookmarked ? 'Job Saved!' : 'Job Removed from Saves'),
-          duration: const Duration(seconds: 1),
-        ),
-      );
+  String _formatSalary(String range, String? type) {
+    if (type == 'Part-time') {
+      return '$range / hr';
+    } else {
+      return '$range / mo';
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: ListTile(
-        title: Text(
-            widget.job.title,
-            style: const TextStyle(fontWeight: FontWeight.bold)
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 4),
-            Text(
-              widget.job.companyName ?? 'Company Name Unavailable',
-              style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.black87),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              widget.job.salaryRange,
-              style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              widget.job.description,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-        isThreeLine: true,
-        trailing: IconButton(
-          // Switch the icon based on the state!
-          icon: Icon(
-            _isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-            color: _isBookmarked ? const Color(0xFF0A66C2) : Colors.grey,
+    return GestureDetector(
+      onTap: onTap,
+      child: Card(
+        elevation: 2,
+        margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Row 1: Title
+              Text(
+                job.title,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+
+              // Row 2 & 3: Company and Location
+              Text(
+                job.companyName ?? 'Unknown Company',
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Icon(Icons.location_on, size: 14, color: Colors.grey.shade600),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    // 👉 Use FutureBuilder to calculate the city name on the fly!
+                    child: FutureBuilder<String>(
+                      future: LocationHelper.getCityFromCoordinates(job.latitude, job.longitude),
+                      builder: (context, snapshot) {
+                        return Text(
+                          snapshot.data ?? 'Loading location...', // Shows while calculating
+                          style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Chips: Job Type and Salary
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  if (job.jobType != null)
+                    _buildChip(job.jobType!, Icons.work_outline),
+                  _buildChip(_formatSalary(job.salaryRange, job.jobType), Icons.attach_money),
+                ],
+              ),
+            ],
           ),
-          onPressed: _handleBookmarkTap,
         ),
-        onTap: widget.onTap,
+      ),
+    );
+  }
+
+  Widget _buildChip(String label, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.primaryBlue.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: AppColors.primaryBlue),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: AppColors.primaryBlue, fontWeight: FontWeight.w600),
+          ),
+        ],
       ),
     );
   }

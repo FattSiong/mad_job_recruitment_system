@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../models/job_model.dart';
-import '../../../models/bookmarked_job_model.dart'; // 👉 Import the model
+import '../../../models/bookmarked_job_model.dart';
 
 class BookmarkedController {
   final _supabase = Supabase.instance.client;

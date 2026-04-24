@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../models/pre_screening_question_model.dart'; // 👉 New Model
-import '../../../models/job_applicant_model.dart';          // 👉 New Model
-import '../../../models/application_answer_model.dart';     // 👉 New Model
+import '../../../models/pre_screening_question_model.dart';
+import '../../../models/job_applicant_model.dart';
+import '../../../models/application_answer_model.dart';
 
 class ApplicationController {
   final _supabase = Supabase.instance.client;
