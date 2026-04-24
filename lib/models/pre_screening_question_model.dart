@@ -13,11 +13,6 @@ class PreScreeningQuestionModel {
     this.questionType = 'Text', // Defaulting to 'Text' based on your current UI
   });
 
-  Map<String, dynamic> toJson() {
-    return {
-    required this.questionType,
-  });
-
   factory PreScreeningQuestionModel.fromJson(Map<String, dynamic> json) {
     return PreScreeningQuestionModel(
       questionID: json['questionID'] as String?,

@@ -5,6 +5,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../models/company_model.dart';
 import '../../../services/employer_service.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geocoding/geocoding.dart';
+import 'company_map_picker.dart';
 
 class RegisterCompanyScreen extends StatefulWidget {
   const RegisterCompanyScreen({super.key});
@@ -89,40 +92,58 @@ class _RegisterCompanyScreenState extends State<RegisterCompanyScreen> {
     );
   }
 
-  // Future<void> _openLocationPicker() async {
-  //   // Wait for the map screen to pop and hand back the data map
-  //   final result = await Navigator.push(
-  //     context,
-  //     MaterialPageRoute(
-  //       builder: (context) => const CompanyMapPicker(),
-  //     ),
-  //   );
-  //
-  //   // If the user actually picked a location and didn't just hit the back button
-  //   if (result != null && result is Map<String, dynamic>) {
-  //     setState(() {
-  //       _selectedLat = result['latitude'];
-  //       _selectedLng = result['longitude'];
-  //       _selectedAddress = result['address'];
-  //     });
-  //   }
-  // }
-
-  // 🚧 TEMPORARY BYPASS: Simulates picking a location until the map is ready
-  void _openLocationPicker() {
-    setState(() {
-      // Inserting dummy coordinates for testing
-      _selectedLat = 3.2162;
-      _selectedLng = 101.7289;
-      _selectedAddress = 'TAR UMT Campus, Setapak, Kuala Lumpur (Test Location)';
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Test location automatically inserted!'),
-        backgroundColor: Colors.blue,
+  Future<void> _openLocationPicker() async {
+    // 1. Navigate to the map and wait for the user to confirm a location
+    final LatLng? pickedLocation = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CompanyMapPickerScreen(
+          initialLat: _selectedLat,
+          initialLng: _selectedLng,
+        ),
       ),
     );
+
+    // 2. If they picked a location (didn't just hit the back button)
+    if (pickedLocation != null) {
+      // Show a temporary loading state while we translate the coordinates
+      setState(() {
+        _selectedAddress = 'Translating map coordinates...';
+      });
+
+      try {
+        // 3. Ask the Geocoding package to turn the GPS pin into a real street address
+        List<Placemark> placemarks = await placemarkFromCoordinates(
+          pickedLocation.latitude,
+          pickedLocation.longitude,
+        );
+
+        String readableAddress = 'Unknown Location';
+        if (placemarks.isNotEmpty) {
+          final place = placemarks.first;
+          // Build a clean address string (e.g., "Jalan Genting Kelang, Setapak, Kuala Lumpur")
+          readableAddress = '${place.street}, ${place.subLocality ?? place.locality}, ${place.administrativeArea}';
+
+          // Clean up any weird formatting where street might be empty
+          readableAddress = readableAddress.replaceAll(RegExp(r'^, |, $'), '').replaceAll(', ,', ',');
+        }
+
+        // 4. Update the UI with the final data!
+        setState(() {
+          _selectedLat = pickedLocation.latitude;
+          _selectedLng = pickedLocation.longitude;
+          _selectedAddress = readableAddress;
+        });
+
+      } catch (e) {
+        // Fallback: If the internet fails during translation, just show the raw GPS coordinates
+        setState(() {
+          _selectedLat = pickedLocation.latitude;
+          _selectedLng = pickedLocation.longitude;
+          _selectedAddress = 'Coordinates: ${pickedLocation.latitude.toStringAsFixed(4)}, ${pickedLocation.longitude.toStringAsFixed(4)}';
+        });
+      }
+    }
   }
 
   Future<void> _submitCompany() async {

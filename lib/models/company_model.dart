@@ -10,6 +10,7 @@ class CompanyModel {
   final double? longitude;
   final String currentPlanType;
   final DateTime? subscriptionEndAt;
+  final String? companyLogoURL;
 
   CompanyModel({
     this.companyID,
@@ -23,6 +24,7 @@ class CompanyModel {
     this.longitude,
     this.currentPlanType = 'FREE',
     this.subscriptionEndAt,
+    this.companyLogoURL,
   });
 
   factory CompanyModel.fromJson(Map<String, dynamic> json) {
@@ -40,6 +42,7 @@ class CompanyModel {
       subscriptionEndAt: json['subscriptionEndAt'] != null
           ? DateTime.tryParse(json['subscriptionEndAt'])
           : null,
+      companyLogoURL: json['companyLogoURL'] as String?,
     );
   }
 
@@ -55,6 +58,7 @@ class CompanyModel {
       'longitude': longitude,
       'currentPlanType': currentPlanType,
       'subscriptionEndAt': subscriptionEndAt?.toIso8601String(),
+      'companyLogoURL': companyLogoURL,
     };
   }
 }

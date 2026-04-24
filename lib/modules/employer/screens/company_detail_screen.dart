@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../models/company_model.dart';
 import '../../../services/employer_service.dart';
+import 'edit_company_screen.dart';
 
 class CompanyDetailScreen extends StatefulWidget {
   final CompanyModel company;
@@ -131,7 +132,30 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
       appBar: AppBar(
         title: const Text('Company Details'),
         actions: [
-          // 👉 Only show the invite button in the AppBar if they are the owner
+          // 👉 NEW: Add Edit Button (Only visible to owners)
+          if (_isOwner && !_isLoading)
+            IconButton(
+              icon: const Icon(Icons.edit),
+              tooltip: 'Edit Company',
+              onPressed: () async {
+                // Navigate to Edit Screen and wait for a result
+                final didUpdate = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => EditCompanyScreen(company: widget.company),
+                  ),
+                );
+
+                // If the edit screen returned 'true', refresh the data!
+                if (didUpdate == true) {
+                  // NOTE: You might want to re-fetch the CompanyModel data here as well
+                  // if you are displaying the updated name/desc on this screen!
+                  _loadMembers();
+                }
+              },
+            ),
+
+          // (Your existing invite button is right here)
           if (_isOwner && !_isLoading)
             IconButton(
               icon: const Icon(Icons.person_add),
@@ -151,12 +175,19 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
             Row(
               children: [
                 CircleAvatar(
-                  radius: 30,
-                  backgroundColor: Colors.blue.shade100,
-                  child: Text(
+                  radius: 35, // Made it slightly bigger to show off the logo!
+                  backgroundColor: Colors.blue.shade50,
+                  // 👉 NEW: If they have a logo, load it from the network
+                  backgroundImage: company.companyLogoURL != null && company.companyLogoURL!.isNotEmpty
+                      ? NetworkImage(company.companyLogoURL!)
+                      : null,
+                  // 👉 NEW: Only show the text letter if they DON'T have a logo
+                  child: company.companyLogoURL == null || company.companyLogoURL!.isEmpty
+                      ? Text(
                     company.name.substring(0, 1).toUpperCase(),
-                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blue),
-                  ),
+                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.blue),
+                  )
+                      : null,
                 ),
                 const SizedBox(width: 16),
                 Expanded(
