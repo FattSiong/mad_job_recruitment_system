@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:mad_job_recruitment_system/modules/job_seeker/screens/report_job_screen.dart';
 import '../../../models/job_model.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/location_helper.dart';
+import '../controllers/bookmarked_controller.dart';
 import 'job_application_screen.dart';
+import 'report_job_screen.dart';
 
 class JobDetailsScreen extends StatefulWidget {
   final JobModel job;
@@ -15,6 +16,9 @@ class JobDetailsScreen extends StatefulWidget {
 }
 
 class _JobDetailsScreenState extends State<JobDetailsScreen> {
+  final BookmarkedController _bookmarkController = BookmarkedController();
+  bool _isBookmarked = false;
+
   bool _isDescriptionExpanded = false;
   final ScrollController _scrollController = ScrollController();
   bool _isAtBottom = false;
@@ -23,6 +27,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_scrollListener);
+    _checkBookmarkStatus();
   }
 
   @override
@@ -30,6 +35,40 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     _scrollController.removeListener(_scrollListener);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkBookmarkStatus() async {
+    if (widget.job.jobID != null) {
+      final isBookmarked = await _bookmarkController.isJobBookmarked(widget.job.jobID!);
+      if (mounted) {
+        setState(() => _isBookmarked = isBookmarked);
+      }
+    }
+  }
+
+  Future<void> _toggleBookmark() async {
+    if (widget.job.jobID == null) return;
+
+    setState(() => _isBookmarked = !_isBookmarked);
+
+    final success = await _bookmarkController.toggleBookmark(widget.job.jobID!, !_isBookmarked);
+
+    if (mounted) {
+      if (!success) {
+        setState(() => _isBookmarked = !_isBookmarked);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to update bookmark.'), backgroundColor: Colors.red),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_isBookmarked ? 'Job bookmarked!' : 'Bookmark removed.'),
+            backgroundColor: _isBookmarked ? Colors.green : Colors.grey.shade800,
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      }
+    }
   }
 
   void _scrollListener() {
@@ -54,7 +93,6 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
   }
 
   void _handleReportJob() {
-    // Navigate to the new report screen instead of showing the modal
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -63,7 +101,6 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     );
   }
 
-  // Helper widget to build rows with icons
   Widget _buildInfoRow(IconData icon, String text) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -92,12 +129,11 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.bookmark_border, color: Colors.black87),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Saved to your jobs!')),
-              );
-            },
+            icon: Icon(
+              _isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+              color: _isBookmarked ? AppColors.primaryBlue : Colors.black87,
+            ),
+            onPressed: _toggleBookmark,
           ),
         ],
       ),
@@ -122,16 +158,15 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                       const SizedBox(height: 12),
                       Text(
                         widget.job.companyName ?? 'Unknown Company',
-                        style: const TextStyle(fontSize: 16, color: Color(0xFF0A66C2), fontWeight: FontWeight.w600),
+                        style: const TextStyle(fontSize: 16, color: AppColors.primaryBlue, fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
                 ),
 
-                // First Divider
                 const Divider(thickness: 1, height: 1),
 
-                // 2. Salary, Job Type, and Location (with icons)
+                // 2. Salary, Job Type, and Location
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
                   child: Column(
@@ -150,7 +185,6 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                   ),
                 ),
 
-                // Second Divider
                 const Divider(thickness: 1, height: 1),
 
                 // 3. Full Job Description
@@ -208,7 +242,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                                     ),
                                     child: Text(
                                       _isDescriptionExpanded ? 'Show less' : 'Show more',
-                                      style: const TextStyle(color: Color(0xFF0A66C2), fontWeight: FontWeight.bold, fontSize: 15),
+                                      style: const TextStyle(color: AppColors.primaryBlue, fontWeight: FontWeight.bold, fontSize: 15),
                                     ),
                                   ),
                                 ),
@@ -231,11 +265,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 boxShadow: [
-                  BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
-                      offset: const Offset(0, -4),
-                      blurRadius: 10
-                  )
+                  BoxShadow(color: Colors.black.withOpacity(0.08), offset: const Offset(0, -4), blurRadius: 10)
                 ],
               ),
               child: SafeArea(
@@ -245,7 +275,6 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Apply Now Button
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
@@ -253,7 +282,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                             Navigator.push(context, MaterialPageRoute(builder: (context) => JobApplicationScreen(job: widget.job)));
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF0A66C2),
+                            backgroundColor: AppColors.primaryBlue,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             elevation: 0,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -262,7 +291,6 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                         ),
                       ),
 
-                      // 👉 UPDATED: Report Job Button with background, icon, and black text
                       if (showReportButton)
                         Padding(
                           padding: const EdgeInsets.only(top: 8.0),
@@ -274,17 +302,11 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                               icon: const Icon(Icons.flag_outlined, color: Colors.black87, size: 20),
                               label: const Text(
                                 'Report Job',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.black87, // Black words
-                                ),
+                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black87),
                               ),
                               style: TextButton.styleFrom(
-                                backgroundColor: Colors.grey.shade200, // Light grey background
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
+                                backgroundColor: Colors.grey.shade200,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               ),
                             ),
                           ),
