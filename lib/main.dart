@@ -3,6 +3,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/constants/supabase_constants.dart';
 import 'shared_widgets/auth_gate.dart';
+import 'shared_widgets/main_screen.dart';
 
 // Change main() to be an async function
 Future<void> main() async {
