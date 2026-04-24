@@ -10,6 +10,7 @@ import 'package:geocoding/geocoding.dart';
 import 'company_map_picker.dart';
 import 'package:open_filex/open_filex.dart';
 
+
 class RegisterCompanyScreen extends StatefulWidget {
   const RegisterCompanyScreen({super.key});
 

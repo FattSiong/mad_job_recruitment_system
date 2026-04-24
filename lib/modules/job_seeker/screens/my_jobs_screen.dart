@@ -8,6 +8,7 @@ import '../controllers/applied_jobs_controller.dart';
 import '../widgets/job_card.dart';
 import 'job_details_screen.dart';
 
+// 1. Changed to StatelessWidget since the Tabs handle their own state now
 class MyJobsScreen extends StatelessWidget {
   const MyJobsScreen({super.key});
 
@@ -44,80 +45,92 @@ class MyJobsScreen extends StatelessWidget {
 // -----------------------------------------------------
 // BOOKMARKED TAB
 // -----------------------------------------------------
-class BookmarkedJobsTab extends StatefulWidget {
+class BookmarkedJobsTab extends StatelessWidget {
   const BookmarkedJobsTab({super.key});
+
   @override
-  State<BookmarkedJobsTab> createState() => _BookmarkedJobsTabState();
+  Widget build(BuildContext context) {
+    // 👉 ValueListenableBuilder automatically listens to our global notifier
+    return ValueListenableBuilder<bool>(
+      valueListenable: BookmarkedController.bookmarkNotifier,
+      builder: (context, value, child) {
+        // 👉 By passing a ValueKey based on the notifier's value, we force
+        // Flutter to completely DESTROY and REBUILD the list from scratch
+        // every time a bookmark changes, guaranteeing fresh DB data!
+        return _BookmarkedJobsList(key: ValueKey(value));
+      },
+    );
+  }
 }
 
-class _BookmarkedJobsTabState extends State<BookmarkedJobsTab> {
+class _BookmarkedJobsList extends StatefulWidget {
+  const _BookmarkedJobsList({super.key});
+
+  @override
+  State<_BookmarkedJobsList> createState() => _BookmarkedJobsListState();
+}
+
+class _BookmarkedJobsListState extends State<_BookmarkedJobsList> {
   final BookmarkedController _bookmarkedController = BookmarkedController();
-  List<JobModel> _bookmarkedJobs = [];
-  bool _isLoading = true;
+  late Future<List<JobModel>> _jobsFuture;
 
   @override
   void initState() {
     super.initState();
-    _loadBookmarkedJobs();
-    BookmarkedController.bookmarkNotifier.addListener(_onBookmarkChanged);
-  }
-
-  void _onBookmarkChanged() {
-    if (mounted) {
-      _loadBookmarkedJobs();
-    }
-  }
-
-  @override
-  void dispose() {
-    // ALWAYS remove listeners when the app closes to save memory
-    BookmarkedController.bookmarkNotifier.removeListener(_onBookmarkChanged);
-    super.dispose();
-  }
-
-  Future<void> _loadBookmarkedJobs() async {
-    setState(() => _isLoading = true);
-    final jobs = await _bookmarkedController.fetchBookmarkedJobs();
-    if (mounted) setState(() { _bookmarkedJobs = jobs; _isLoading = false; });
+    // Because of the ValueKey above, this initState runs fresh every time a bookmark changes globally
+    _jobsFuture = _bookmarkedController.fetchBookmarkedJobs();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
-    if (_bookmarkedJobs.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.bookmark_border, size: 64, color: Colors.grey.shade400),
-            const SizedBox(height: 16),
-            Text('No bookmarked jobs', style: TextStyle(fontSize: 18, color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
-          ],
-        ),
-      );
-    }
-    return RefreshIndicator(
-      onRefresh: _loadBookmarkedJobs,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(UiConstants.defaultPadding),
-        itemCount: _bookmarkedJobs.length,
-        itemBuilder: (context, index) {
-          final job = _bookmarkedJobs[index];
-          return JobCard(
-            job: job,
-            onTap: () async {
-              await Navigator.push(context, MaterialPageRoute(builder: (context) => JobDetailsScreen(job: job)));
-              _loadBookmarkedJobs();
-            },
+    return FutureBuilder<List<JobModel>>(
+      future: _jobsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(color: AppColors.primaryBlue));
+        }
+
+        final jobs = snapshot.data ?? [];
+
+        if (jobs.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.bookmark_border, size: 64, color: Colors.grey.shade400),
+                const SizedBox(height: 16),
+                Text('No bookmarked jobs', style: TextStyle(fontSize: 18, color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
+              ],
+            ),
           );
-        },
-      ),
+        }
+
+        return RefreshIndicator(
+          onRefresh: () async {
+            // Manually flip the notifier to trigger a pull-to-refresh rebuild
+            BookmarkedController.bookmarkNotifier.value = !BookmarkedController.bookmarkNotifier.value;
+          },
+          child: ListView.builder(
+            padding: const EdgeInsets.all(UiConstants.defaultPadding),
+            itemCount: jobs.length,
+            itemBuilder: (context, index) {
+              final job = jobs[index];
+              return JobCard(
+                job: job,
+                onTap: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => JobDetailsScreen(job: job)));
+                },
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }
 
 // -----------------------------------------------------
-// APPLIED JOBS TAB
+// APPLIED JOBS TAB (Remains exactly the same)
 // -----------------------------------------------------
 class AppliedJobsTab extends StatefulWidget {
   const AppliedJobsTab({super.key});
@@ -153,7 +166,7 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    if (_isLoading) return const Center(child: CircularProgressIndicator(color: AppColors.primaryBlue));
     if (_appliedJobs.isEmpty) {
       return Center(
         child: Column(

@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../models/job_seeker_model.dart'; // 👉 Import the new model
+import '../../../models/job_seeker_model.dart';
 
 class ProfileController {
   final _supabase = Supabase.instance.client;
-  final String _mockSeekerID = '773ed23f-95ca-4853-ae50-06bd5e411bad';
+  String get _currentSeekerID => Supabase.instance.client.auth.currentUser!.id;
 
   /// Fetches the user's profile and returns a JobSeekerModel
   Future<JobSeekerModel?> getProfile() async {
@@ -12,7 +12,7 @@ class ProfileController {
       final response = await _supabase
           .from('JobSeeker')
           .select()
-          .eq('seekerID', _mockSeekerID)
+          .eq('seekerID', _currentSeekerID)
           .maybeSingle();
 
       if (response != null) {
@@ -29,7 +29,7 @@ class ProfileController {
   Future<String?> uploadResume(File file) async {
     try {
       final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.path.split('/').last}';
-      final filePath = '$_mockSeekerID/$fileName';
+      final filePath = '$_currentSeekerID/$fileName';
 
       await _supabase.storage.from('resumes').upload(filePath, file);
       final newResumeUrl = _supabase.storage.from('resumes').getPublicUrl(filePath);
@@ -37,7 +37,7 @@ class ProfileController {
       await _supabase
           .from('JobSeeker')
           .update({'resumeURL': newResumeUrl})
-          .eq('seekerID', _mockSeekerID);
+          .eq('seekerID', _currentSeekerID);
 
       return newResumeUrl;
     } catch (e) {
