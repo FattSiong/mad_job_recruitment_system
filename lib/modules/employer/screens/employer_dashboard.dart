@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../services/auth_service.dart';
 // Note: Update this import to point to your actual LoginScreen when ready
 import '../../../core/screens/temp_main_screen.dart';
+import '../../community/screens/community_dashboard.dart';
 import 'create_job_screen.dart';
 import 'company_list_screen.dart'; // 👉 Make sure to import the new screen
 import 'job_company_list_screen.dart';
@@ -134,6 +136,25 @@ class EmployerDashboard extends StatelessWidget {
                       );
                     },
                   ),
+
+
+                  // Placeholder for managing existing jobs
+                  ElevatedButton(
+                    onPressed: () {
+                      // Grab the currently logged-in user's UUID directly from Supabase
+                      final String currentUserId = Supabase.instance.client.auth.currentUser!.id;
+
+                      // Navigate to the Community Dashboard and pass the ID
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => CommunityDashboard(currentUserID: currentUserId),
+                        ),
+                      );
+                    },
+                    child: const Text('Community'),
+                  ),
+
                 ],
               ),
             ),
