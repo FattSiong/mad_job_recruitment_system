@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import '../../../models/company_model.dart';
 import '../../../services/employer_service.dart';
 
+
 class RegisterCompanyScreen extends StatefulWidget {
   const RegisterCompanyScreen({super.key});
 

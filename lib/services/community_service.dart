@@ -15,8 +15,8 @@ class CommunityService {
         .select('''
           roomID,
           User!ChatRoom_user2_ID_fkey(username, role), 
-          Message(content, sentAt, isRead)
-        ''') // ^^^ CHANGED 'fullName' to 'username' here ^^^
+          Message(content, sentAt, isRead, senderID)
+        ''')
         .eq('user1_ID', currentUserId)
         .order('sentAt', referencedTable: 'Message', ascending: false)
         .limit(1, referencedTable: 'Message');
@@ -74,7 +74,7 @@ class CommunityService {
           postID,
           authorID,
           content,
-          mediaURL,     -- 👈 Added this so images show up!
+          mediaURL,
           createdAt,
           User: "User"!CommunityPost_authorID_fkey (username, role),
           "PostComment" ("commentID"),
@@ -303,6 +303,22 @@ class CommunityService {
     } catch (e) {
       print('Error fetching attachments: $e');
       return [];
+    }
+  }
+
+
+
+
+  // --- Add this inside your CommunityService class ---
+  Future<void> softDeleteMessage(String messageID) async {
+    try {
+      await _supabase
+          .from('Message')
+          .update({'isDeleted': true})
+          .eq('messageID', messageID);
+    } catch (e) {
+      print('Error deleting message: $e');
+      throw Exception('Failed to delete message.');
     }
   }
 

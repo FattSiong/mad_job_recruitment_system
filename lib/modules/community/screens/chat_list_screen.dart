@@ -112,9 +112,15 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     final otherUserRole = userMap['role'] ?? 'Member';
 
                     final messageList = room['Message'] as List<dynamic>? ?? [];
+
+                    // Extract message data safely
                     final latestMessage = messageList.isNotEmpty ? messageList[0]['content'] : 'Started a chat';
-                    final isUnread = messageList.isNotEmpty ? !(messageList[0]['isRead'] as bool) : false;
                     final sentAt = messageList.isNotEmpty ? messageList[0]['sentAt'] : null;
+                    final senderID = messageList.isNotEmpty ? messageList[0]['senderID'] : null;
+                    final isMessageRead = messageList.isNotEmpty ? (messageList[0]['isRead'] as bool) : true;
+
+                    // 🛑 THE FIX: It is ONLY unread if it is unread AND you are not the sender!
+                    final isUnread = !isMessageRead && (senderID != widget.currentUserID);
 
                     return ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -135,7 +141,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
                             latestMessage,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: Colors.grey[800], fontSize: 14),
+                            style: TextStyle(
+                                color: isUnread ? Colors.black87 : Colors.grey[600],
+                                fontWeight: isUnread ? FontWeight.bold : FontWeight.normal,
+                                fontSize: 14
+                            ),
                           ),
                           const SizedBox(height: 2),
                           Text(
@@ -150,7 +160,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                         children: [
                           Text(
                             getRelativeTime(sentAt),
-                            style: TextStyle(fontSize: 12, color: Colors.grey[500], fontWeight: isUnread ? FontWeight.bold : FontWeight.normal),
+                            style: TextStyle(fontSize: 12, color: isUnread ? Colors.blue : Colors.grey[500], fontWeight: isUnread ? FontWeight.bold : FontWeight.normal),
                           ),
                           const SizedBox(height: 6),
                           if (isUnread)
@@ -177,7 +187,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
                               otherUserID: 'other_user_uuid',
                             ),
                           ),
-                        );
+                        ).then((_) {
+                          // Refresh the chat list when coming back to clear the badge!
+                          setState(() {});
+                        });
                       },
                     );
                   },
