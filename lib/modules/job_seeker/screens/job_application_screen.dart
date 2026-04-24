@@ -213,7 +213,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
           ..._questions.map((q) {
             // 👉 3. Use Model syntax (q.property) instead of Map syntax (q['property'])
             final questionId = q.questionID!;
-            final isText = q.questionType == 'text';
+            final isText = q.questionType == 'Text';
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 24.0),
