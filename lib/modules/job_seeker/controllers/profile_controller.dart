@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../models/job_seeker_model.dart'; // 👉 Import the new model
+import '../../../models/job_seeker_model.dart';
 
 class ProfileController {
   final _supabase = Supabase.instance.client;

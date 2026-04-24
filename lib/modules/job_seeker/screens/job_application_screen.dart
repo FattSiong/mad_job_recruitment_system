@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import '../../../core/utils/file_picker_helper.dart';
 import '../../../models/job_model.dart';
-import '../../../models/pre_screening_question_model.dart'; // 👉 1. Added import
+import '../../../models/pre_screening_question_model.dart';
 import '../controllers/application_controller.dart';
+import '../../../core/utils/file_preview_helper.dart';
 
 class JobApplicationScreen extends StatefulWidget {
   final JobModel job;
@@ -22,7 +24,6 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
   bool _isSubmitting = false;
   int _currentPage = 0;
 
-  // 👉 2. Changed from List<Map> to List<PreScreeningQuestionModel>
   List<PreScreeningQuestionModel> _questions = [];
   String? _existingResumeUrl;
 
@@ -65,6 +66,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     }
   }
 
+  // 👉 ADDED: Question Validation
   bool _validateQuestions() {
     for (var q in _questions) {
       final answer = _answers[q.questionID!];
@@ -76,7 +78,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
   }
 
   Future<void> _submitApplication() async {
-    // --- RESUME VALIDATION ---
+    // 👉 ADDED: Resume Validation
     if (_resumeSelection == 'new' && _newResumeFile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select a resume file to upload.'), backgroundColor: Colors.red),
@@ -200,7 +202,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                     ? null
                     : () {
                   if (hasQuestions && _currentPage == 0) {
-                    // --- QUESTION VALIDATION ---
+                    // 👉 ADDED: Validate before going to resume page
                     if (!_validateQuestions()) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -208,11 +210,11 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                           backgroundColor: Colors.red,
                         ),
                       );
-                      return; // Stop them from going to the next page
+                      return;
                     }
                     _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.ease);
                   } else {
-                    _submitApplication(); // This will handle the Resume validation
+                    _submitApplication();
                   }
                 },
                 style: ElevatedButton.styleFrom(
@@ -246,9 +248,12 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
           const SizedBox(height: 24),
 
           ..._questions.map((q) {
-            // 👉 3. Use Model syntax (q.property) instead of Map syntax (q['property'])
             final questionId = q.questionID!;
             final isText = q.questionType == 'Text';
+
+            // 👉 Get current answer to check if file is selected
+            final currentAnswer = _answers[questionId];
+            final isFileSelected = currentAnswer != null && currentAnswer is File;
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 24.0),
@@ -268,20 +273,49 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                       maxLines: 3,
                     )
                   else
-                    OutlinedButton.icon(
-                      onPressed: () => _pickFile((file) {
-                        setState(() => _answers[questionId] = file);
-                      }),
-                      icon: const Icon(Icons.upload_file),
-                      label: Text(
-                        _answers[questionId] != null
-                            ? (_answers[questionId] as File).path.split('/').last
-                            : 'Upload File Answer',
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-                        alignment: Alignment.centerLeft,
-                      ),
+                  // 👉 ADDED: File Preview UI for Pre-screening questions
+                    Row(
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: () async {
+                            File? pickedFile = await FilePickerHelper.pickFile(
+                              allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'zip', 'rar', 'dart', 'py', 'js', 'java', 'cpp', 'html', 'css', 'txt'],
+                            );
+
+                            // Only update state if they actually picked a file (didn't click cancel)
+                            if (pickedFile != null) {
+                              setState(() => _answers[questionId] = pickedFile);
+                            }
+                          },
+                          icon: const Icon(Icons.upload_file),
+                          label: Text(isFileSelected ? 'Change File' : 'Upload File'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: const Color(0xFF0A66C2),
+                            elevation: 0,
+                            side: const BorderSide(color: Color(0xFF0A66C2)),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        if (isFileSelected) ...[
+                          Expanded(
+                            child: Text(
+                              (currentAnswer).path.split('/').last,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.remove_red_eye, color: Color(0xFF0A66C2)),
+                            tooltip: 'Preview File',
+                            onPressed: () => FilePreviewHelper.previewLocalFile(context, currentAnswer),
+                          ),
+                        ] else ...[
+                          const Expanded(
+                            child: Text('No file selected', style: TextStyle(color: Colors.grey)),
+                          ),
+                        ],
+                      ],
                     ),
                 ],
               ),
@@ -329,6 +363,12 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                         ],
                       ),
                     ),
+                    // 👉 ADDED: Preview existing resume button
+                    IconButton(
+                      icon: const Icon(Icons.remove_red_eye, color: Colors.black54),
+                      tooltip: 'Preview',
+                      onPressed: () => FilePreviewHelper.previewNetworkFile(context, _existingResumeUrl!),
+                    ),
                     Icon(
                       _resumeSelection == 'existing' ? Icons.check_circle : Icons.radio_button_unchecked,
                       color: _resumeSelection == 'existing' ? const Color(0xFF0A66C2) : Colors.grey,
@@ -341,9 +381,14 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
           GestureDetector(
             onTap: () async {
               setState(() => _resumeSelection = 'new');
-              await _pickFile((file) {
-                setState(() => _newResumeFile = file);
-              });
+
+              File? pickedFile = await FilePickerHelper.pickFile(
+                allowedExtensions: ['pdf', 'doc', 'docx', 'rtf', 'txt'],
+              );
+
+              if (pickedFile != null) {
+                setState(() => _newResumeFile = pickedFile);
+              }
             },
             child: Container(
               padding: const EdgeInsets.all(16),
@@ -374,6 +419,13 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                       ],
                     ),
                   ),
+                  // 👉 ADDED: Preview new local file button
+                  if (_newResumeFile != null)
+                    IconButton(
+                      icon: const Icon(Icons.remove_red_eye, color: Colors.black54),
+                      tooltip: 'Preview',
+                      onPressed: () => FilePreviewHelper.previewLocalFile(context, _newResumeFile!),
+                    ),
                   Icon(
                     _resumeSelection == 'new' ? Icons.check_circle : Icons.radio_button_unchecked,
                     color: _resumeSelection == 'new' ? const Color(0xFF0A66C2) : Colors.grey,
