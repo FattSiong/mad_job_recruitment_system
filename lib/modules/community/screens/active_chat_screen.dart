@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../services/community_service.dart';
+import '../../../services/interview_service.dart'; // 👈 NEW: Import the Interview Service
 import '../../../models/message_model.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
@@ -7,8 +8,7 @@ import 'dart:io';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:audioplayers/audioplayers.dart';
-
-//import 'call_screen.dart'; // Add this at the top!
+import 'interview_lobby_screen.dart'; // 👈 NEW: Import the Lobby
 
 class ActiveChatScreen extends StatefulWidget {
   final String roomID;
@@ -179,7 +179,45 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
           ],
         ),
         actions: [
-          IconButton(icon: const Icon(Icons.videocam), onPressed: () {}),
+          // -----------------------------------------
+          // 👈 REFACTORED VIDEO BUTTON LOGIC
+          // -----------------------------------------
+          IconButton(
+            icon: const Icon(Icons.videocam, color: Colors.blueAccent),
+            tooltip: 'Video Interview',
+            onPressed: () async {
+              try {
+                // TODO: Replace this hardcoded 'true' with your actual user role check!
+                // For example: bool isCurrentUserEmployer = currentUser.role == 'Employer';
+                bool isCurrentUserEmployer = true;
+
+                // Assign the IDs properly so the database knows who is who
+                final employerID = isCurrentUserEmployer ? widget.currentUserID : widget.otherUserID;
+                final seekerID = isCurrentUserEmployer ? widget.otherUserID : widget.currentUserID;
+
+                // Create or fetch the room from Supabase
+                final interviewData = await InterviewService().getOrCreateInterview(employerID, seekerID);
+
+                // Navigate to the Lobby
+                if (context.mounted) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => InterviewLobbyScreen(
+                        interviewID: interviewData['interviewID'],
+                        roomCode: interviewData['roomCode'],
+                        isEmployer: isCurrentUserEmployer,
+                      ),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                }
+              }
+            },
+          ),
           IconButton(icon: const Icon(Icons.call), onPressed: () {}),
           IconButton(
             icon: const Icon(Icons.more_vert),
@@ -207,9 +245,7 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
                   return const Center(child: Text("Say hi!", style: TextStyle(color: Colors.grey)));
                 }
 
-                // 🛑 FIX 1: REVERSE THE LIST!
-                // Since the stream returns oldest-first, and our ListView builds from the bottom-up,
-                // we reverse the list here so the newest messages are at index 0 (the bottom).
+                // Reverse the list so the newest messages are at index 0 (the bottom).
                 final messages = snapshot.data!.reversed.toList();
 
                 return ListView.builder(
@@ -310,10 +346,6 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
     );
   }
 }
-
-
-
-
 
 // ------------------------------------------------------------------------
 // The Smart Message Bubble Widget (Now with Soft Delete!)

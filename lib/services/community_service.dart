@@ -14,6 +14,7 @@ class CommunityService {
         .from('ChatRoom')
         .select('''
           roomID,
+          user2_ID,
           User!ChatRoom_user2_ID_fkey(username, role), 
           Message(content, sentAt, isRead, senderID)
         ''')

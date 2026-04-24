@@ -184,7 +184,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
                               roomID: room['roomID'],
                               currentUserID: widget.currentUserID,
                               otherUserName: otherUserName,
-                              otherUserID: 'other_user_uuid',
+                              // 👇 FIX: Use the real ID from the database instead of the placeholder
+                              otherUserID: room['user2_ID'],
                             ),
                           ),
                         ).then((_) {
