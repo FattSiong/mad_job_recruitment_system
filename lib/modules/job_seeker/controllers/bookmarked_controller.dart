@@ -1,11 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../models/job_model.dart';
-import '../../../models/bookmarked_job_model.dart'; // 👉 Import the model
+import '../../../models/bookmarked_job_model.dart';
 
 class BookmarkedController {
   final _supabase = Supabase.instance.client;
-  final String _mockSeekerID = '773ed23f-95ca-4853-ae50-06bd5e411bad';
+  String get _currentSeekerID => Supabase.instance.client.auth.currentUser!.id;
   static final ValueNotifier<bool> bookmarkNotifier = ValueNotifier(false);
 
   Future<bool> isJobBookmarked(String jobId) async {
@@ -13,7 +13,7 @@ class BookmarkedController {
       final response = await _supabase
           .from('BookmarkedJob')
           .select()
-          .eq('seekerID', _mockSeekerID)
+          .eq('seekerID', _currentSeekerID)
           .eq('jobID', jobId);
 
       return response.isNotEmpty;
@@ -29,7 +29,7 @@ class BookmarkedController {
         await _supabase
             .from('BookmarkedJob')
             .delete()
-            .eq('seekerID', _mockSeekerID)
+            .eq('seekerID', _currentSeekerID)
             .eq('jobID', jobId);
 
         bookmarkNotifier.value = !bookmarkNotifier.value;
@@ -37,7 +37,7 @@ class BookmarkedController {
       } else {
         // 👉 Package the data into the Model
         final newBookmark = BookmarkedJobModel(
-          seekerID: _mockSeekerID,
+          seekerID: _currentSeekerID,
           jobID: jobId,
         );
 
@@ -57,7 +57,7 @@ class BookmarkedController {
       final response = await _supabase
           .from('BookmarkedJob')
           .select('Job(*, Company(name))')
-          .eq('seekerID', _mockSeekerID)
+          .eq('seekerID', _currentSeekerID)
           .order('savedAt', ascending: false);
 
       final List<JobModel> bookmarkedJobs = (response as List<dynamic>)

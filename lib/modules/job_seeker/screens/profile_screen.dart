@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/constants/ui_constants.dart';
+import '../../../core/utils/file_preview_helper.dart';
 import '../../../models/job_seeker_model.dart';
 import '../controllers/profile_controller.dart';
 
@@ -149,6 +150,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                     ),
                   ),
+                  // 👉 ADD THIS PREVIEW BUTTON
+                  if (_profile!.resumeURL != null)
+                    IconButton(
+                      icon: const Icon(Icons.remove_red_eye, color: AppColors.primaryBlue),
+                      tooltip: 'Preview Resume',
+                      onPressed: () {
+                        FilePreviewHelper.previewNetworkFile(context, _profile!.resumeURL!);
+                      },
+                    ),
                 ],
               ),
             ),
