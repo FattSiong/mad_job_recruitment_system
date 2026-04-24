@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../models/job_model.dart';
 import '../../../services/employer_service.dart';
 import 'create_job_screen.dart';
+import 'job_detail_screen.dart';
 
 class ManageJobsScreen extends StatefulWidget {
   const ManageJobsScreen({super.key});
@@ -120,9 +121,17 @@ class _ManageJobsScreenState extends State<ManageJobsScreen> {
                 ],
               ),
               trailing: _buildStatusBadge(job.status),
-              onTap: () {
-                // TODO: Navigate to the Job Details / ATS Screen for this specific job
-                print('Tapped on job: ${job.title}');
+              onTap: () async {
+                // Navigate to the Job Detail screen
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => JobDetailScreen(job: job),
+                  ),
+                );
+
+                // Refresh the job list when returning, just in case they closed the job
+                _loadJobs();
               },
             ),
           );

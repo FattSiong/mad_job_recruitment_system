@@ -4,7 +4,9 @@ import '../../../services/auth_service.dart';
 import '../../../core/screens/temp_main_screen.dart';
 import 'create_job_screen.dart';
 import 'company_list_screen.dart'; // 👉 Make sure to import the new screen
+import 'job_company_list_screen.dart';
 import 'manage_job_screen.dart';
+import 'pending_invites_screen.dart';
 
 class EmployerDashboard extends StatelessWidget {
   const EmployerDashboard({super.key});
@@ -91,7 +93,7 @@ class EmployerDashboard extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const ManageJobsScreen(),
+                          builder: (context) => const ManageJobsCompanyListScreen(),
                         ),
                       );
                     },
@@ -116,6 +118,20 @@ class EmployerDashboard extends StatelessWidget {
                     onTap: () {
                       // TODO: Navigate to Payment Screen
                       print('Navigate to Billing');
+                    },
+                  ),
+
+                  _buildDashboardCard(
+                    context,
+                    title: 'Company Invitations',
+                    icon: Icons.mail,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const PendingInvitationsScreen(),
+                        ),
+                      );
                     },
                   ),
                 ],

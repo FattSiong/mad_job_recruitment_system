@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/company_model.dart';
 import '../models/job_model.dart';
@@ -21,14 +22,15 @@ class EmployerService {
       // 2. Insert the JSON version of our Dart model
       // 3. .select() asks Supabase to hand the newly created row back to us
       final response = await _supabase
-          .from(TableConstants.job) // Make sure this matches your exact table name in Supabase
+          .from(
+            TableConstants.job,
+          ) // Make sure this matches your exact table name in Supabase
           .insert(newJob.toJson())
           .select()
           .single(); // We only expect one row back
 
       // Convert the successful database response back into a Dart Model
       return JobModel.fromJson(response);
-
     } on PostgrestException catch (e) {
       // This catches database-specific errors (like missing foreign keys)
       print('Database Error creating job: ${e.message}');
@@ -41,7 +43,10 @@ class EmployerService {
   }
 
   /// Registers a new company AND links the creating employer to it.
-  Future<CompanyModel?> registerCompany(CompanyModel newCompany, String employerId) async {
+  Future<CompanyModel?> registerCompany(
+    CompanyModel newCompany,
+    String employerId,
+  ) async {
     try {
       // 1. Insert the company and get the generated row back
       final response = await _supabase
@@ -66,7 +71,6 @@ class EmployerService {
       }
 
       return createdCompany; // Return the company so the UI can show a success message
-
     } on PostgrestException catch (e) {
       print('🔥🔥🔥 Database Error registering company: ${e.message}');
       return null;
@@ -76,10 +80,14 @@ class EmployerService {
     }
   }
 
-  Future<String?> uploadVerificationDocument(File documentFile, String companyName) async {
+  Future<String?> uploadVerificationDocument(
+    File documentFile,
+    String companyName,
+  ) async {
     try {
       // Create a unique file name using the timestamp to prevent overwriting
-      final fileName = '${companyName.replaceAll(' ', '_')}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      final fileName =
+          '${companyName.replaceAll(' ', '_')}_${DateTime.now().millisecondsSinceEpoch}.pdf';
 
       // Upload to the 'verification_documents' bucket
       await _supabase.storage
@@ -92,7 +100,6 @@ class EmployerService {
           .getPublicUrl(fileName);
 
       return publicUrl;
-
     } catch (e) {
       print('Error uploading document: $e');
       return null;
@@ -110,19 +117,23 @@ class EmployerService {
             .select()
             .order('createdAt', ascending: false); // Optional: newest first
 
-        return (response as List).map((json) => CompanyModel.fromJson(json)).toList();
-
+        return (response as List)
+            .map((json) => CompanyModel.fromJson(json))
+            .toList();
       } else if (role == 'employer') {
         // 1. Find all company IDs this specific employer belongs to
         final memberResponse = await _supabase
             .from(TableConstants.companyMember)
             .select('companyID')
-            .eq('employerID', userId);
+            .eq('employerID', userId)
+            .eq('status', 'active');
 
         if (memberResponse.isEmpty) return [];
 
         // Extract just the IDs into a list
-        final List<dynamic> companyIds = memberResponse.map((m) => m['companyID']).toList();
+        final List<dynamic> companyIds = memberResponse
+            .map((m) => m['companyID'])
+            .toList();
 
         // 2. Fetch the actual company details for those IDs
         final companyResponse = await _supabase
@@ -130,12 +141,34 @@ class EmployerService {
             .select()
             .filter('companyID', 'in', companyIds);
 
-        return (companyResponse as List).map((json) => CompanyModel.fromJson(json)).toList();
+        return (companyResponse as List)
+            .map((json) => CompanyModel.fromJson(json))
+            .toList();
       }
 
       return []; // Return empty if role is not recognized
     } catch (e) {
       print('Error fetching companies: $e');
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getCompanyMembers(String companyId) async {
+    try {
+      // We query the CompanyMember table and join it with your public Employer profile table
+      // Note: Ensure your public profile table is named 'Employer' and has 'name' and 'email'
+      final response = await _supabase
+          .from('CompanyMember')
+          .select('companyRole, status, employerID, Employer(fullName, email)')
+          .eq('companyID', companyId)
+          .order(
+            'companyRole',
+            ascending: false,
+          ); // This puts 'owner' at the top of the list!
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Fetch members error: $e');
       return [];
     }
   }
@@ -156,8 +189,58 @@ class EmployerService {
     }
   }
 
+  Future<List<CompanyModel>> getMyAcceptedCompanies() async {
+    try {
+      final currentUser = _supabase.auth.currentUser;
+      if (currentUser == null) return [];
+
+      // Query the CompanyMember table and join the actual Company data
+      final response = await _supabase
+          .from('CompanyMember')
+          .select(
+            'status, Company(*)',
+          ) // Pulls everything from the linked Company table
+          .eq('employerID', currentUser.id)
+          .eq('status', 'active'); // 👉 SECURITY CHECK: Must be accepted
+
+      // Parse the joined data back into your CompanyModel list
+      final List<CompanyModel> companies = [];
+      for (var row in response) {
+        if (row['Company'] != null) {
+          companies.add(CompanyModel.fromJson(row['Company']));
+        }
+      }
+
+      return companies;
+    } catch (e) {
+      print('Fetch accepted companies error: $e');
+      return [];
+    }
+  }
+
+  /// Fetches all jobs for a specific company
+  Future<List<JobModel>> getJobsByCompanyId(String companyId) async {
+    try {
+      final response = await _supabase
+          .from('Job') // Use TableConstants.job if you have it
+          .select()
+          .eq('companyID', companyId);
+      // Optional: .order('created_at', ascending: false) to show newest first
+
+      return response.map((json) => JobModel.fromJson(json)).toList();
+    } catch (e) {
+      print('Fetch jobs by company error: $e');
+      return [];
+    }
+  }
+
   /// Simulated AI Salary Suggestion
-  Future<Map<String, String>> getAiSalarySuggestion(String jobTitle, String jobDescription, int minExperience, String jobType) async {
+  Future<Map<String, String>> getAiSalarySuggestion(
+    String jobTitle,
+    String jobDescription,
+    int minExperience,
+    String jobType,
+  ) async {
     try {
       // 1. Retrieve the hidden API key
       final apiKey = 'AIzaSyCPF5BiUdWIoroAWm42IhiUfxDMkQzFJ6U';
@@ -171,7 +254,8 @@ class EmployerService {
       String prompt;
 
       if (jobType == 'Part-time') {
-        prompt = '''
+        prompt =
+            '''
         You are an expert HR recruiter in Malaysia. 
         Analyze the following part-time job details and suggest a realistic HOURLY salary rate in RM.
         
@@ -183,7 +267,8 @@ class EmployerService {
         Example: {"min": "15", "max": ""}
         ''';
       } else {
-        prompt = '''
+        prompt =
+            '''
         You are an expert HR recruiter in Malaysia. 
         Analyze the following full-time job details and suggest a realistic MONTHLY salary range in RM.
         
@@ -214,5 +299,353 @@ class EmployerService {
 
     // 5. Fallback just in case the AI fails or the user has no internet
     return {'min': '3000', 'max': '4500'};
+  }
+
+  Future<bool> updateJobStatus(String jobId, String newStatus) async {
+    try {
+      await _supabase
+          .from(
+            'Job',
+          ) // Or TableConstants.job if you are using your constants file
+          .update({'status': newStatus})
+          .eq('jobID', jobId);
+      return true;
+    } catch (e) {
+      print('Error updating job status: $e');
+      return false;
+    }
+  }
+
+  /// Updates an existing job posting in the database.
+  Future<bool> updateJobPosting(JobModel updatedJob) async {
+    try {
+      // Safety check to ensure we know which row to update
+      if (updatedJob.jobID == null) return false;
+
+      await _supabase
+          .from('Job') // Use TableConstants.job if you implemented it
+          .update(updatedJob.toJson())
+          .eq('jobID', updatedJob.jobID!);
+
+      return true;
+    } catch (e) {
+      print('Error updating job: $e');
+      return false;
+    }
+  }
+
+  Future<String> sendInvitation(String companyId, String inviteeEmail) async {
+    try {
+      final currentUser = _supabase.auth.currentUser;
+      if (currentUser == null) return 'Not authenticated';
+
+      // Verify the current user is the owner
+      final ownerCheck = await _supabase
+          .from('CompanyMember')
+          .select('companyRole')
+          .eq('companyID', companyId)
+          .eq('employerID', currentUser.id)
+          .maybeSingle();
+
+      if (ownerCheck == null || ownerCheck['companyRole'] != 'owner') {
+        return 'Only owners can invite members.';
+      }
+
+      // Call the secure database function to check auth.users
+      final inviteeId = await _supabase.rpc(
+        'get_user_id_by_email',
+        params: {'lookup_email': inviteeEmail.trim().toLowerCase()},
+      );
+
+      if (inviteeId == null) {
+        return 'No account found with this email. They must register first.';
+      }
+
+      // Prevent inviting yourself
+      if (inviteeId == currentUser.id) {
+        return 'You cannot invite yourself.';
+      }
+
+      // Check if they are already in the company (accepted or pending)
+      final existingMember = await _supabase
+          .from('CompanyMember')
+          .select('status')
+          .eq('companyID', companyId)
+          .eq('employerID', inviteeId)
+          .maybeSingle();
+
+      if (existingMember != null) {
+        return 'This user is already in the company or has a pending invite.';
+      }
+
+      // Insert the new member with a 'pending' status
+      await _supabase.from('CompanyMember').insert({
+        'companyID': companyId,
+        'employerID': inviteeId,
+        'companyRole': 'member',
+        'status': 'pending',
+      });
+
+      return 'Success';
+    } catch (e) {
+      print('Invite error: $e');
+      return 'An error occurred. Please try again.';
+    }
+  }
+
+  /// 2. FETCH PENDING INVITATIONS
+  Future<List<Map<String, dynamic>>> getMyPendingInvitations() async {
+    try {
+      final currentUser = _supabase.auth.currentUser;
+      if (currentUser == null) return [];
+
+      final response = await _supabase
+          .from('CompanyMember')
+          .select('*, Company(name)')
+          .eq('employerID', currentUser.id)
+          .eq('status', 'pending');
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Fetch invites error: $e');
+      return [];
+    }
+  }
+
+  /// 3. RESPOND TO INVITATION
+  Future<bool> respondToInvitation(String companyId, bool isAccepted) async {
+    try {
+      final currentUser = _supabase.auth.currentUser;
+      if (currentUser == null) return false;
+
+      if (isAccepted) {
+        await _supabase
+            .from('CompanyMember')
+            .update({'status': 'active'})
+            .eq('companyID', companyId)
+            .eq('employerID', currentUser.id);
+      } else {
+        await _supabase
+            .from('CompanyMember')
+            .delete()
+            .eq('companyID', companyId)
+            .eq('employerID', currentUser.id);
+      }
+      return true;
+    } catch (e) {
+      print('Respond error: $e');
+      return false;
+    }
+  }
+
+  // 👉 The REAL Gemini AI Question Generator
+  Future<String> generateAiQuestion(
+    String jobTitle,
+    String jobDesc,
+    String questionType,
+  ) async {
+    try {
+      // 1. Initialize the Model
+      // ⚠️ Note for FYP: Hardcoding the API key is fine for testing, but for production
+      // or public GitHub repos, it's best to hide this in a .env file using flutter_dotenv!
+      final apiKey = 'AIzaSyCPF5BiUdWIoroAWm42IhiUfxDMkQzFJ6U';
+      final model = GenerativeModel(
+        model: 'gemini-3-flash-preview',
+        apiKey: apiKey,
+      );
+
+      // 2. Build a highly specific Prompt
+      String prompt =
+          '''
+            You are an expert HR recruiter. You need to write ONE pre-screening interview question for a candidate applying for the role of "$jobTitle".
+          ''';
+
+      // Inject the job description only if the user typed one
+      if (jobDesc.isNotEmpty) {
+        prompt += 'Here is the job description for context: "$jobDesc"\n\n';
+      }
+
+      // Change the AI's goal based on what the employer wants
+      if (questionType == 'File') {
+        prompt += '''
+          The candidate must answer this question by UPLOADING A FILE. 
+          Write a professional request asking them to upload a relevant portfolio, document, certificate, or code sample to prove their skills.
+        ''';
+      } else {
+        prompt += '''
+          The candidate must answer this question by TYPING TEXT.
+          Write a professional interview question to test their experience, situational judgment, or technical knowledge.
+        ''';
+      }
+
+      // 3. The Constraint Rule (Stops the AI from saying "Here is your question:")
+      prompt += '''
+          \nCRITICAL INSTRUCTION: Output ONLY the question/request itself. Do not use quotation marks, bullet points, introductory text, or conversational filler.
+        ''';
+
+      // 4. Send to Gemini
+      final content = [Content.text(prompt)];
+      final response = await model.generateContent(content);
+
+      // 5. Clean and return the result
+      if (response.text != null && response.text!.isNotEmpty) {
+        // .trim() removes extra spaces/newlines, .replaceAll removes accidental quotes
+        return response.text!.trim().replaceAll('"', '');
+      }
+
+      return '';
+    } catch (e) {
+      print('Gemini AI Gen Error: $e');
+      return '';
+    }
+  }
+
+  // 2. 👉 UPDATE: Modify the insert method to handle the isAIGenerated flag
+  Future<bool> addPreScreeningQuestions(
+    String jobId,
+    List<Map<String, dynamic>> questionsData,
+  ) async {
+    try {
+      if (questionsData.isEmpty) return true;
+
+      final List<Map<String, dynamic>> dbPayload = questionsData.map((data) {
+        return {
+          'jobID': jobId,
+          'questionText': data['text'],
+          'questionType': data['type'],
+          'isAIGenerated': data['isAIGenerated'] ?? false, // 👉 Now dynamic!
+        };
+      }).toList();
+
+      await _supabase.from('PreScreeningQuestion').insert(dbPayload);
+      return true;
+    } catch (e) {
+      print('Error saving questions: $e');
+      return false;
+    }
+  }
+
+  Future<bool> updateCompanyDetails({
+    required String companyId,
+    required String name,
+    required String description,
+    File? newLogoFile,
+  }) async {
+    try {
+      String? finalLogoUrl;
+
+      // 1. If they picked a new image, upload it first
+      if (newLogoFile != null) {
+        final fileExt = newLogoFile.path.split('.').last;
+        final fileName = 'company_$companyId\_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+
+        // Ensure you have a 'company_logos' bucket created in your Supabase Storage!
+        await _supabase.storage.from('company_logos').upload(fileName, newLogoFile);
+        finalLogoUrl = _supabase.storage.from('company_logos').getPublicUrl(fileName);
+      }
+
+      // 2. Prepare the update payload
+      final Map<String, dynamic> updateData = {
+        'name': name,
+        'description': description,
+      };
+
+      // Only update the logo URL if a new one was actually uploaded
+      if (finalLogoUrl != null) {
+        updateData['companyLogoURL'] = finalLogoUrl; // Make sure your DB has a 'logoURL' column!
+      }
+
+      // 3. Update the database
+      await _supabase
+          .from('Company') // Or TableConstants.company
+          .update(updateData)
+          .eq('companyID', companyId);
+
+      return true;
+    } catch (e) {
+      print('Update Company Error: $e');
+      return false;
+    }
+  }
+
+  // 1. Fetch all applicants for a specific job
+  Future<List<Map<String, dynamic>>> getJobApplicants(String jobId) async {
+    try {
+      // We use a JOIN to grab the applicant's data AND their JobSeeker profile (for their name)
+      final response = await _supabase
+          .from('JobApplicant')
+          .select('*, JobSeeker(*)')
+          .eq('jobID', jobId)
+          .order('appliedAt', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Fetch applicants error: $e');
+      return [];
+    }
+  }
+
+  // 2. Fetch the pre-screening answers for a specific applicant
+  Future<List<Map<String, dynamic>>> getApplicantAnswers(String applicantId) async {
+    try {
+      // We JOIN with the PreScreeningQuestion table so we know what question they are answering!
+      final response = await _supabase
+          .from('ApplicationAnswer')
+          .select('*, PreScreeningQuestion(questionText, questionType)')
+          .eq('applicantID', applicantId);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Fetch answers error: $e');
+      return [];
+    }
+  }
+
+  // 3. Update the candidate's application status
+  Future<bool> updateApplicationStatus(String applicantId, String newStatus) async {
+    try {
+      await _supabase
+          .from('JobApplicant')
+          .update({'applicationStatus': newStatus})
+          .eq('applicantID', applicantId);
+      return true;
+    } catch (e) {
+      print('Update status error: $e');
+      return false;
+    }
+  }
+
+  // 👉 NEW: Save the interview schedule and update status
+  Future<bool> scheduleInterview({
+    required String applicantId,
+    required DateTime date,
+    required TimeOfDay startTime,
+    required TimeOfDay endTime,
+    required String meetingMethod,
+    String? meetingLink,
+  }) async {
+    try {
+      // Format TimeOfDay into standard SQL time format (HH:MM:SS)
+      final startStr = '${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}:00';
+      final endStr = '${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}:00';
+
+      // 1. Insert into the InterviewSchedule table
+      await _supabase.from('InterviewSchedule').insert({
+        'applicantID': applicantId,
+        'date': date.toIso8601String().split('T')[0], // YYYY-MM-DD
+        'startTime': startStr,
+        'endTime': endStr,
+        'meetingMethod': meetingMethod,
+        'meetingLink': meetingLink,
+      });
+
+      // 2. Update the JobApplicant status to 'scheduled'
+      await updateApplicationStatus(applicantId, 'scheduled');
+
+      return true;
+    } catch (e) {
+      print('Schedule Interview Error: $e');
+      return false;
+    }
   }
 }

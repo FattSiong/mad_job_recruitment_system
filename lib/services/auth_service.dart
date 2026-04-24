@@ -22,7 +22,7 @@ class AuthService {
       final String? userId = response.user?.id;
 
       if (userId != null) {
-        // Step B: Use TableConstants.user here
+        // Step B: Insert into the master User table
         await _supabase.from(TableConstants.user).insert({
           'userID': userId,
           'email': email,
@@ -32,16 +32,18 @@ class AuthService {
 
         final String fullName = '${firstName.trim()} ${lastName.trim()}';
 
-        // Step C: Use TableConstants.employer and TableConstants.jobSeeker here
+        // Step C: Insert into the specific Role table, NOW INCLUDING THE EMAIL
         if (role == 'employer') {
           await _supabase.from(TableConstants.employer).insert({
             'employerID': userId,
             'fullName': fullName,
+            'email': email, // 👉 ADDED EMAIL HERE
           });
         } else if (role == 'job_seeker') {
           await _supabase.from(TableConstants.jobSeeker).insert({
             'seekerID': userId,
             'fullName': fullName,
+            'email': email, // 👉 ADDED EMAIL HERE
           });
         }
       }
@@ -66,7 +68,6 @@ class AuthService {
       final String? userId = response.user?.id;
 
       if (userId != null) {
-        // Query using TableConstants.user
         final userData = await _supabase
             .from(TableConstants.user)
             .select('role')

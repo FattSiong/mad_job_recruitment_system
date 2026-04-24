@@ -10,7 +10,7 @@ class PreScreeningQuestionModel {
     required this.jobID,
     required this.questionText,
     this.isAIGenerated = false,
-    required this.questionType,
+    this.questionType = 'Text', // Defaulting to 'Text' based on your current UI
   });
 
   factory PreScreeningQuestionModel.fromJson(Map<String, dynamic> json) {
