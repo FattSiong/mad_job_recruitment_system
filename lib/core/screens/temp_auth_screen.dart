@@ -3,6 +3,7 @@ import '../../modules/employer/screens/employer_dashboard.dart';
 import '../../modules/job_seeker/screens/seeker_dashboard.dart';
 import '../../modules/admin/screens/admin_dashboard.dart';
 import '../../modules/community/screens/community_dashboard.dart';
+import '../../modules/job_seeker/screens/seeker_main_screen.dart';
 
 class TempAuthScreen extends StatelessWidget {
   final String selectedRole;
@@ -18,7 +19,7 @@ class TempAuthScreen extends StatelessWidget {
         destination = const EmployerDashboard();
         break;
       case 'Seeker':
-        destination = const SeekerDashboard();
+        destination = const SeekerMainScreen();
         break;
       case 'Community':
         destination = const CommunityDashboard();

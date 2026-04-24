@@ -9,6 +9,7 @@ class JobModel {
   final String salaryRange;
   final String status; // e.g., 'active', 'draft', 'archived'
   final DateTime? createdAt;
+  final String? companyName;
 
   JobModel({
     this.jobID,
@@ -21,10 +22,20 @@ class JobModel {
     required this.salaryRange,
     this.status = 'active',
     this.createdAt,
+    this.companyName,
   });
 
   // 1. Convert from Supabase JSON to Dart Object (When reading data)
   factory JobModel.fromJson(Map<String, dynamic> json) {
+
+    String? extractedCompanyName;
+    // Supabase returns joined tables as nested JSON objects!
+    if (json['Company'] != null && json['Company']['name'] != null) {
+      extractedCompanyName = json['Company']['name'] as String;
+    } else if (json['company'] != null && json['company']['name'] != null) {
+      // Fallback just in case PostgreSQL lowercased the table name
+      extractedCompanyName = json['company']['name'] as String;
+    }
     return JobModel(
       jobID: json['jobID'] as String?,
       companyID: json['companyID'] as String,
@@ -36,6 +47,7 @@ class JobModel {
       salaryRange: json['salaryRange'] as String,
       status: json['status'] as String,
       createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt']) : null,
+      companyName: extractedCompanyName,
     );
   }
 
