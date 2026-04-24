@@ -3,6 +3,8 @@ import '../../../services/auth_service.dart';
 import '../../../core/screens/temp_main_screen.dart';
 import 'create_job_screen.dart'; // Import the screen we just made
 import 'register_company_screen.dart';
+import '../../community/screens/community_dashboard.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 
 class EmployerDashboard extends StatelessWidget {
@@ -29,6 +31,21 @@ class EmployerDashboard extends StatelessWidget {
                   );
                 },
                 child: const Text('Register Company'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  // Grab the currently logged-in user's UUID directly from Supabase
+                  final String currentUserId = Supabase.instance.client.auth.currentUser!.id;
+
+                  // Navigate to the Community Dashboard and pass the ID
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => CommunityDashboard(currentUserID: currentUserId),
+                    ),
+                  );
+                },
+                child: const Text('Community'),
               ),
               IconButton(
                 icon: const Icon(Icons.logout),

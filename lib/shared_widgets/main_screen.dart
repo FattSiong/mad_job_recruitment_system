@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 // 导入对应的页面路径，请根据你实际的项目文件夹名称调整
 
-import '../../modules/community/screens/chat_main_screen.dart';
 import '../../modules/community/screens/community_dashboard.dart';
 import '../../modules/job_seeker/screens/seeker_dashboard.dart';
 import '../core/screens/login_page.dart';
@@ -22,10 +21,10 @@ class _TempMainScreenState extends State<TempMainScreen> {
       setState(() => _currentIndex = index);
     } else if (index == 1) {
       // For you -> Community Dashboard
-      Navigator.push(context, MaterialPageRoute(builder: (context) => const CommunityDashboard()));
+      //Navigator.push(context, MaterialPageRoute(builder: (context) => const CommunityDashboard()));
     } else if (index == 2) {
       // Chats -> Chat & Interview Main Screen
-      Navigator.push(context, MaterialPageRoute(builder: (context) => const ChatMainScreen()));
+      //Navigator.push(context, MaterialPageRoute(builder: (context) => const ChatMainScreen()));
     } else if (index == 3) {
       // My Jobs -> Seeker Dashboard
       Navigator.push(context, MaterialPageRoute(builder: (context) => const SeekerDashboard()));
