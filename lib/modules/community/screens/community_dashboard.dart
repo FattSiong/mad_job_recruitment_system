@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'active_chat_screen.dart';
 import '../../../services/community_service.dart';
 import 'create_post_screen.dart';
+import 'chat_list_screen.dart'; // Imports your newly separated Chat file!
 
 // ------------------------------------------------------------------------
 // Global Helper Function for Time Formatting
@@ -72,6 +73,8 @@ class _CommunityDashboardState extends State<CommunityDashboard> {
         body: TabBarView(
           children: [
             CommunityFeedTab(key: UniqueKey(), currentUserID: widget.currentUserID),
+
+            // This now pulls from your new file!
             ChatListScreen(currentUserID: widget.currentUserID),
           ],
         ),
@@ -147,8 +150,6 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
                 post: posts[index],
                 currentUserID: widget.currentUserID,
                 onDelete: () {
-                  print("Refresh callback triggered!");
-                  // This calls your _handleRefresh method which runs setState()
                   _handleRefresh();
                 },
               );
@@ -161,213 +162,12 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
 }
 
 // ------------------------------------------------------------------------
-// TAB 2: The Chat List Screen
-// ------------------------------------------------------------------------
-class ChatListScreen extends StatefulWidget {
-  final String currentUserID;
-
-  const ChatListScreen({super.key, required this.currentUserID});
-
-  @override
-  State<ChatListScreen> createState() => _ChatListScreenState();
-}
-
-class _ChatListScreenState extends State<ChatListScreen> {
-  final CommunityService _communityService = CommunityService();
-
-  // --- NEW: Search State Variables ---
-  String _searchQuery = '';
-  final TextEditingController _searchController = TextEditingController();
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: Colors.white,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: TextField(
-              controller: _searchController, // <-- Bind the controller
-              onChanged: (value) {
-                // <-- Update state when user types
-                setState(() {
-                  _searchQuery = value.toLowerCase();
-                });
-              },
-              decoration: InputDecoration(
-                hintText: 'Search messages...',
-                hintStyle: TextStyle(color: Colors.grey[400]),
-                prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                filled: true,
-                fillColor: Colors.grey[100],
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30.0),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            child: FutureBuilder<List<Map<String, dynamic>>>(
-              future: _communityService.getChatRooms(widget.currentUserID),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Text(
-                        "Database Error:\n${snapshot.error}",
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.red),
-                      ),
-                    ),
-                  );
-                }
-
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Center(
-                      child: Text("No active chats yet.", style: TextStyle(color: Colors.grey))
-                  );
-                }
-
-                final chatRooms = snapshot.data!;
-
-                // --- NEW: Filter Logic ---
-                final filteredRooms = chatRooms.where((room) {
-                  final userMap = room['User'] ?? {};
-                  final otherUserName = (userMap['fullName'] ?? userMap['username'] ?? 'Unknown User').toString().toLowerCase();
-
-                  final messageList = room['Message'] as List<dynamic>? ?? [];
-                  final latestMessage = messageList.isNotEmpty ? messageList[0]['content'].toString().toLowerCase() : '';
-
-                  // Keep the room if the username OR the message contains the search query
-                  return otherUserName.contains(_searchQuery) || latestMessage.contains(_searchQuery);
-                }).toList();
-
-                // Show a message if search yields no results
-                if (filteredRooms.isEmpty) {
-                  return const Center(
-                      child: Text("No messages match your search.", style: TextStyle(color: Colors.grey))
-                  );
-                }
-
-                return ListView.separated(
-                  itemCount: filteredRooms.length, // <-- Use the filtered list length
-                  separatorBuilder: (context, index) => Divider(color: Colors.grey[200], height: 1, indent: 76),
-                  itemBuilder: (context, index) {
-                    final room = filteredRooms[index]; // <-- Use the filtered list items
-
-                    final userMap = room['User'] ?? {};
-                    final otherUserName = userMap['fullName'] ?? userMap['username'] ?? 'Unknown User';
-                    final otherUserRole = userMap['role'] ?? 'Member';
-
-                    final messageList = room['Message'] as List<dynamic>? ?? [];
-                    final latestMessage = messageList.isNotEmpty ? messageList[0]['content'] : 'Started a chat';
-                    final isUnread = messageList.isNotEmpty ? !(messageList[0]['isRead'] as bool) : false;
-                    final sentAt = messageList.isNotEmpty ? messageList[0]['sentAt'] : null;
-
-                    return ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-
-                      // THE AVATAR (Green dot removed)
-                      leading: const CircleAvatar(
-                        radius: 26,
-                        backgroundColor: Colors.blueAccent,
-                        child: Icon(Icons.person, color: Colors.white, size: 30),
-                      ),
-
-                      // THE NAME
-                      title: Text(
-                        otherUserName,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
-                      ),
-
-                      // THE MESSAGE PREVIEW & ROLE
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 4),
-                          Text(
-                            latestMessage,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: Colors.grey[800], fontSize: 14),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            otherUserRole,
-                            style: TextStyle(fontSize: 12, color: Colors.blueGrey[400]),
-                          ),
-                        ],
-                      ),
-
-                      // THE TIME & UNREAD BADGE
-                      trailing: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            getRelativeTime(sentAt),
-                            style: TextStyle(fontSize: 12, color: Colors.grey[500], fontWeight: isUnread ? FontWeight.bold : FontWeight.normal),
-                          ),
-                          const SizedBox(height: 6),
-                          if (isUnread)
-                            Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: const BoxDecoration(color: Color(0xFF1865F2), shape: BoxShape.circle),
-                              child: const Text(
-                                '1',
-                                style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                              ),
-                            )
-                          else
-                            const SizedBox(height: 24),
-                        ],
-                      ),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => ActiveChatScreen(
-                              roomID: room['roomID'],
-                              currentUserID: widget.currentUserID,
-                              otherUserName: otherUserName,
-                              otherUserID: 'other_user_uuid',
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ------------------------------------------------------------------------
 // The Smart Post Card Widget
 // ------------------------------------------------------------------------
 class PostCard extends StatefulWidget {
   final Map<String, dynamic> post;
   final String currentUserID;
-  final VoidCallback onDelete; // Used to refresh the feed after a deletion
+  final VoidCallback onDelete;
 
   const PostCard({
     super.key,
@@ -392,7 +192,6 @@ class _PostCardState extends State<PostCard> {
   @override
   void initState() {
     super.initState();
-    // Initialize interaction counts and states
     _likeCount = (widget.post['PostLike'] as List?)?.length ?? 0;
     _savedCount = (widget.post['PostSaved'] as List?)?.length ?? 0;
     _commentCount = (widget.post['PostComment'] as List?)?.length ?? 0;
@@ -404,7 +203,6 @@ class _PostCardState extends State<PostCard> {
     _isSaved = savedList.any((save) => save['userID'].toString() == widget.currentUserID.toString());
   }
 
-  // --- Post Actions (Like/Save) ---
   void _handleLike() async {
     setState(() {
       _isLiked = !_isLiked;
@@ -437,7 +235,6 @@ class _PostCardState extends State<PostCard> {
     }
   }
 
-  // --- Delete Logic ---
   void _showDeleteConfirmationDialog(BuildContext context, String postID) {
     showDialog(
       context: context,
@@ -452,14 +249,14 @@ class _PostCardState extends State<PostCard> {
             ),
             ElevatedButton(
               onPressed: () async {
-                Navigator.pop(context); // Close the dialog
+                Navigator.pop(context);
                 try {
                   await _communityService.deletePost(postID);
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Post deleted successfully.')),
                     );
-                    widget.onDelete(); // Trigger refresh in parent feed
+                    widget.onDelete();
                   }
                 } catch (e) {
                   if (mounted) {
@@ -478,7 +275,6 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
-  // --- Report Logic ---
   void _showReportDialog(BuildContext context, String postID) {
     String selectedCategory = 'Spam';
     final TextEditingController detailsController = TextEditingController();
@@ -601,12 +397,9 @@ class _PostCardState extends State<PostCard> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
-                // --- NEW: Clickable Profile Picture ---
                 InkWell(
                   borderRadius: BorderRadius.circular(24),
                   onTap: () {
-                    // Prevent the user from messaging themselves
                     if (currentUID == creatorID) return;
 
                     showModalBottomSheet(
@@ -625,7 +418,6 @@ class _PostCardState extends State<PostCard> {
                             ),
                             const SizedBox(height: 20),
 
-                            // Profile Info
                             CircleAvatar(
                               radius: 36,
                               backgroundColor: Colors.blueAccent.withValues(alpha: 0.1),
@@ -636,15 +428,13 @@ class _PostCardState extends State<PostCard> {
                             Text(user['role'] ?? 'Member', style: TextStyle(color: Colors.grey[600], fontSize: 14)),
                             const SizedBox(height: 24),
 
-                            // Contact Me Button
                             Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
                               child: ElevatedButton.icon(
                                 onPressed: () async {
-                                  Navigator.pop(context); // Close bottom sheet
+                                  Navigator.pop(context);
 
                                   try {
-                                    // Generate or fetch Room ID
                                     String roomID = await _communityService.getOrCreateChatRoom(currentUID, creatorID);
 
                                     if (context.mounted) {
@@ -688,7 +478,6 @@ class _PostCardState extends State<PostCard> {
                     child: const Icon(Icons.person, color: Colors.grey, size: 30),
                   ),
                 ),
-                // --- END Clickable Profile Picture ---
 
                 const SizedBox(width: 12),
                 Expanded(
@@ -710,7 +499,7 @@ class _PostCardState extends State<PostCard> {
                               }
                             },
                             itemBuilder: (BuildContext context) => [
-                              if (currentUID == creatorID && creatorID.isNotEmpty) // Logic check
+                              if (currentUID == creatorID && creatorID.isNotEmpty)
                                 const PopupMenuItem<String>(
                                   value: 'delete',
                                   child: Row(
@@ -888,7 +677,6 @@ class _CommentSheetState extends State<CommentSheet> {
     }
   }
 
-  // --- NEW: The Comment Report Dialog ---
   void _showReportCommentDialog(BuildContext context, String commentID) {
     String selectedCategory = 'Spam';
     final TextEditingController detailsController = TextEditingController();

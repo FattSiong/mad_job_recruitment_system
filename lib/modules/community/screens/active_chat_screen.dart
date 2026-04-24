@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:record/record.dart';
 import '../../../services/community_service.dart';
 import '../../../models/message_model.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
+
+// --- NEW IMPORTS FOR AUDIO RECORDING ---
+import 'package:record/record.dart';
+import 'package:path_provider/path_provider.dart';
+
 import 'package:audioplayers/audioplayers.dart';
 
 class ActiveChatScreen extends StatefulWidget {
@@ -32,55 +34,65 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
 
   bool _isUploading = false;
 
-  // --- Audio Recording Variables ---
-  final AudioRecorder _audioRecorder = AudioRecorder();
+  // --- AUDIO RECORDING STATE ---
+  late final AudioRecorder _audioRecorder;
   bool _isRecording = false;
 
   @override
   void initState() {
     super.initState();
     _communityService.markMessagesAsRead(widget.roomID, widget.otherUserID);
+    _audioRecorder = AudioRecorder(); // Initialize the recorder
   }
 
   @override
   void dispose() {
     _messageController.dispose();
-    _audioRecorder.dispose();
+    _audioRecorder.dispose(); // Always clean up the recorder
     super.dispose();
   }
 
-  // --- PHASE 1: Activation (Hold down Mic) ---
+  // --- AUDIO RECORDING LOGIC ---
   Future<void> _startRecording() async {
     try {
-      if (await Permission.microphone.request().isGranted) {
-        // Hide keyboard
-        FocusScope.of(context).unfocus();
+      // Check microphone permissions
+      if (await _audioRecorder.hasPermission()) {
+        // Find a temporary directory to save the audio file before uploading
+        final Directory tempDir = await getTemporaryDirectory();
+        final String filePath = '${tempDir.path}/audio_msg_${DateTime.now().millisecondsSinceEpoch}.m4a';
 
-        // PHASE 2: Drafting (Temp File)
-        final directory = await getTemporaryDirectory();
-        final path = '${directory.path}/audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        // Start recording
+        await _audioRecorder.start(
+            const RecordConfig(encoder: AudioEncoder.aacLc),
+            path: filePath
+        );
 
-        await _audioRecorder.start(const RecordConfig(encoder: AudioEncoder.aacLc), path: path);
-        setState(() => _isRecording = true);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Microphone permission required')));
+        setState(() {
+          _isRecording = true;
+        });
       }
     } catch (e) {
-      print('Recording error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to start recording: $e')));
+      }
     }
   }
 
-  // --- PHASE 3: Delivery (Release Mic & Send) ---
   Future<void> _stopAndSendRecording() async {
     try {
-      final path = await _audioRecorder.stop();
-      setState(() => _isRecording = false);
+      // Stop the recorder and get the file path
+      final String? path = await _audioRecorder.stop();
+
+      setState(() {
+        _isRecording = false;
+      });
 
       if (path != null) {
         setState(() => _isUploading = true);
+
         File audioFile = File(path);
 
-        // Upload to Supabase
+        // Upload the audio file to Supabase using your existing attachment function
         String? fileUrl = await _communityService.uploadChatAttachment(audioFile, widget.roomID);
 
         if (fileUrl != null) {
@@ -88,25 +100,27 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
             messageID: '',
             roomID: widget.roomID,
             senderID: widget.currentUserID,
-            content: 'Voice Message',
+            content: 'Voice Message', // The text displayed if audio isn't supported
             isRead: false,
             sentAt: DateTime.now(),
-            mediaType: 'audio', // Important! Tells UI to show player
-            mediaURL: fileUrl,
+            mediaType: 'audio',
+            mediaURL: fileUrl, // Save the Supabase Storage URL
           );
+
           await _communityService.sendMessage(newMessage);
         }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to send audio: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to send recording: $e')));
+      }
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }
   }
+  // -----------------------------
 
-  // File Picker Logic
   Future<void> _pickAndSendFile() async {
-    // ... (Keep your existing _pickAndSendFile logic exactly as is) ...
     try {
       FilePickerResult? result = await FilePicker.pickFiles(
         type: FileType.custom,
@@ -119,6 +133,7 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
         File file = File(result.files.single.path!);
         String fileName = result.files.single.name;
         String ext = result.files.single.extension?.toLowerCase() ?? '';
+
         String mediaType = ['jpg', 'png', 'jpeg'].contains(ext) ? 'image' : 'file';
 
         String? fileUrl = await _communityService.uploadChatAttachment(file, widget.roomID);
@@ -134,6 +149,7 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
             mediaType: mediaType,
             mediaURL: fileUrl,
           );
+
           await _communityService.sendMessage(newMessage);
         }
       }
@@ -145,7 +161,6 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
   }
 
   void _sendMessage() async {
-    // ... (Keep your existing _sendMessage logic exactly as is) ...
     if (_messageController.text.trim().isEmpty) return;
 
     final newMessage = MessageModel(
@@ -174,15 +189,23 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
           ],
         ),
         actions: [
-          IconButton(icon: const Icon(Icons.videocam), onPressed: () {}),
-          IconButton(icon: const Icon(Icons.call), onPressed: () {}),
+          IconButton(
+            icon: const Icon(Icons.videocam),
+            onPressed: () {},
+          ),
+          IconButton(
+            icon: const Icon(Icons.call),
+            onPressed: () {},
+          ),
           IconButton(
             icon: const Icon(Icons.more_vert),
             onPressed: () {
               showModalBottomSheet(
                 context: context,
                 backgroundColor: Colors.white,
-                shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
                 builder: (context) => SharedAttachmentsSheet(roomID: widget.roomID),
               );
             },
@@ -205,12 +228,16 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
                 final messages = snapshot.data!;
                 return ListView.builder(
                   padding: const EdgeInsets.symmetric(vertical: 16),
+                  reverse: true, // Typically chats scroll from bottom up, make sure your query orders descending!
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
                     final msg = messages[index];
                     final isMe = msg.senderID == widget.currentUserID;
 
-                    return MessageBubble(message: msg, isMe: isMe);
+                    return MessageBubble(
+                      message: msg,
+                      isMe: isMe,
+                    );
                   },
                 );
               },
@@ -228,13 +255,29 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
                         : const Icon(Icons.attach_file, color: Colors.grey),
                     onPressed: _isUploading ? null : _pickAndSendFile,
                   ),
+
+                  // Text Field Area (Changes to 'Recording...' when holding mic)
                   Expanded(
-                    child: TextField(
+                    child: _isRecording
+                        ? Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.mic, color: Colors.red),
+                          SizedBox(width: 8),
+                          Text("Recording audio...", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    )
+                        : TextField(
                       controller: _messageController,
                       decoration: InputDecoration(
-                        // UI Change when recording
-                        hintText: _isRecording ? "Recording... (Release to send)" : "Type a message...",
-                        hintStyle: TextStyle(color: _isRecording ? Colors.red : Colors.grey[400]),
+                        hintText: "Type a message...",
+                        hintStyle: TextStyle(color: Colors.grey[400]),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
@@ -245,32 +288,35 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
                           borderSide: BorderSide(color: Colors.grey.shade300),
                         ),
                         filled: true,
-                        fillColor: _isRecording ? Colors.red.withValues(alpha: 0.05) : Colors.grey[50],
+                        fillColor: Colors.grey[50],
                       ),
                     ),
                   ),
 
-                  // --- HOLD TO RECORD BUTTON ---
+                  // --- UPDATED: Hold to Record Button ---
                   GestureDetector(
                     onLongPressStart: (_) => _startRecording(),
                     onLongPressEnd: (_) => _stopAndSendRecording(),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      margin: const EdgeInsets.symmetric(horizontal: 4),
-                      decoration: BoxDecoration(
-                        color: _isRecording ? Colors.red.withValues(alpha: 0.2) : Colors.transparent,
-                        shape: BoxShape.circle,
-                      ),
+                    // Cancel if they drag their finger away while holding
+                    onLongPressCancel: () async {
+                      if (_isRecording) {
+                        await _audioRecorder.stop();
+                        setState(() => _isRecording = false);
+                      }
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(8.0),
                       child: Icon(
-                        Icons.mic,
+                        _isRecording ? Icons.mic : Icons.mic_none,
                         color: _isRecording ? Colors.red : Colors.grey,
+                        size: _isRecording ? 28 : 24, // Slightly grows when pressed
                       ),
                     ),
                   ),
 
                   IconButton(
-                      icon: const Icon(Icons.send, color: Colors.blueAccent),
-                      onPressed: _sendMessage
+                    icon: const Icon(Icons.send, color: Colors.blueAccent),
+                    onPressed: _sendMessage,
                   ),
                 ],
               ),
@@ -282,10 +328,11 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
   }
 }
 
+
 // ------------------------------------------------------------------------
-// The Smart Message Bubble Widget
+// The Smart Message Bubble Widget (Now Stateful for Audio Playback!)
 // ------------------------------------------------------------------------
-class MessageBubble extends StatelessWidget {
+class MessageBubble extends StatefulWidget {
   final MessageModel message;
   final bool isMe;
 
@@ -296,13 +343,80 @@ class MessageBubble extends StatelessWidget {
   }) : super(key: key);
 
   @override
+  State<MessageBubble> createState() => _MessageBubbleState();
+}
+
+class _MessageBubbleState extends State<MessageBubble> {
+  // Audio Player State
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _isPlaying = false;
+  Duration _duration = Duration.zero;
+  Duration _position = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // If this message is an audio file, set up the listeners
+    if (widget.message.mediaType == 'audio' && widget.message.mediaURL != null) {
+      _audioPlayer.onPlayerStateChanged.listen((state) {
+        if (mounted) {
+          setState(() {
+            _isPlaying = state == PlayerState.playing;
+          });
+        }
+      });
+
+      _audioPlayer.onDurationChanged.listen((newDuration) {
+        if (mounted) {
+          setState(() {
+            _duration = newDuration;
+          });
+        }
+      });
+
+      _audioPlayer.onPositionChanged.listen((newPosition) {
+        if (mounted) {
+          setState(() {
+            _position = newPosition;
+          });
+        }
+      });
+
+      // Reset when audio finishes
+      _audioPlayer.onPlayerComplete.listen((event) {
+        if (mounted) {
+          setState(() {
+            _isPlaying = false;
+            _position = Duration.zero;
+          });
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose(); // Always clean up to prevent memory leaks!
+    super.dispose();
+  }
+
+  // Helper to format the audio duration (e.g., 0:05)
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, "0");
+    String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
+    String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
+    return "$twoDigitMinutes:$twoDigitSeconds";
+  }
+
+  @override
   Widget build(BuildContext context) {
     DateTime sentTime;
     try {
-      if (message.sentAt is String) {
-        sentTime = DateTime.parse(message.sentAt.toString()).toLocal();
+      if (widget.message.sentAt is String) {
+        sentTime = DateTime.parse(widget.message.sentAt.toString()).toLocal();
       } else {
-        sentTime = (message.sentAt as DateTime).toLocal();
+        sentTime = (widget.message.sentAt as DateTime).toLocal();
       }
     } catch (e) {
       sentTime = DateTime.now();
@@ -313,28 +427,29 @@ class MessageBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 12.0),
       child: Column(
-        crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: widget.isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
           Container(
             padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
             decoration: BoxDecoration(
-              color: isMe ? const Color(0xFF1865F2) : Colors.grey[100],
+              color: widget.isMe ? const Color(0xFF1865F2) : Colors.grey[100],
               borderRadius: BorderRadius.only(
                 topLeft: const Radius.circular(16),
                 topRight: const Radius.circular(16),
-                bottomLeft: isMe ? const Radius.circular(16) : const Radius.circular(4),
-                bottomRight: isMe ? const Radius.circular(4) : const Radius.circular(16),
+                bottomLeft: widget.isMe ? const Radius.circular(16) : const Radius.circular(4),
+                bottomRight: widget.isMe ? const Radius.circular(4) : const Radius.circular(16),
               ),
-              border: isMe ? null : Border.all(color: Colors.grey.shade300),
+              border: widget.isMe ? null : Border.all(color: Colors.grey.shade300),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (message.mediaType == 'image' && message.mediaURL != null) ...[
+                // 1. IMAGE
+                if (widget.message.mediaType == 'image' && widget.message.mediaURL != null) ...[
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: Image.network(
-                      message.mediaURL!,
+                      widget.message.mediaURL!,
                       width: 200,
                       height: 200,
                       fit: BoxFit.cover,
@@ -343,21 +458,23 @@ class MessageBubble extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                 ]
-                else if (message.mediaType == 'file' && message.mediaURL != null) ...[
+
+                // 2. DOCUMENT/FILE
+                else if (widget.message.mediaType == 'file' && widget.message.mediaURL != null) ...[
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
                         padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(color: isMe ? Colors.white24 : Colors.blue.withValues(alpha: 0.1), shape: BoxShape.circle),
-                        child: Icon(Icons.picture_as_pdf, color: isMe ? Colors.white : Colors.redAccent),
+                        decoration: BoxDecoration(color: widget.isMe ? Colors.white24 : Colors.blue.withOpacity(0.1), shape: BoxShape.circle),
+                        child: Icon(Icons.picture_as_pdf, color: widget.isMe ? Colors.white : Colors.redAccent),
                       ),
                       const SizedBox(width: 8),
                       Flexible(
                         child: Text(
-                          message.content,
+                          widget.message.content,
                           style: TextStyle(
-                            color: isMe ? Colors.white : Colors.blueAccent,
+                            color: widget.isMe ? Colors.white : Colors.blueAccent,
                             fontWeight: FontWeight.bold,
                             decoration: TextDecoration.underline,
                           ),
@@ -368,18 +485,68 @@ class MessageBubble extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                 ]
-                else if (message.mediaType == 'audio' && message.mediaURL != null) ...[
-                    // PHASE 4: Playback Logic
-                    AudioPlayBubble(
-                        audioUrl: message.mediaURL!,
-                        isMe: isMe
-                    ),
+
+                // 3. AUDIO RECORDING (Now Functional!)
+                else if (widget.message.mediaType == 'audio' && widget.message.mediaURL != null) ...[
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Play/Pause Button
+                        GestureDetector(
+                          onTap: () async {
+                            if (_isPlaying) {
+                              await _audioPlayer.pause();
+                            } else {
+                              await _audioPlayer.play(UrlSource(widget.message.mediaURL!));
+                            }
+                          },
+                          child: Icon(
+                            _isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
+                            color: widget.isMe ? Colors.white : const Color(0xFF1865F2),
+                            size: 36,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+
+                        // Progress Slider
+                        SizedBox(
+                          width: 100, // Fixed width for the slider inside the bubble
+                          child: SliderTheme(
+                            data: SliderThemeData(
+                              trackHeight: 3,
+                              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                              overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                              activeTrackColor: widget.isMe ? Colors.white : const Color(0xFF1865F2),
+                              inactiveTrackColor: widget.isMe ? Colors.white38 : Colors.grey[300],
+                              thumbColor: widget.isMe ? Colors.white : const Color(0xFF1865F2),
+                            ),
+                            child: Slider(
+                              min: 0,
+                              max: _duration.inSeconds.toDouble() > 0 ? _duration.inSeconds.toDouble() : 1.0,
+                              value: _position.inSeconds.toDouble().clamp(0.0, _duration.inSeconds.toDouble() > 0 ? _duration.inSeconds.toDouble() : 1.0),
+                              onChanged: (value) async {
+                                final position = Duration(seconds: value.toInt());
+                                await _audioPlayer.seek(position);
+                              },
+                            ),
+                          ),
+                        ),
+
+                        // Duration Text
+                        Text(
+                          _position.inSeconds > 0 ? _formatDuration(_position) : _formatDuration(_duration),
+                          style: TextStyle(color: widget.isMe ? Colors.white : Colors.black87, fontSize: 12),
+                        ),
+                      ],
+                    )
                   ]
+
+                  // 4. STANDARD TEXT
                   else ...[
                       Text(
-                        message.content,
+                        widget.message.content,
                         style: TextStyle(
-                          color: isMe ? Colors.white : Colors.black87,
+                          color: widget.isMe ? Colors.white : Colors.black87,
                           fontSize: 15,
                         ),
                       ),
@@ -395,12 +562,12 @@ class MessageBubble extends StatelessWidget {
                 timeString,
                 style: TextStyle(fontSize: 11, color: Colors.grey[500]),
               ),
-              if (isMe) ...[
+              if (widget.isMe) ...[
                 const SizedBox(width: 4),
                 Icon(
                   Icons.done_all,
                   size: 15,
-                  color: message.isRead ? Colors.blue : Colors.grey[400],
+                  color: widget.message.isRead ? Colors.blue : Colors.grey[400],
                 ),
               ],
             ],
@@ -412,7 +579,7 @@ class MessageBubble extends StatelessWidget {
 }
 
 // ------------------------------------------------------------------------
-// NEW: Shared Attachments Bottom Sheet
+// Shared Attachments Bottom Sheet
 // ------------------------------------------------------------------------
 class SharedAttachmentsSheet extends StatelessWidget {
   final String roomID;
@@ -428,7 +595,6 @@ class SharedAttachmentsSheet extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Drag handle
           Center(
             child: Container(
               height: 4, width: 40,
@@ -475,7 +641,6 @@ class SharedAttachmentsSheet extends StatelessWidget {
                     final String fileName = item['content'] ?? 'Unknown File';
                     final String fileUrl = item['mediaURL'] ?? '';
 
-                    // Format the date
                     final DateTime date = DateTime.parse(item['sentAt']).toLocal();
                     final String dateString = "${date.day}/${date.month}/${date.year}";
 
@@ -485,7 +650,7 @@ class SharedAttachmentsSheet extends StatelessWidget {
                         width: 50,
                         height: 50,
                         decoration: BoxDecoration(
-                          color: Colors.blue.withValues(alpha: 0.1),
+                          color: Colors.blue.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: mediaType == 'image'
@@ -508,7 +673,6 @@ class SharedAttachmentsSheet extends StatelessWidget {
                       trailing: IconButton(
                         icon: const Icon(Icons.download_rounded, color: Colors.blueAccent),
                         onPressed: () {
-                          // TODO: Implement actual download or view logic if needed later
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Opening file...')),
                           );
@@ -522,106 +686,6 @@ class SharedAttachmentsSheet extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-
-// ------------------------------------------------------------------------
-// NEW: Playable Audio Bubble
-// ------------------------------------------------------------------------
-
-class AudioPlayBubble extends StatefulWidget {
-  final String audioUrl;
-  final bool isMe;
-
-  const AudioPlayBubble({Key? key, required this.audioUrl, required this.isMe}) : super(key: key);
-
-  @override
-  State<AudioPlayBubble> createState() => _AudioPlayBubbleState();
-}
-
-class _AudioPlayBubbleState extends State<AudioPlayBubble> {
-  final AudioPlayer _audioPlayer = AudioPlayer();
-  bool _isPlaying = false;
-  Duration _duration = Duration.zero;
-  Duration _position = Duration.zero;
-
-  @override
-  void initState() {
-    super.initState();
-    // Listen for audio state changes
-    _audioPlayer.onPlayerStateChanged.listen((state) {
-      if (mounted) setState(() => _isPlaying = state == PlayerState.playing);
-    });
-
-    _audioPlayer.onDurationChanged.listen((newDuration) {
-      if (mounted) setState(() => _duration = newDuration);
-    });
-
-    _audioPlayer.onPositionChanged.listen((newPosition) {
-      if (mounted) setState(() => _position = newPosition);
-    });
-  }
-
-  @override
-  void dispose() {
-    _audioPlayer.dispose();
-    super.dispose();
-  }
-
-  String _formatDuration(Duration duration) {
-    String twoDigits(int n) => n.toString().padLeft(2, "0");
-    String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
-    String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
-    return "$twoDigitMinutes:$twoDigitSeconds";
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final Color textColor = widget.isMe ? Colors.white : Colors.black87;
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          icon: Icon(_isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill),
-          color: textColor,
-          iconSize: 36,
-          onPressed: () async {
-            if (_isPlaying) {
-              await _audioPlayer.pause();
-            } else {
-              await _audioPlayer.play(UrlSource(widget.audioUrl));
-            }
-          },
-        ),
-        // A mini progress slider
-        SizedBox(
-          width: 100,
-          child: SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-              trackHeight: 2,
-            ),
-            child: Slider(
-              min: 0,
-              max: _duration.inSeconds.toDouble() > 0 ? _duration.inSeconds.toDouble() : 1,
-              value: _position.inSeconds.toDouble().clamp(0, _duration.inSeconds.toDouble() > 0 ? _duration.inSeconds.toDouble() : 1),
-              activeColor: textColor,
-              inactiveColor: textColor.withValues(alpha: 0.3),
-              onChanged: (value) async {
-                final position = Duration(seconds: value.toInt());
-                await _audioPlayer.seek(position);
-              },
-            ),
-          ),
-        ),
-        Text(
-          _formatDuration(_position.inSeconds > 0 ? _position : _duration),
-          style: TextStyle(color: textColor, fontSize: 12),
-        ),
-      ],
     );
   }
 }
