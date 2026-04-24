@@ -46,7 +46,7 @@ class _LoginScreenState extends State<LoginScreen> {
       // Navigate based on the fetched role
       if (role == 'employer') {
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const EmployerDashboard()));
-      } else if (role == 'seeker') {
+      } else if (role == 'job_seeker') {
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const SeekerDashboard()));
       } else if (role == 'admin') {
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const AdminDashboard()));
