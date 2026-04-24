@@ -1,39 +1,26 @@
 import 'package:flutter/material.dart';
-// Note: Adjust these imports based on your actual folder structure
-import 'active_chat_screen.dart';
 import '../../../services/community_service.dart';
+import '../../../models/community_post_model.dart'; // Import your model here
+import 'active_chat_screen.dart';
 import 'create_post_screen.dart';
-import 'chat_list_screen.dart'; // Imports your newly separated Chat file!
+import 'chat_list_screen.dart';
 
 // ------------------------------------------------------------------------
 // Global Helper Function for Time Formatting
 // ------------------------------------------------------------------------
 String getRelativeTime(String? dateString) {
   if (dateString == null) return 'Just now';
-
   try {
     final DateTime postDate = DateTime.parse(dateString).toLocal();
     final Duration difference = DateTime.now().difference(postDate);
-
-    if (difference.isNegative) {
-      return 'Just now';
-    }
-
-    if (difference.inSeconds < 60) {
-      return '${difference.inSeconds}s ago';
-    } else if (difference.inMinutes < 60) {
-      return '${difference.inMinutes}m ago';
-    } else if (difference.inHours < 24) {
-      return '${difference.inHours}h ago';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays}d ago';
-    } else if (difference.inDays < 30) {
-      return '${(difference.inDays / 7).floor()}w ago';
-    } else if (difference.inDays < 365) {
-      return '${(difference.inDays / 30).floor()}mo ago';
-    } else {
-      return '${(difference.inDays / 365).floor()}y ago';
-    }
+    if (difference.isNegative) return 'Just now';
+    if (difference.inSeconds < 60) return '${difference.inSeconds}s ago';
+    if (difference.inMinutes < 60) return '${difference.inMinutes}m ago';
+    if (difference.inHours < 24) return '${difference.inHours}h ago';
+    if (difference.inDays < 7) return '${difference.inDays}d ago';
+    if (difference.inDays < 30) return '${(difference.inDays / 7).floor()}w ago';
+    if (difference.inDays < 365) return '${(difference.inDays / 30).floor()}mo ago';
+    return '${(difference.inDays / 365).floor()}y ago';
   } catch (e) {
     return 'Just now';
   }
@@ -44,7 +31,6 @@ String getRelativeTime(String? dateString) {
 // ------------------------------------------------------------------------
 class CommunityDashboard extends StatefulWidget {
   final String currentUserID;
-
   const CommunityDashboard({super.key, required this.currentUserID});
 
   @override
@@ -52,9 +38,7 @@ class CommunityDashboard extends StatefulWidget {
 }
 
 class _CommunityDashboardState extends State<CommunityDashboard> {
-  void _refreshFeed() {
-    setState(() {});
-  }
+  void _refreshFeed() => setState(() {});
 
   @override
   Widget build(BuildContext context) {
@@ -73,8 +57,6 @@ class _CommunityDashboardState extends State<CommunityDashboard> {
         body: TabBarView(
           children: [
             CommunityFeedTab(key: UniqueKey(), currentUserID: widget.currentUserID),
-
-            // This now pulls from your new file!
             ChatListScreen(currentUserID: widget.currentUserID),
           ],
         ),
@@ -82,9 +64,7 @@ class _CommunityDashboardState extends State<CommunityDashboard> {
           onPressed: () async {
             await Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (context) => CreatePostScreen(currentUserID: widget.currentUserID),
-              ),
+              MaterialPageRoute(builder: (context) => CreatePostScreen(currentUserID: widget.currentUserID)),
             );
             _refreshFeed();
           },
@@ -101,7 +81,6 @@ class _CommunityDashboardState extends State<CommunityDashboard> {
 // ------------------------------------------------------------------------
 class CommunityFeedTab extends StatefulWidget {
   final String currentUserID;
-
   const CommunityFeedTab({super.key, required this.currentUserID});
 
   @override
@@ -111,25 +90,22 @@ class CommunityFeedTab extends StatefulWidget {
 class _CommunityFeedTabState extends State<CommunityFeedTab> {
   final CommunityService _communityService = CommunityService();
 
-  Future<void> _handleRefresh() async {
-    setState(() {});
-  }
+  Future<void> _handleRefresh() async => setState(() {});
 
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
       onRefresh: _handleRefresh,
-      child: FutureBuilder<List<Map<String, dynamic>>>(
+      // 👈 Changed to List<CommunityPostModel>
+      child: FutureBuilder<List<CommunityPostModel>>(
         future: _communityService.getCommunityPosts(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-
           if (snapshot.hasError) {
             return Center(child: Text("Error: ${snapshot.error}"));
           }
-
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return ListView(
               children: const [
@@ -147,11 +123,9 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
             separatorBuilder: (context, index) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
               return PostCard(
-                post: posts[index],
+                post: posts[index], // Passes the clean Model!
                 currentUserID: widget.currentUserID,
-                onDelete: () {
-                  _handleRefresh();
-                },
+                onDelete: _handleRefresh,
               );
             },
           );
@@ -162,10 +136,10 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
 }
 
 // ------------------------------------------------------------------------
-// The Smart Post Card Widget
+// The Smart Post Card Widget (Now using CommunityPostModel)
 // ------------------------------------------------------------------------
 class PostCard extends StatefulWidget {
-  final Map<String, dynamic> post;
+  final CommunityPostModel post; // 👈 Look how clean this is!
   final String currentUserID;
   final VoidCallback onDelete;
 
@@ -192,15 +166,12 @@ class _PostCardState extends State<PostCard> {
   @override
   void initState() {
     super.initState();
-    _likeCount = (widget.post['PostLike'] as List?)?.length ?? 0;
-    _savedCount = (widget.post['PostSaved'] as List?)?.length ?? 0;
-    _commentCount = (widget.post['PostComment'] as List?)?.length ?? 0;
-
-    final likesList = widget.post['PostLike'] as List<dynamic>? ?? [];
-    final savedList = widget.post['PostSaved'] as List<dynamic>? ?? [];
-
-    _isLiked = likesList.any((like) => like['userID'].toString() == widget.currentUserID.toString());
-    _isSaved = savedList.any((save) => save['userID'].toString() == widget.currentUserID.toString());
+    // 👈 Setup is instantly readable using the helper methods from your model
+    _likeCount = widget.post.likeCount;
+    _savedCount = widget.post.savedCount;
+    _commentCount = widget.post.commentCount;
+    _isLiked = widget.post.isLikedBy(widget.currentUserID);
+    _isSaved = widget.post.isSavedBy(widget.currentUserID);
   }
 
   void _handleLike() async {
@@ -209,13 +180,13 @@ class _PostCardState extends State<PostCard> {
       _likeCount += _isLiked ? 1 : -1;
     });
     try {
-      await _communityService.toggleLike(widget.post['postID'], widget.currentUserID, !_isLiked);
+      await _communityService.toggleLike(widget.post.postID, widget.currentUserID, !_isLiked);
     } catch (e) {
       setState(() {
         _isLiked = !_isLiked;
         _likeCount += _isLiked ? 1 : -1;
       });
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to update like: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
     }
   }
 
@@ -225,13 +196,13 @@ class _PostCardState extends State<PostCard> {
       _savedCount += _isSaved ? 1 : -1;
     });
     try {
-      await _communityService.toggleSave(widget.post['postID'], widget.currentUserID, !_isSaved);
+      await _communityService.toggleSave(widget.post.postID, widget.currentUserID, !_isSaved);
     } catch (e) {
       setState(() {
         _isSaved = !_isSaved;
         _savedCount += _isSaved ? 1 : -1;
       });
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to update save: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
     }
   }
 
@@ -253,17 +224,11 @@ class _PostCardState extends State<PostCard> {
                 try {
                   await _communityService.deletePost(postID);
                   if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Post deleted successfully.')),
-                    );
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Post deleted successfully.')));
                     widget.onDelete();
                   }
                 } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error: $e')),
-                    );
-                  }
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
                 }
               },
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red[50]),
@@ -292,28 +257,20 @@ class _PostCardState extends State<PostCard> {
                     children: [
                       DropdownButtonFormField<String>(
                         value: selectedCategory,
-                        items: ['Spam', 'Inappropriate Content', 'Harassment', 'Other']
-                            .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                            .toList(),
+                        items: ['Spam', 'Inappropriate Content', 'Harassment', 'Other'].map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
                         onChanged: (val) => setDialogState(() => selectedCategory = val!),
                         decoration: const InputDecoration(labelText: 'Reason'),
                       ),
                       const SizedBox(height: 12),
                       TextField(
                         controller: detailsController,
-                        decoration: const InputDecoration(
-                          labelText: 'Additional Details (Optional)',
-                          border: OutlineInputBorder(),
-                        ),
+                        decoration: const InputDecoration(labelText: 'Additional Details (Optional)', border: OutlineInputBorder()),
                         maxLines: 3,
                       ),
                     ],
                   ),
                   actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-                    ),
+                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
                     ElevatedButton(
                       onPressed: isSubmitting
                           ? null
@@ -328,16 +285,10 @@ class _PostCardState extends State<PostCard> {
                           );
                           if (context.mounted) {
                             Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Report submitted.'))
-                            );
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Report submitted.')));
                           }
                         } catch (e) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Failed to report: $e'))
-                            );
-                          }
+                          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
                         } finally {
                           setDialogState(() => isSubmitting = false);
                         }
@@ -374,20 +325,14 @@ class _PostCardState extends State<PostCard> {
 
   @override
   Widget build(BuildContext context) {
-    final user = widget.post['User'] ?? {};
-    final String timeAgo = getRelativeTime(widget.post['createdAt']);
-
-    final String postAuthorID = (widget.post['authorID'] ?? user['userID'] ?? '').toString();
-    final String currentUID = widget.currentUserID.toString().trim();
-    final String creatorID = postAuthorID.trim();
+    final String timeAgo = getRelativeTime(widget.post.createdAt.toIso8601String());
+    final String currentUID = widget.currentUserID.trim();
+    final String creatorID = widget.post.authorID.trim();
 
     return Card(
       elevation: 0,
       margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade200),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade200)),
       color: Colors.white,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -401,69 +346,42 @@ class _PostCardState extends State<PostCard> {
                   borderRadius: BorderRadius.circular(24),
                   onTap: () {
                     if (currentUID == creatorID) return;
-
+                    // Bottom Sheet Profile Popup (Same as before)
                     showModalBottomSheet(
                       context: context,
-                      shape: const RoundedRectangleBorder(
-                        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                      ),
+                      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
                       builder: (context) => SafeArea(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             const SizedBox(height: 8),
-                            Container(
-                              height: 4, width: 40,
-                              decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
-                            ),
+                            Container(height: 4, width: 40, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
                             const SizedBox(height: 20),
-
-                            CircleAvatar(
-                              radius: 36,
-                              backgroundColor: Colors.blueAccent.withValues(alpha: 0.1),
-                              child: const Icon(Icons.person, color: Colors.blueAccent, size: 40),
-                            ),
+                            CircleAvatar(radius: 36, backgroundColor: Colors.blueAccent.withValues(alpha: 0.1), child: const Icon(Icons.person, color: Colors.blueAccent, size: 40)),
                             const SizedBox(height: 12),
-                            Text(user['username'] ?? 'Unknown User', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                            Text(user['role'] ?? 'Member', style: TextStyle(color: Colors.grey[600], fontSize: 14)),
+                            Text(widget.post.username, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                            Text(widget.post.role, style: TextStyle(color: Colors.grey[600], fontSize: 14)),
                             const SizedBox(height: 24),
-
                             Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
                               child: ElevatedButton.icon(
                                 onPressed: () async {
                                   Navigator.pop(context);
-
                                   try {
                                     String roomID = await _communityService.getOrCreateChatRoom(currentUID, creatorID);
-
                                     if (context.mounted) {
                                       Navigator.push(
                                         context,
-                                        MaterialPageRoute(
-                                          builder: (context) => ActiveChatScreen(
-                                            roomID: roomID,
-                                            currentUserID: currentUID,
-                                            otherUserName: user['username'] ?? 'Unknown User',
-                                            otherUserID: creatorID,
-                                          ),
-                                        ),
+                                        MaterialPageRoute(builder: (context) => ActiveChatScreen(roomID: roomID, currentUserID: currentUID, otherUserName: widget.post.username, otherUserID: creatorID)),
                                       );
                                     }
                                   } catch (e) {
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-                                    }
+                                    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
                                   }
                                 },
                                 icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
                                 label: const Text('Contact Me', style: TextStyle(color: Colors.white, fontSize: 16)),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.blueAccent,
-                                  minimumSize: const Size(double.infinity, 48),
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                ),
+                                style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, minimumSize: const Size(double.infinity, 48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                               ),
                             ),
                             const SizedBox(height: 16),
@@ -472,13 +390,8 @@ class _PostCardState extends State<PostCard> {
                       ),
                     );
                   },
-                  child: CircleAvatar(
-                    radius: 24,
-                    backgroundColor: Colors.grey[200],
-                    child: const Icon(Icons.person, color: Colors.grey, size: 30),
-                  ),
+                  child: CircleAvatar(radius: 24, backgroundColor: Colors.grey[200], child: const Icon(Icons.person, color: Colors.grey, size: 30)),
                 ),
-
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -487,46 +400,27 @@ class _PostCardState extends State<PostCard> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(user['username'] ?? 'Unknown User', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-
+                          // 👈 Clean attribute access
+                          Text(widget.post.username, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                           PopupMenuButton<String>(
                             icon: const Icon(Icons.more_horiz, color: Colors.grey),
                             onSelected: (value) {
                               if (value == 'report') {
-                                _showReportDialog(context, widget.post['postID']);
+                                _showReportDialog(context, widget.post.postID);
                               } else if (value == 'delete') {
-                                _showDeleteConfirmationDialog(context, widget.post['postID']);
+                                _showDeleteConfirmationDialog(context, widget.post.postID);
                               }
                             },
                             itemBuilder: (BuildContext context) => [
                               if (currentUID == creatorID && creatorID.isNotEmpty)
-                                const PopupMenuItem<String>(
-                                  value: 'delete',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                                      SizedBox(width: 8),
-                                      Text('Delete Post', style: TextStyle(color: Colors.red)),
-                                    ],
-                                  ),
-                                ),
-
-                              const PopupMenuItem<String>(
-                                value: 'report',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.flag_outlined, color: Colors.orange, size: 20),
-                                    SizedBox(width: 8),
-                                    Text('Report Post', style: TextStyle(color: Colors.orange)),
-                                  ],
-                                ),
-                              ),
+                                const PopupMenuItem<String>(value: 'delete', child: Row(children: [Icon(Icons.delete_outline, color: Colors.red, size: 20), SizedBox(width: 8), Text('Delete Post', style: TextStyle(color: Colors.red))])),
+                              const PopupMenuItem<String>(value: 'report', child: Row(children: [Icon(Icons.flag_outlined, color: Colors.orange, size: 20), SizedBox(width: 8), Text('Report Post', style: TextStyle(color: Colors.orange))])),
                             ],
                           ),
                         ],
                       ),
                       const SizedBox(height: 2),
-                      Text(user['role'] ?? 'Member', style: TextStyle(color: Colors.grey[600], fontSize: 14)),
+                      Text(widget.post.role, style: TextStyle(color: Colors.grey[600], fontSize: 14)),
                       const SizedBox(height: 2),
                       Text(timeAgo, style: TextStyle(color: Colors.grey[500], fontSize: 12)),
                     ],
@@ -546,60 +440,59 @@ class _PostCardState extends State<PostCard> {
               ),
             const SizedBox(height: 8),
 
-            Text(widget.post['content'] ?? '', style: const TextStyle(fontSize: 15, height: 1.4)),
+            Text(widget.post.content, style: const TextStyle(fontSize: 15, height: 1.4)),
+
+            // 👈 NEW: Render Attached Image or PDF!
+            if (widget.post.mediaURL != null) ...[
+              const SizedBox(height: 12),
+              if (widget.post.mediaURL!.toLowerCase().contains('.pdf'))
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade300)),
+                  child: Row(
+                    children: const [
+                      Icon(Icons.picture_as_pdf, color: Colors.redAccent),
+                      SizedBox(width: 8),
+                      Text("Attached PDF Document", style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, decoration: TextDecoration.underline)),
+                    ],
+                  ),
+                )
+              else
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    widget.post.mediaURL!,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                  ),
+                ),
+            ],
+
             const SizedBox(height: 16),
             Divider(color: Colors.grey[200], height: 1, thickness: 1),
 
             Row(
               children: [
-                _buildClickableAction(
-                  _isLiked ? Icons.favorite : Icons.favorite_border,
-                  _likeCount.toString(),
-                  _isLiked ? Colors.red : Colors.grey[600]!,
-                  _handleLike,
-                ),
+                _buildClickableAction(_isLiked ? Icons.favorite : Icons.favorite_border, _likeCount.toString(), _isLiked ? Colors.red : Colors.grey[600]!, _handleLike),
                 const SizedBox(width: 16),
-
-                _buildClickableAction(
-                  Icons.chat_bubble_outline,
-                  _commentCount.toString(),
-                  Colors.grey[600]!,
-                      () {
-                    showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.white,
-                      shape: const RoundedRectangleBorder(
-                        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                      ),
-                      builder: (context) => CommentSheet(
-                        postID: widget.post['postID'],
-                        currentUserID: widget.currentUserID,
-                        onCommentAdded: () {
-                          setState(() {
-                            _commentCount++;
-                          });
-                        },
-                      ),
-                    );
-                  },
-                ),
+                _buildClickableAction(Icons.chat_bubble_outline, _commentCount.toString(), Colors.grey[600]!, () {
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.white,
+                    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+                    builder: (context) => CommentSheet(
+                      postID: widget.post.postID,
+                      currentUserID: widget.currentUserID,
+                      onCommentAdded: () => setState(() => _commentCount++),
+                    ),
+                  );
+                }),
                 const SizedBox(width: 16),
-
-                _buildClickableAction(
-                  Icons.share_outlined,
-                  '0',
-                  Colors.grey[600]!,
-                      () {},
-                ),
-
+                _buildClickableAction(Icons.share_outlined, '0', Colors.grey[600]!, () {}),
                 const Spacer(),
-
-                IconButton(
-                  icon: Icon(_isSaved ? Icons.bookmark : Icons.bookmark_border),
-                  color: _isSaved ? Colors.blue : Colors.grey[600],
-                  onPressed: _handleSave,
-                ),
+                IconButton(icon: Icon(_isSaved ? Icons.bookmark : Icons.bookmark_border), color: _isSaved ? Colors.blue : Colors.grey[600], onPressed: _handleSave),
               ],
             ),
           ],
@@ -610,7 +503,7 @@ class _PostCardState extends State<PostCard> {
 }
 
 // ------------------------------------------------------------------------
-// The Comment Bottom Sheet
+// The Comment Bottom Sheet (No model changes needed here)
 // ------------------------------------------------------------------------
 class CommentSheet extends StatefulWidget {
   final String postID;
@@ -635,7 +528,6 @@ class _CommentSheetState extends State<CommentSheet> {
 
   bool _isPosting = false;
   String? _activeReplyCommentID;
-
   final Set<String> _expandedThreads = {};
 
   void _submitComment() async {
@@ -646,30 +538,18 @@ class _CommentSheetState extends State<CommentSheet> {
   void _submitReply(String parentID) async {
     if (_replyController.text.trim().isEmpty) return;
     _postData(_replyController.text.trim(), parentID);
-
-    setState(() {
-      _expandedThreads.add(parentID);
-    });
+    setState(() => _expandedThreads.add(parentID));
   }
 
   Future<void> _postData(String content, String? parentID) async {
     setState(() => _isPosting = true);
-
     try {
-      await _communityService.addComment(
-        postID: widget.postID,
-        userID: widget.currentUserID,
-        content: content,
-        parentCommentID: parentID,
-      );
-
+      await _communityService.addComment(postID: widget.postID, userID: widget.currentUserID, content: content, parentCommentID: parentID);
       _commentController.clear();
       _replyController.clear();
       _activeReplyCommentID = null;
-
       widget.onCommentAdded();
       setState(() {});
-
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
@@ -703,19 +583,13 @@ class _CommentSheetState extends State<CommentSheet> {
                       const SizedBox(height: 12),
                       TextField(
                         controller: detailsController,
-                        decoration: const InputDecoration(
-                          labelText: 'Additional Details (Optional)',
-                          border: OutlineInputBorder(),
-                        ),
+                        decoration: const InputDecoration(labelText: 'Additional Details (Optional)', border: OutlineInputBorder()),
                         maxLines: 3,
                       ),
                     ],
                   ),
                   actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-                    ),
+                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
                     ElevatedButton(
                       onPressed: isSubmitting
                           ? null
@@ -730,24 +604,16 @@ class _CommentSheetState extends State<CommentSheet> {
                           );
                           if (context.mounted) {
                             Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Comment reported successfully.'))
-                            );
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Comment reported successfully.')));
                           }
                         } catch (e) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Failed to report: $e'))
-                            );
-                          }
+                          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to report: $e')));
                         } finally {
                           setDialogState(() => isSubmitting = false);
                         }
                       },
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.red[50]),
-                      child: isSubmitting
-                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Text('Submit Report', style: TextStyle(color: Colors.red)),
+                      child: isSubmitting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Submit Report', style: TextStyle(color: Colors.red)),
                     ),
                   ],
                 );
@@ -765,11 +631,7 @@ class _CommentSheetState extends State<CommentSheet> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        CircleAvatar(
-          radius: isReply ? 12 : 16,
-          backgroundColor: Colors.grey[200],
-          child: Icon(Icons.person, color: Colors.grey, size: isReply ? 16 : 20),
-        ),
+        CircleAvatar(radius: isReply ? 12 : 16, backgroundColor: Colors.grey[200], child: Icon(Icons.person, color: Colors.grey, size: isReply ? 16 : 20)),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -786,34 +648,21 @@ class _CommentSheetState extends State<CommentSheet> {
                       Text(timeAgo, style: TextStyle(color: Colors.grey[500], fontSize: 11)),
                     ],
                   ),
-
                   PopupMenuButton<String>(
                     icon: const Icon(Icons.more_horiz, color: Colors.grey, size: 16),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                     onSelected: (value) {
-                      if (value == 'report') {
-                        _showReportCommentDialog(context, commentID);
-                      }
+                      if (value == 'report') _showReportCommentDialog(context, commentID);
                     },
                     itemBuilder: (BuildContext context) => [
-                      const PopupMenuItem<String>(
-                        value: 'report',
-                        child: Row(
-                          children: [
-                            Icon(Icons.flag_outlined, color: Colors.red, size: 18),
-                            SizedBox(width: 8),
-                            Text('Report Comment', style: TextStyle(color: Colors.red, fontSize: 14)),
-                          ],
-                        ),
-                      ),
+                      const PopupMenuItem<String>(value: 'report', child: Row(children: [Icon(Icons.flag_outlined, color: Colors.red, size: 18), SizedBox(width: 8), Text('Report Comment', style: TextStyle(color: Colors.red, fontSize: 14))])),
                     ],
                   ),
                 ],
               ),
               const SizedBox(height: 4),
               Text(comment['content'] ?? '', style: TextStyle(fontSize: isReply ? 13 : 14)),
-
               if (!isReply)
                 InkWell(
                   onTap: () {
@@ -823,10 +672,7 @@ class _CommentSheetState extends State<CommentSheet> {
                   },
                   child: Padding(
                     padding: const EdgeInsets.only(top: 8.0, bottom: 4.0, right: 16.0),
-                    child: Text(
-                      'Reply',
-                      style: TextStyle(color: Colors.grey[700], fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
+                    child: Text('Reply', style: TextStyle(color: Colors.grey[700], fontSize: 12, fontWeight: FontWeight.bold)),
                   ),
                 ),
             ],
@@ -843,41 +689,24 @@ class _CommentSheetState extends State<CommentSheet> {
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Column(
         children: [
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 12),
-            height: 4,
-            width: 40,
-            decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
-          ),
+          Container(margin: const EdgeInsets.symmetric(vertical: 12), height: 4, width: 40, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
           const Text('Comments', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           const Divider(),
-
           Expanded(
             child: FutureBuilder<List<Map<String, dynamic>>>(
               future: _communityService.getComments(widget.postID),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Text("Database Error:\n\n${snapshot.error}", style: const TextStyle(color: Colors.red)),
-                  );
-                }
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Center(child: Text("No comments yet. Start the conversation!"));
-                }
+                if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+                if (snapshot.hasError) return Padding(padding: const EdgeInsets.all(16.0), child: Text("Database Error:\n\n${snapshot.error}", style: const TextStyle(color: Colors.red)));
+                if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No comments yet. Start the conversation!"));
 
                 final allComments = snapshot.data!;
-
                 final topLevelComments = allComments.where((c) => c['parentCommentID'] == null).toList();
-
                 final Map<String, List<Map<String, dynamic>>> repliesMap = {};
+
                 for (var comment in allComments) {
                   if (comment['parentCommentID'] != null) {
-                    final parentID = comment['parentCommentID'];
-                    repliesMap.putIfAbsent(parentID, () => []).add(comment);
+                    repliesMap.putIfAbsent(comment['parentCommentID'], () => []).add(comment);
                   }
                 }
 
@@ -895,7 +724,6 @@ class _CommentSheetState extends State<CommentSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _buildCommentRow(parentComment, isReply: false),
-
                         if (_activeReplyCommentID == commentID)
                           Padding(
                             padding: const EdgeInsets.only(left: 44.0, top: 8.0),
@@ -904,23 +732,13 @@ class _CommentSheetState extends State<CommentSheet> {
                               children: [
                                 Row(
                                   children: [
-                                    const CircleAvatar(
-                                      radius: 12,
-                                      backgroundColor: Colors.blueAccent,
-                                      child: Icon(Icons.person, color: Colors.white, size: 16),
-                                    ),
+                                    const CircleAvatar(radius: 12, backgroundColor: Colors.blueAccent, child: Icon(Icons.person, color: Colors.white, size: 16)),
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: TextField(
                                         controller: _replyController,
                                         autofocus: true,
-                                        decoration: const InputDecoration(
-                                          hintText: 'Add a reply...',
-                                          hintStyle: TextStyle(fontSize: 14),
-                                          isDense: true,
-                                          enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.black54)),
-                                          focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.black, width: 2)),
-                                        ),
+                                        decoration: const InputDecoration(hintText: 'Add a reply...', hintStyle: TextStyle(fontSize: 14), isDense: true, enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.black54)), focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.black, width: 2))),
                                       ),
                                     ),
                                   ],
@@ -929,77 +747,32 @@ class _CommentSheetState extends State<CommentSheet> {
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.end,
                                   children: [
-                                    TextButton(
-                                      onPressed: () {
-                                        setState(() {
-                                          _activeReplyCommentID = null;
-                                          _replyController.clear();
-                                        });
-                                      },
-                                      child: const Text('Cancel', style: TextStyle(color: Colors.black)),
-                                    ),
+                                    TextButton(onPressed: () => setState(() { _activeReplyCommentID = null; _replyController.clear(); }), child: const Text('Cancel', style: TextStyle(color: Colors.black))),
                                     const SizedBox(width: 8),
-                                    ElevatedButton(
-                                      onPressed: _isPosting ? null : () => _submitReply(commentID),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.grey[200],
-                                        elevation: 0,
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                      ),
-                                      child: const Text('Reply', style: TextStyle(color: Colors.black)),
-                                    ),
+                                    ElevatedButton(onPressed: _isPosting ? null : () => _submitReply(commentID), style: ElevatedButton.styleFrom(backgroundColor: Colors.grey[200], elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))), child: const Text('Reply', style: TextStyle(color: Colors.black))),
                                   ],
                                 )
                               ],
                             ),
                           ),
-
                         if (replies.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(left: 44.0, top: 4.0),
                             child: InkWell(
-                              onTap: () {
-                                setState(() {
-                                  if (isExpanded) {
-                                    _expandedThreads.remove(commentID);
-                                  } else {
-                                    _expandedThreads.add(commentID);
-                                  }
-                                });
-                              },
+                              onTap: () => setState(() { isExpanded ? _expandedThreads.remove(commentID) : _expandedThreads.add(commentID); }),
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(vertical: 8.0),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: Colors.blue, size: 18),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      isExpanded ? 'Hide replies' : '${replies.length} replies',
-                                      style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 13),
-                                    ),
-                                  ],
-                                ),
+                                child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: Colors.blue, size: 18), const SizedBox(width: 4), Text(isExpanded ? 'Hide replies' : '${replies.length} replies', style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 13))]),
                               ),
                             ),
                           ),
-
                         if (isExpanded && replies.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(left: 44.0, top: 8.0),
                             child: Container(
-                              decoration: BoxDecoration(
-                                border: Border(left: BorderSide(color: Colors.grey.shade300, width: 2)),
-                              ),
+                              decoration: BoxDecoration(border: Border(left: BorderSide(color: Colors.grey.shade300, width: 2))),
                               padding: const EdgeInsets.only(left: 12.0),
-                              child: Column(
-                                children: replies.map((reply) {
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 12.0),
-                                    child: _buildCommentRow(reply, isReply: true),
-                                  );
-                                }).toList(),
-                              ),
+                              child: Column(children: replies.map((reply) => Padding(padding: const EdgeInsets.only(bottom: 12.0), child: _buildCommentRow(reply, isReply: true))).toList()),
                             ),
                           ),
                       ],
@@ -1009,31 +782,14 @@ class _CommentSheetState extends State<CommentSheet> {
               },
             ),
           ),
-
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Colors.grey.shade200))),
             child: Row(
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _commentController,
-                    decoration: InputDecoration(
-                      hintText: 'Add a comment...',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
-                      filled: true,
-                      fillColor: Colors.grey[100],
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    ),
-                  ),
-                ),
+                Expanded(child: TextField(controller: _commentController, decoration: InputDecoration(hintText: 'Add a comment...', border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none), filled: true, fillColor: Colors.grey[100], contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8)))),
                 const SizedBox(width: 8),
-                IconButton(
-                  icon: _isPosting
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.send, color: Colors.blue),
-                  onPressed: _isPosting ? null : _submitComment,
-                ),
+                IconButton(icon: _isPosting ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.send, color: Colors.blue), onPressed: _isPosting ? null : _submitComment),
               ],
             ),
           ),
