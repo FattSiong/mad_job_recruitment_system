@@ -41,12 +41,7 @@ class TempMainScreen extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             ElevatedButton(
-              onPressed: () => {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => CommunityDashboard()),
-                ),
-              },
+              onPressed: () => _goToAuth(context, 'Community'),
               child: const Text('Go to Community Auth'),
             ),
           ],
