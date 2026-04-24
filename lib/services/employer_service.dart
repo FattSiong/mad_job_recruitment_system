@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/company_model.dart';
 import '../models/job_model.dart';
@@ -610,6 +611,40 @@ class EmployerService {
       return true;
     } catch (e) {
       print('Update status error: $e');
+      return false;
+    }
+  }
+
+  // 👉 NEW: Save the interview schedule and update status
+  Future<bool> scheduleInterview({
+    required String applicantId,
+    required DateTime date,
+    required TimeOfDay startTime,
+    required TimeOfDay endTime,
+    required String meetingMethod,
+    String? meetingLink,
+  }) async {
+    try {
+      // Format TimeOfDay into standard SQL time format (HH:MM:SS)
+      final startStr = '${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}:00';
+      final endStr = '${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}:00';
+
+      // 1. Insert into the InterviewSchedule table
+      await _supabase.from('InterviewSchedule').insert({
+        'applicantID': applicantId,
+        'date': date.toIso8601String().split('T')[0], // YYYY-MM-DD
+        'startTime': startStr,
+        'endTime': endStr,
+        'meetingMethod': meetingMethod,
+        'meetingLink': meetingLink,
+      });
+
+      // 2. Update the JobApplicant status to 'scheduled'
+      await updateApplicationStatus(applicantId, 'scheduled');
+
+      return true;
+    } catch (e) {
+      print('Schedule Interview Error: $e');
       return false;
     }
   }

@@ -8,6 +8,7 @@ import '../../../services/employer_service.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geocoding/geocoding.dart';
 import 'company_map_picker.dart';
+import 'package:open_filex/open_filex.dart';
 
 class RegisterCompanyScreen extends StatefulWidget {
   const RegisterCompanyScreen({super.key});
@@ -43,53 +44,21 @@ class _RegisterCompanyScreenState extends State<RegisterCompanyScreen> {
     }
   }
 
-  void _previewDocument(BuildContext context) {
+  Future<void> _previewDocument() async {
     if (_selectedFile == null) return;
 
-    final filePath = _selectedFile!.path.toLowerCase();
-    final isImage = filePath.endsWith('.jpg') || filePath.endsWith('.jpeg') || filePath.endsWith('.png');
+    // Ask the phone's OS to open the file path
+    final result = await OpenFilex.open(_selectedFile!.path);
 
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Document Preview'),
-          content: SizedBox(
-            width: double.maxFinite,
-            height: MediaQuery.of(context).size.height * 0.5,
-            child: isImage
-                ? Image.file(
-              _selectedFile!,
-              fit: BoxFit.contain,
-            )
-            // 🛑 For PDFs, we bypass the emulator's native rendering limitations
-                : const Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.picture_as_pdf, size: 80, color: Colors.red),
-                SizedBox(height: 16),
-                Text(
-                  'PDF Attached Successfully!',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  '(PDF rendering is restricted on this emulator. Preview will function on a physical device.)',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
-    );
+    // Handle the case where the emulator/phone doesn't have a PDF reader installed
+    if (result.type != ResultType.done && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open file. You may need an app to read this format.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
   }
 
   Future<void> _openLocationPicker() async {
@@ -307,7 +276,7 @@ class _RegisterCompanyScreenState extends State<RegisterCompanyScreen> {
                     if (_selectedFile != null) ...[
                       const SizedBox(width: 12),
                       OutlinedButton.icon(
-                        onPressed: () => _previewDocument(context),
+                        onPressed: _previewDocument, // 👉 Cleaner call
                         icon: const Icon(Icons.visibility),
                         label: const Text('Review'),
                       ),
