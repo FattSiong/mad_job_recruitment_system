@@ -32,16 +32,16 @@ class AdminDashboard extends StatelessWidget {
 //             )
 //           ],
 //         ),
-      backgroundColor: const Color(0xFFFBFBF9),
-      appBar: AppBar(title: const Text("Admin Moderation"), backgroundColor: Colors.white, elevation: 0.5),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          _buildAdminTile(Icons.business, "Company Verification", "3 Pending", const Color(0xFFA7BED3)),
-          _buildAdminTile(Icons.policy_rounded, "Job Moderation", "12 New", const Color(0xFFC6DEF1)),
-          _buildAdminTile(Icons.forum_outlined, "Community Control", "5 Reported", const Color(0xFFDBCDF0)),
-        ],
-      ),
+//      backgroundColor: const Color(0xFFFBFBF9),
+//      appBar: AppBar(title: const Text("Admin Moderation"), backgroundColor: Colors.white, elevation: 0.5),
+//      body: ListView(
+//        padding: const EdgeInsets.all(20),
+//        children: [
+//          _buildAdminTile(Icons.business, "Company Verification", "3 Pending", const Color(0xFFA7BED3)),
+//          _buildAdminTile(Icons.policy_rounded, "Job Moderation", "12 New", const Color(0xFFC6DEF1)),
+//          _buildAdminTile(Icons.forum_outlined, "Community Control", "5 Reported", const Color(0xFFDBCDF0)),
+//        ],
+//      ),
     );
   }
 
