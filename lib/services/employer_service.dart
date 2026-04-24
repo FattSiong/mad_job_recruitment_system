@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/company_model.dart';
 import '../models/job_model.dart';
@@ -520,6 +521,130 @@ class EmployerService {
       return true;
     } catch (e) {
       print('Error saving questions: $e');
+      return false;
+    }
+  }
+
+  Future<bool> updateCompanyDetails({
+    required String companyId,
+    required String name,
+    required String description,
+    File? newLogoFile,
+  }) async {
+    try {
+      String? finalLogoUrl;
+
+      // 1. If they picked a new image, upload it first
+      if (newLogoFile != null) {
+        final fileExt = newLogoFile.path.split('.').last;
+        final fileName = 'company_$companyId\_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+
+        // Ensure you have a 'company_logos' bucket created in your Supabase Storage!
+        await _supabase.storage.from('company_logos').upload(fileName, newLogoFile);
+        finalLogoUrl = _supabase.storage.from('company_logos').getPublicUrl(fileName);
+      }
+
+      // 2. Prepare the update payload
+      final Map<String, dynamic> updateData = {
+        'name': name,
+        'description': description,
+      };
+
+      // Only update the logo URL if a new one was actually uploaded
+      if (finalLogoUrl != null) {
+        updateData['companyLogoURL'] = finalLogoUrl; // Make sure your DB has a 'logoURL' column!
+      }
+
+      // 3. Update the database
+      await _supabase
+          .from('Company') // Or TableConstants.company
+          .update(updateData)
+          .eq('companyID', companyId);
+
+      return true;
+    } catch (e) {
+      print('Update Company Error: $e');
+      return false;
+    }
+  }
+
+  // 1. Fetch all applicants for a specific job
+  Future<List<Map<String, dynamic>>> getJobApplicants(String jobId) async {
+    try {
+      // We use a JOIN to grab the applicant's data AND their JobSeeker profile (for their name)
+      final response = await _supabase
+          .from('JobApplicant')
+          .select('*, JobSeeker(*)')
+          .eq('jobID', jobId)
+          .order('appliedAt', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Fetch applicants error: $e');
+      return [];
+    }
+  }
+
+  // 2. Fetch the pre-screening answers for a specific applicant
+  Future<List<Map<String, dynamic>>> getApplicantAnswers(String applicantId) async {
+    try {
+      // We JOIN with the PreScreeningQuestion table so we know what question they are answering!
+      final response = await _supabase
+          .from('ApplicationAnswer')
+          .select('*, PreScreeningQuestion(questionText, questionType)')
+          .eq('applicantID', applicantId);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Fetch answers error: $e');
+      return [];
+    }
+  }
+
+  // 3. Update the candidate's application status
+  Future<bool> updateApplicationStatus(String applicantId, String newStatus) async {
+    try {
+      await _supabase
+          .from('JobApplicant')
+          .update({'applicationStatus': newStatus})
+          .eq('applicantID', applicantId);
+      return true;
+    } catch (e) {
+      print('Update status error: $e');
+      return false;
+    }
+  }
+
+  // 👉 NEW: Save the interview schedule and update status
+  Future<bool> scheduleInterview({
+    required String applicantId,
+    required DateTime date,
+    required TimeOfDay startTime,
+    required TimeOfDay endTime,
+    required String meetingMethod,
+    String? meetingLink,
+  }) async {
+    try {
+      // Format TimeOfDay into standard SQL time format (HH:MM:SS)
+      final startStr = '${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}:00';
+      final endStr = '${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}:00';
+
+      // 1. Insert into the InterviewSchedule table
+      await _supabase.from('InterviewSchedule').insert({
+        'applicantID': applicantId,
+        'date': date.toIso8601String().split('T')[0], // YYYY-MM-DD
+        'startTime': startStr,
+        'endTime': endStr,
+        'meetingMethod': meetingMethod,
+        'meetingLink': meetingLink,
+      });
+
+      // 2. Update the JobApplicant status to 'scheduled'
+      await updateApplicationStatus(applicantId, 'scheduled');
+
+      return true;
+    } catch (e) {
+      print('Schedule Interview Error: $e');
       return false;
     }
   }

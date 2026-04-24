@@ -4,6 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../models/job_model.dart';
 import '../../../models/company_model.dart';
 import '../../../services/employer_service.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'company_map_picker.dart';
 
 class CreateJobScreen extends StatefulWidget {
   final CompanyModel? preselectedCompany;
@@ -140,14 +142,29 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
     });
   }
 
-  void _openLocationPicker() {
-    setState(() {
-      _selectedLat = 3.2162;
-      _selectedLng = 101.7289;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Test location automatically inserted!'), backgroundColor: Colors.blue),
+  Future<void> _openLocationPicker() async {
+    // 1. Navigate to the map and WAIT for a result
+    final LatLng? pickedLocation = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CompanyMapPickerScreen(
+          initialLat: _selectedLat,
+          initialLng: _selectedLng,
+        ),
+      ),
     );
+
+    // 2. If they clicked 'Confirm' (and didn't just hit the back button)
+    if (pickedLocation != null) {
+      setState(() {
+        _selectedLat = pickedLocation.latitude;
+        _selectedLng = pickedLocation.longitude;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Location selected successfully!'), backgroundColor: Colors.green),
+      );
+    }
   }
 
   bool get _hasActiveSubscription {

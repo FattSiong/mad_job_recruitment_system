@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../models/job_model.dart';
 import '../../../services/employer_service.dart';
 import 'edit_job_screen.dart';
+import 'manage_applicants_screen.dart';
 
 class JobDetailScreen extends StatefulWidget {
   final JobModel job;
@@ -162,10 +163,11 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                 subtitle: const Text('Review resumes, manage interviews, and hire candidates.'),
                 trailing: const Icon(Icons.arrow_forward_ios, color: Colors.blue),
                 onTap: () {
-                  // TODO: Navigate to the ATS Screen passing the _currentJob.jobID
-                  print('Navigate to ATS for ${_currentJob.title}');
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('ATS Module coming soon!')),
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ManageApplicantsScreen(job: _currentJob),
+                    ),
                   );
                 },
               ),
