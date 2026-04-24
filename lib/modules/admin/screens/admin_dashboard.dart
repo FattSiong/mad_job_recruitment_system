@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/screens/temp_main_screen.dart';
+import '../../../services/auth_service.dart';
+
 class AdminDashboard extends StatelessWidget {
   const AdminDashboard({super.key});
 
@@ -7,7 +10,50 @@ class AdminDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Admin / Moderation Module')),
-      body: const Center(child: Text('Admin Workspace')),
+//       body: Center(
+//         child: Column(
+//           mainAxisAlignment: MainAxisAlignment.center,
+//           children: [
+//             IconButton(
+//               icon: const Icon(Icons.logout),
+//               onPressed: () async {
+//                 // 1. Tell Supabase to destroy the saved session
+//                 await AuthService().signOut();
+
+//                 // 2. Kick them back to the login screen and clear the route history
+//                 if (context.mounted) {
+//                   Navigator.of(context).pushAndRemoveUntil(
+//                     // MaterialPageRoute(builder: (context) => const LoginScreen()),
+//                     MaterialPageRoute(builder: (context) => const TempMainScreen()),
+//                         (Route<dynamic> route) => false,
+//                   );
+//                 }
+//               },
+//             )
+//           ],
+//         ),
+      backgroundColor: const Color(0xFFFBFBF9),
+      appBar: AppBar(title: const Text("Admin Moderation"), backgroundColor: Colors.white, elevation: 0.5),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          _buildAdminTile(Icons.business, "Company Verification", "3 Pending", const Color(0xFFA7BED3)),
+          _buildAdminTile(Icons.policy_rounded, "Job Moderation", "12 New", const Color(0xFFC6DEF1)),
+          _buildAdminTile(Icons.forum_outlined, "Community Control", "5 Reported", const Color(0xFFDBCDF0)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdminTile(IconData icon, String title, String count, Color color) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 15),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: ListTile(
+        leading: CircleAvatar(backgroundColor: color.withValues(alpha: 0.1), child: Icon(icon, color: color)),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        trailing: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)), child: Text(count, style: TextStyle(color: color, fontWeight: FontWeight.bold))),
+      ),
     );
   }
 }
