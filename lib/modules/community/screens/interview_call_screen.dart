@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
-import '../../../services/interview_service.dart';
+import '../../../services/interview_service.dart'; // Make sure this path is correct for your project!
 
 class InterviewCallScreen extends StatefulWidget {
   final String roomCode;
@@ -31,7 +31,7 @@ class _InterviewCallScreenState extends State<InterviewCallScreen> {
   }
 
   Future<void> initAgora() async {
-    // 1. Request camera and mic permissions
+    // 1. Request permissions
     await [Permission.microphone, Permission.camera].request();
 
     // 2. Initialize the Agora Engine
@@ -41,7 +41,7 @@ class _InterviewCallScreenState extends State<InterviewCallScreen> {
       channelProfile: ChannelProfileType.channelProfileCommunication,
     ));
 
-    // 3. Set up listeners to know when people join or leave
+    // 3. Set up listeners
     _engine.registerEventHandler(
       RtcEngineEventHandler(
         onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
@@ -59,14 +59,14 @@ class _InterviewCallScreenState extends State<InterviewCallScreen> {
       ),
     );
 
-    // 4. Turn on the video and join the room!
+    // 4. Turn on video and join!
     await _engine.enableVideo();
     await _engine.startPreview();
 
     await _engine.joinChannel(
       token: '', // Leave empty if your project is in Testing Mode
       channelId: widget.roomCode,
-      uid: 0, // 0 tells Agora to assign you a random ID
+      uid: 0,
       options: const ChannelMediaOptions(),
     );
   }
@@ -78,13 +78,21 @@ class _InterviewCallScreenState extends State<InterviewCallScreen> {
     super.dispose();
   }
 
-  // Handle what happens when they click the red hang-up button
   void _onCallEnded() async {
     if (widget.isEmployer) {
       await InterviewService().endInterview(widget.interviewID);
     }
     if (mounted) {
-      Navigator.pop(context); // Send them back to the dashboard
+      Navigator.pop(context);
+    }
+  }
+
+  // 👈 NEW: The Switch Camera Function
+  void _onSwitchCamera() async {
+    try {
+      await _engine.switchCamera();
+    } catch (e) {
+      debugPrint("Error switching camera: $e");
     }
   }
 
@@ -139,16 +147,34 @@ class _InterviewCallScreenState extends State<InterviewCallScreen> {
             ),
           ),
 
-          // THE HANG-UP BUTTON
+          // 👈 THE NEW UPDATED BOTTOM BUTTONS
           Align(
             alignment: Alignment.bottomCenter,
             child: Padding(
               padding: const EdgeInsets.only(bottom: 32.0),
-              child: FloatingActionButton(
-                onPressed: _onCallEnded,
-                backgroundColor: Colors.red,
-                elevation: 0,
-                child: const Icon(Icons.call_end, color: Colors.white, size: 28),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // 1. Switch Camera Button
+                  FloatingActionButton(
+                    heroTag: "switch_camera_btn", // Required when you have multiple FloatingActionButtons
+                    onPressed: _onSwitchCamera,
+                    backgroundColor: Colors.white.withValues(alpha: 0.2), // Cool semi-transparent look
+                    elevation: 0,
+                    child: const Icon(Icons.flip_camera_ios, color: Colors.white, size: 28),
+                  ),
+
+                  const SizedBox(width: 24), // Spacing between buttons
+
+                  // 2. Hang Up Button
+                  FloatingActionButton(
+                    heroTag: "hang_up_btn",
+                    onPressed: _onCallEnded,
+                    backgroundColor: Colors.red,
+                    elevation: 0,
+                    child: const Icon(Icons.call_end, color: Colors.white, size: 28),
+                  ),
+                ],
               ),
             ),
           ),
