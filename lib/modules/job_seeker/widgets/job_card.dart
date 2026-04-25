@@ -84,9 +84,9 @@ class _JobCardState extends State<JobCard> {
 
   String _formatSalary(String range, String? type) {
     if (type == 'Part-time') {
-      return '$range / hr';
+      return '$range / hour';
     } else {
-      return '$range / mo';
+      return '$range / month';
     }
   }
 

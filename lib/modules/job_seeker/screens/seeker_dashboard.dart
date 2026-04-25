@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mad_job_recruitment_system/modules/job_seeker/screens/qr_scanner_screen.dart';
 import '../../../core/screens/temp_main_screen.dart';
 import '../../../models/job_model.dart';
 import '../../../services/auth_service.dart';
@@ -408,7 +409,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
               children: [
                 Text(
                   _keywordController.text.isEmpty && _locationController.text.isEmpty && _selectedJobType == 'All' && _selectedDatePosted == 'All time' && _selectedSalary == 'Any'
-                      ? 'Recommended jobs for you'
+                      ? 'Jobs for you'
                       : '${_jobs.length} jobs found',
                   style: TextStyle(fontSize: 15, color: Colors.grey.shade800, fontWeight: FontWeight.bold),
                 ),
@@ -451,6 +452,17 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
             ),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const QRScannerScreen()),
+          );
+        },
+        icon: const Icon(Icons.qr_code_scanner),
+        label: const Text('Test Scanner'),
+        backgroundColor: Colors.blue, // Or your AppColors.primaryBlue
       ),
     );
   }
