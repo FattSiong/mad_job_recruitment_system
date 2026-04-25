@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; // 👉 ADDED: Required for the Interviews query
 import '../../../core/theme/app_colors.dart';
 import '../../../core/constants/ui_constants.dart';
 import '../../../models/job_model.dart';
@@ -15,7 +16,7 @@ class MyJobsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('My Jobs', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
@@ -28,6 +29,7 @@ class MyJobsScreen extends StatelessWidget {
             tabs: [
               Tab(text: 'Bookmarked'),
               Tab(text: 'Applied'),
+              Tab(text: 'Interviews'),
             ],
           ),
         ),
@@ -35,6 +37,7 @@ class MyJobsScreen extends StatelessWidget {
           children: [
             BookmarkedJobsTab(),
             AppliedJobsTab(),
+            InterviewsTab(), // 👉 Links to the new tab at the bottom of the file
           ],
         ),
       ),
@@ -130,7 +133,7 @@ class _BookmarkedJobsListState extends State<_BookmarkedJobsList> {
 }
 
 // -----------------------------------------------------
-// APPLIED JOBS TAB (Remains exactly the same)
+// APPLIED JOBS TAB
 // -----------------------------------------------------
 class AppliedJobsTab extends StatefulWidget {
   const AppliedJobsTab({super.key});
@@ -238,6 +241,159 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
           );
         },
       ),
+    );
+  }
+}
+
+// -----------------------------------------------------
+// 👉 ADDED: INTERVIEWS TAB
+// -----------------------------------------------------
+class InterviewsTab extends StatefulWidget {
+  const InterviewsTab({super.key});
+
+  @override
+  State<InterviewsTab> createState() => _InterviewsTabState();
+}
+
+class _InterviewsTabState extends State<InterviewsTab> {
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _interviews = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchInterviews();
+  }
+
+  Future<void> _fetchInterviews() async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) return;
+
+      // Fetches the schedule, joins the JobApplicant table to filter by the current user,
+      // and joins Job + Company to get the UI display text.
+      final response = await Supabase.instance.client
+          .from('InterviewSchedule')
+          .select('''
+            *,
+            JobApplicant!inner(
+              seekerID,
+              Job (
+                title,
+                Company (name)
+              )
+            )
+          ''')
+          .eq('JobApplicant.seekerID', userId)
+          .order('date', ascending: true);
+
+      if (mounted) {
+        setState(() {
+          _interviews = List<Map<String, dynamic>>.from(response);
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error fetching interviews: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator(color: AppColors.primaryBlue));
+    }
+
+    if (_interviews.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.event_busy, size: 64, color: Colors.grey.shade400),
+            const SizedBox(height: 16),
+            Text('No scheduled interviews yet.', style: TextStyle(color: Colors.grey.shade600, fontSize: 16)),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(UiConstants.defaultPadding),
+      itemCount: _interviews.length,
+      itemBuilder: (context, index) {
+        final interview = _interviews[index];
+
+        // Safely extract the nested joined data
+        final applicantData = interview['JobApplicant'] as Map<String, dynamic>?;
+        final jobData = applicantData?['Job'] as Map<String, dynamic>?;
+        final companyData = jobData?['Company'] as Map<String, dynamic>?;
+
+        final jobTitle = jobData?['title'] ?? 'Unknown Job';
+        final companyName = companyData?['name'] ?? 'Unknown Company';
+        final date = interview['date'] ?? 'N/A';
+        // Substring to remove the seconds (e.g., "14:30:00" -> "14:30")
+        final startTime = interview['startTime']?.toString().substring(0, 5) ?? '';
+        final endTime = interview['endTime']?.toString().substring(0, 5) ?? '';
+
+        return Card(
+          elevation: 2,
+          margin: const EdgeInsets.only(bottom: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(jobTitle, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                Text(companyName, style: const TextStyle(fontSize: 14, color: AppColors.primaryBlue, fontWeight: FontWeight.w600)),
+                const Divider(height: 24, thickness: 1),
+
+                _buildInfoRow(Icons.calendar_today, date),
+                const SizedBox(height: 8),
+                _buildInfoRow(Icons.access_time, '$startTime - $endTime'),
+                const SizedBox(height: 8),
+                _buildInfoRow(Icons.videocam, interview['meetingMethod'] ?? 'TBA'),
+
+                if (interview['meetingLink'] != null && interview['meetingLink'].toString().isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    'Link: ${interview['meetingLink']}',
+                    style: const TextStyle(color: Colors.blue, decoration: TextDecoration.underline),
+                  )
+                ],
+
+                if (interview['interviewNote'] != null && interview['interviewNote'].toString().isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.info_outline, size: 16, color: Colors.grey),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(interview['interviewNote'], style: TextStyle(fontSize: 13, color: Colors.grey.shade800))),
+                      ],
+                    ),
+                  )
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: Colors.grey.shade700),
+        const SizedBox(width: 8),
+        Text(text, style: TextStyle(fontSize: 14, color: Colors.grey.shade800)),
+      ],
     );
   }
 }
