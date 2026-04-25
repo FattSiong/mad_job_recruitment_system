@@ -2,8 +2,14 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../models/company_model.dart';
 import '../../../services/employer_service.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geocoding/geocoding.dart';
+import 'company_map_picker.dart';
+import 'package:open_filex/open_filex.dart';
+
 
 class RegisterCompanyScreen extends StatefulWidget {
   const RegisterCompanyScreen({super.key});
@@ -21,6 +27,10 @@ class _RegisterCompanyScreenState extends State<RegisterCompanyScreen> {
   bool _isLoading = false;
   File? _selectedFile; // 👉 Variable to hold the chosen file
 
+  double? _selectedLat;
+  double? _selectedLng;
+  String? _selectedAddress;
+
   // 👉 Function to open the device's file explorer
   Future<void> _pickDocument() async {
     FilePickerResult? result = await FilePicker.pickFiles(
@@ -35,62 +45,90 @@ class _RegisterCompanyScreenState extends State<RegisterCompanyScreen> {
     }
   }
 
-  void _previewDocument(BuildContext context) {
+  Future<void> _previewDocument() async {
     if (_selectedFile == null) return;
 
-    final filePath = _selectedFile!.path.toLowerCase();
-    final isImage = filePath.endsWith('.jpg') || filePath.endsWith('.jpeg') || filePath.endsWith('.png');
+    // Ask the phone's OS to open the file path
+    final result = await OpenFilex.open(_selectedFile!.path);
 
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Document Preview'),
-          content: SizedBox(
-            width: double.maxFinite,
-            height: MediaQuery.of(context).size.height * 0.5,
-            child: isImage
-                ? Image.file(
-              _selectedFile!,
-              fit: BoxFit.contain,
-            )
-            // 🛑 For PDFs, we bypass the emulator's native rendering limitations
-                : const Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.picture_as_pdf, size: 80, color: Colors.red),
-                SizedBox(height: 16),
-                Text(
-                  'PDF Attached Successfully!',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  '(PDF rendering is restricted on this emulator. Preview will function on a physical device.)',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
+    // Handle the case where the emulator/phone doesn't have a PDF reader installed
+    if (result.type != ResultType.done && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open file. You may need an app to read this format.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+  }
+
+  Future<void> _openLocationPicker() async {
+    // 1. Navigate to the map and wait for the user to confirm a location
+    final LatLng? pickedLocation = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CompanyMapPickerScreen(
+          initialLat: _selectedLat,
+          initialLng: _selectedLng,
+        ),
+      ),
     );
+
+    // 2. If they picked a location (didn't just hit the back button)
+    if (pickedLocation != null) {
+      // Show a temporary loading state while we translate the coordinates
+      setState(() {
+        _selectedAddress = 'Translating map coordinates...';
+      });
+
+      try {
+        // 3. Ask the Geocoding package to turn the GPS pin into a real street address
+        List<Placemark> placemarks = await placemarkFromCoordinates(
+          pickedLocation.latitude,
+          pickedLocation.longitude,
+        );
+
+        String readableAddress = 'Unknown Location';
+        if (placemarks.isNotEmpty) {
+          final place = placemarks.first;
+          // Build a clean address string (e.g., "Jalan Genting Kelang, Setapak, Kuala Lumpur")
+          readableAddress = '${place.street}, ${place.subLocality ?? place.locality}, ${place.administrativeArea}';
+
+          // Clean up any weird formatting where street might be empty
+          readableAddress = readableAddress.replaceAll(RegExp(r'^, |, $'), '').replaceAll(', ,', ',');
+        }
+
+        // 4. Update the UI with the final data!
+        setState(() {
+          _selectedLat = pickedLocation.latitude;
+          _selectedLng = pickedLocation.longitude;
+          _selectedAddress = readableAddress;
+        });
+
+      } catch (e) {
+        // Fallback: If the internet fails during translation, just show the raw GPS coordinates
+        setState(() {
+          _selectedLat = pickedLocation.latitude;
+          _selectedLng = pickedLocation.longitude;
+          _selectedAddress = 'Coordinates: ${pickedLocation.latitude.toStringAsFixed(4)}, ${pickedLocation.longitude.toStringAsFixed(4)}';
+        });
+      }
+    }
   }
 
   Future<void> _submitCompany() async {
+    final currentUser = Supabase.instance.client.auth.currentUser;
+
+    if (currentUser == null) return;
+
+    // 👉 Updated validation to require location
     if (_nameController.text.isEmpty ||
         _regNumberController.text.isEmpty ||
-        _selectedFile == null) {
+        _selectedFile == null ||
+        _selectedLat == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Name, Registration Number, and Document are required'),
+          content: Text('Name, Registration Number, Document, and Location are required'),
         ),
       );
       return;
@@ -98,7 +136,6 @@ class _RegisterCompanyScreenState extends State<RegisterCompanyScreen> {
 
     setState(() => _isLoading = true);
 
-    // 1. Upload the file first to get the URL
     String? uploadedUrl = await _employerService.uploadVerificationDocument(
       _selectedFile!,
       _nameController.text,
@@ -112,25 +149,27 @@ class _RegisterCompanyScreenState extends State<RegisterCompanyScreen> {
       return;
     }
 
-    // 2. Create the company model WITH the new URL
     final newCompany = CompanyModel(
       name: _nameController.text,
       description: _descriptionController.text,
       registrationNumber: _regNumberController.text,
       verificationDocumentURL: uploadedUrl,
+      // 👉 Pass the coordinates to the model
+      latitude: _selectedLat,
+      longitude: _selectedLng,
     );
 
-    // 3. Save to database
     final createdCompany = await _employerService.registerCompany(
       newCompany,
-      '469885d6-45ac-4e96-b11f-a95fb0bafd78',
+      currentUser.id,
     );
 
     setState(() => _isLoading = false);
 
     if (createdCompany != null) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Company Registered! Awaiting Admin Approval.')),
+        const SnackBar(content: Text('Company Registered! Awaiting Admin Approval.')),
       );
       Navigator.pop(context);
     }
@@ -168,6 +207,43 @@ class _RegisterCompanyScreenState extends State<RegisterCompanyScreen> {
           ),
           const SizedBox(height: 16),
 
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Company HQ Location',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _selectedAddress ?? 'No location selected yet.',
+                  style: TextStyle(
+                      fontSize: 16,
+                      color: _selectedAddress == null ? Colors.red : Colors.black
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  onPressed: _openLocationPicker,
+                  icon: const Icon(Icons.map),
+                  label: Text(_selectedLat == null ? 'Search or Pick on Map' : 'Change Location'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue.shade50,
+                    foregroundColor: Colors.blue.shade900,
+                    elevation: 0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
           // 👉 File selection UI
           Container(
             padding: const EdgeInsets.all(16),
@@ -201,7 +277,7 @@ class _RegisterCompanyScreenState extends State<RegisterCompanyScreen> {
                     if (_selectedFile != null) ...[
                       const SizedBox(width: 12),
                       OutlinedButton.icon(
-                        onPressed: () => _previewDocument(context),
+                        onPressed: _previewDocument, // 👉 Cleaner call
                         icon: const Icon(Icons.visibility),
                         label: const Text('Review'),
                       ),

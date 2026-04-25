@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 // Import your other screens here once they are built:
+import '../modules/job_seeker/screens/seeker_main_screen.dart';
 import 'role_selection_screen.dart';
 import '../modules/employer/screens/employer_dashboard.dart';
-import '../modules/job_seeker/screens/seeker_dashboard.dart';
 import '../modules/admin/screens/admin_dashboard.dart';
 
 
@@ -47,7 +47,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (role == 'employer') {
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const EmployerDashboard()));
       } else if (role == 'job_seeker') {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const SeekerDashboard()));
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const SeekerMainScreen()));
       } else if (role == 'admin') {
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const AdminDashboard()));
       } else {

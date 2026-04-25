@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import '../../../services/community_service.dart';
+import '../../../services/interview_service.dart'; // 👈 NEW: Import the Interview Service
 import '../../../models/message_model.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 
-// --- NEW IMPORTS FOR AUDIO RECORDING ---
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
-
 import 'package:audioplayers/audioplayers.dart';
+import 'interview_lobby_screen.dart'; // 👈 NEW: Import the Lobby
 
 class ActiveChatScreen extends StatefulWidget {
   final String roomID;
@@ -34,7 +34,6 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
 
   bool _isUploading = false;
 
-  // --- AUDIO RECORDING STATE ---
   late final AudioRecorder _audioRecorder;
   bool _isRecording = false;
 
@@ -42,26 +41,22 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
   void initState() {
     super.initState();
     _communityService.markMessagesAsRead(widget.roomID, widget.otherUserID);
-    _audioRecorder = AudioRecorder(); // Initialize the recorder
+    _audioRecorder = AudioRecorder();
   }
 
   @override
   void dispose() {
     _messageController.dispose();
-    _audioRecorder.dispose(); // Always clean up the recorder
+    _audioRecorder.dispose();
     super.dispose();
   }
 
-  // --- AUDIO RECORDING LOGIC ---
   Future<void> _startRecording() async {
     try {
-      // Check microphone permissions
       if (await _audioRecorder.hasPermission()) {
-        // Find a temporary directory to save the audio file before uploading
         final Directory tempDir = await getTemporaryDirectory();
         final String filePath = '${tempDir.path}/audio_msg_${DateTime.now().millisecondsSinceEpoch}.m4a';
 
-        // Start recording
         await _audioRecorder.start(
             const RecordConfig(encoder: AudioEncoder.aacLc),
             path: filePath
@@ -80,7 +75,6 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
 
   Future<void> _stopAndSendRecording() async {
     try {
-      // Stop the recorder and get the file path
       final String? path = await _audioRecorder.stop();
 
       setState(() {
@@ -91,8 +85,6 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
         setState(() => _isUploading = true);
 
         File audioFile = File(path);
-
-        // Upload the audio file to Supabase using your existing attachment function
         String? fileUrl = await _communityService.uploadChatAttachment(audioFile, widget.roomID);
 
         if (fileUrl != null) {
@@ -100,11 +92,11 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
             messageID: '',
             roomID: widget.roomID,
             senderID: widget.currentUserID,
-            content: 'Voice Message', // The text displayed if audio isn't supported
+            content: 'Voice Message',
             isRead: false,
             sentAt: DateTime.now(),
             mediaType: 'audio',
-            mediaURL: fileUrl, // Save the Supabase Storage URL
+            mediaURL: fileUrl,
           );
 
           await _communityService.sendMessage(newMessage);
@@ -118,7 +110,6 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
       if (mounted) setState(() => _isUploading = false);
     }
   }
-  // -----------------------------
 
   Future<void> _pickAndSendFile() async {
     try {
@@ -135,7 +126,6 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
         String ext = result.files.single.extension?.toLowerCase() ?? '';
 
         String mediaType = ['jpg', 'png', 'jpeg'].contains(ext) ? 'image' : 'file';
-
         String? fileUrl = await _communityService.uploadChatAttachment(file, widget.roomID);
 
         if (fileUrl != null) {
@@ -189,23 +179,53 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
           ],
         ),
         actions: [
+          // -----------------------------------------
+          // 👈 REFACTORED VIDEO BUTTON LOGIC
+          // -----------------------------------------
           IconButton(
-            icon: const Icon(Icons.videocam),
-            onPressed: () {},
+            icon: const Icon(Icons.videocam, color: Colors.blueAccent),
+            tooltip: 'Video Interview',
+            onPressed: () async {
+              try {
+                // TODO: Replace this hardcoded 'true' with your actual user role check!
+                // For example: bool isCurrentUserEmployer = currentUser.role == 'Employer';
+                bool isCurrentUserEmployer = true;
+
+                // Assign the IDs properly so the database knows who is who
+                final employerID = isCurrentUserEmployer ? widget.currentUserID : widget.otherUserID;
+                final seekerID = isCurrentUserEmployer ? widget.otherUserID : widget.currentUserID;
+
+                // Create or fetch the room from Supabase
+                // final interviewData = await InterviewService().getRoomByScheduleId(employerID, seekerID);
+
+                // Navigate to the Lobby
+                // if (context.mounted) {
+                //   Navigator.push(
+                //     context,
+                //     MaterialPageRoute(
+                //       builder: (context) => InterviewLobbyScreen(
+                //         interviewID: interviewData['interviewID'],
+                //         roomCode: interviewData['roomCode'],
+                //         isEmployer: isCurrentUserEmployer,
+                //       ),
+                //     ),
+                //   );
+                // }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                }
+              }
+            },
           ),
-          IconButton(
-            icon: const Icon(Icons.call),
-            onPressed: () {},
-          ),
+          IconButton(icon: const Icon(Icons.call), onPressed: () {}),
           IconButton(
             icon: const Icon(Icons.more_vert),
             onPressed: () {
               showModalBottomSheet(
                 context: context,
                 backgroundColor: Colors.white,
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                ),
+                shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
                 builder: (context) => SharedAttachmentsSheet(roomID: widget.roomID),
               );
             },
@@ -225,10 +245,12 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
                   return const Center(child: Text("Say hi!", style: TextStyle(color: Colors.grey)));
                 }
 
-                final messages = snapshot.data!;
+                // Reverse the list so the newest messages are at index 0 (the bottom).
+                final messages = snapshot.data!.reversed.toList();
+
                 return ListView.builder(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  reverse: true, // Typically chats scroll from bottom up, make sure your query orders descending!
+                  reverse: true, // Keeps the scroll anchored to the bottom
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
                     final msg = messages[index];
@@ -256,7 +278,6 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
                     onPressed: _isUploading ? null : _pickAndSendFile,
                   ),
 
-                  // Text Field Area (Changes to 'Recording...' when holding mic)
                   Expanded(
                     child: _isRecording
                         ? Container(
@@ -293,11 +314,9 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
                     ),
                   ),
 
-                  // --- UPDATED: Hold to Record Button ---
                   GestureDetector(
                     onLongPressStart: (_) => _startRecording(),
                     onLongPressEnd: (_) => _stopAndSendRecording(),
-                    // Cancel if they drag their finger away while holding
                     onLongPressCancel: () async {
                       if (_isRecording) {
                         await _audioRecorder.stop();
@@ -309,7 +328,7 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
                       child: Icon(
                         _isRecording ? Icons.mic : Icons.mic_none,
                         color: _isRecording ? Colors.red : Colors.grey,
-                        size: _isRecording ? 28 : 24, // Slightly grows when pressed
+                        size: _isRecording ? 28 : 24,
                       ),
                     ),
                   ),
@@ -328,9 +347,8 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
   }
 }
 
-
 // ------------------------------------------------------------------------
-// The Smart Message Bubble Widget (Now Stateful for Audio Playback!)
+// The Smart Message Bubble Widget (Now with Soft Delete!)
 // ------------------------------------------------------------------------
 class MessageBubble extends StatefulWidget {
   final MessageModel message;
@@ -347,8 +365,8 @@ class MessageBubble extends StatefulWidget {
 }
 
 class _MessageBubbleState extends State<MessageBubble> {
-  // Audio Player State
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final CommunityService _communityService = CommunityService(); // Add service for deletion
   bool _isPlaying = false;
   Duration _duration = Duration.zero;
   Duration _position = Duration.zero;
@@ -357,56 +375,69 @@ class _MessageBubbleState extends State<MessageBubble> {
   void initState() {
     super.initState();
 
-    // If this message is an audio file, set up the listeners
-    if (widget.message.mediaType == 'audio' && widget.message.mediaURL != null) {
+    // Only setup audio if the message is NOT deleted
+    if (!widget.message.isDeleted && widget.message.mediaType == 'audio' && widget.message.mediaURL != null) {
+      _audioPlayer.setAudioContext(AudioContext(
+        iOS: AudioContextIOS(category: AVAudioSessionCategory.playback, options: [AVAudioSessionOptions.defaultToSpeaker]),
+        android: AudioContextAndroid(isSpeakerphoneOn: true, usageType: AndroidUsageType.media, audioFocus: AndroidAudioFocus.gain),
+      ));
+
       _audioPlayer.onPlayerStateChanged.listen((state) {
-        if (mounted) {
-          setState(() {
-            _isPlaying = state == PlayerState.playing;
-          });
-        }
+        if (mounted) setState(() => _isPlaying = state == PlayerState.playing);
       });
-
       _audioPlayer.onDurationChanged.listen((newDuration) {
-        if (mounted) {
-          setState(() {
-            _duration = newDuration;
-          });
-        }
+        if (mounted) setState(() => _duration = newDuration);
       });
-
       _audioPlayer.onPositionChanged.listen((newPosition) {
-        if (mounted) {
-          setState(() {
-            _position = newPosition;
-          });
-        }
+        if (mounted) setState(() => _position = newPosition);
+      });
+      _audioPlayer.onPlayerComplete.listen((event) {
+        if (mounted) setState(() { _isPlaying = false; _position = Duration.zero; });
       });
 
-      // Reset when audio finishes
-      _audioPlayer.onPlayerComplete.listen((event) {
-        if (mounted) {
-          setState(() {
-            _isPlaying = false;
-            _position = Duration.zero;
-          });
-        }
-      });
+      _audioPlayer.setSource(UrlSource(widget.message.mediaURL!));
     }
   }
 
   @override
   void dispose() {
-    _audioPlayer.dispose(); // Always clean up to prevent memory leaks!
+    _audioPlayer.dispose();
     super.dispose();
   }
 
-  // Helper to format the audio duration (e.g., 0:05)
   String _formatDuration(Duration duration) {
     String twoDigits(int n) => n.toString().padLeft(2, "0");
     String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
     String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
     return "$twoDigitMinutes:$twoDigitSeconds";
+  }
+
+  // --- NEW: The Delete Dialog ---
+  void _showDeleteDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Message?'),
+        content: const Text('This will delete the message for everyone in this chat.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context); // Close dialog immediately
+              try {
+                await _communityService.softDeleteMessage(widget.message.messageID);
+              } catch (e) {
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete: $e')));
+              }
+            },
+            child: const Text('Delete for Everyone', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -429,131 +460,175 @@ class _MessageBubbleState extends State<MessageBubble> {
       child: Column(
         crossAxisAlignment: widget.isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-            decoration: BoxDecoration(
-              color: widget.isMe ? const Color(0xFF1865F2) : Colors.grey[100],
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(16),
-                topRight: const Radius.circular(16),
-                bottomLeft: widget.isMe ? const Radius.circular(16) : const Radius.circular(4),
-                bottomRight: widget.isMe ? const Radius.circular(4) : const Radius.circular(16),
+
+          // --- NEW: GestureDetector for Long Press ---
+          GestureDetector(
+            onLongPress: () {
+              // Only allow deletion if it's MY message, and it isn't ALREADY deleted
+              if (widget.isMe && !widget.message.isDeleted) {
+                _showDeleteDialog();
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+              decoration: BoxDecoration(
+                color: widget.message.isDeleted
+                    ? Colors.grey[200] // Grey out deleted messages
+                    : (widget.isMe ? const Color(0xFF1865F2) : Colors.grey[100]),
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(16),
+                  topRight: const Radius.circular(16),
+                  bottomLeft: widget.isMe ? const Radius.circular(16) : const Radius.circular(4),
+                  bottomRight: widget.isMe ? const Radius.circular(4) : const Radius.circular(16),
+                ),
+                border: widget.isMe && !widget.message.isDeleted ? null : Border.all(color: Colors.grey.shade300),
               ),
-              border: widget.isMe ? null : Border.all(color: Colors.grey.shade300),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 1. IMAGE
-                if (widget.message.mediaType == 'image' && widget.message.mediaURL != null) ...[
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      widget.message.mediaURL!,
-                      width: 200,
-                      height: 200,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                ]
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
 
-                // 2. DOCUMENT/FILE
-                else if (widget.message.mediaType == 'file' && widget.message.mediaURL != null) ...[
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(color: widget.isMe ? Colors.white24 : Colors.blue.withOpacity(0.1), shape: BoxShape.circle),
-                        child: Icon(Icons.picture_as_pdf, color: widget.isMe ? Colors.white : Colors.redAccent),
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          widget.message.content,
-                          style: TextStyle(
-                            color: widget.isMe ? Colors.white : Colors.blueAccent,
-                            fontWeight: FontWeight.bold,
-                            decoration: TextDecoration.underline,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                ]
-
-                // 3. AUDIO RECORDING (Now Functional!)
-                else if (widget.message.mediaType == 'audio' && widget.message.mediaURL != null) ...[
+                  // --- NEW: THE DELETED TOMBSTONE ---
+                  if (widget.message.isDeleted) ...[
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Play/Pause Button
-                        GestureDetector(
-                          onTap: () async {
-                            if (_isPlaying) {
-                              await _audioPlayer.pause();
-                            } else {
-                              await _audioPlayer.play(UrlSource(widget.message.mediaURL!));
-                            }
-                          },
-                          child: Icon(
-                            _isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
-                            color: widget.isMe ? Colors.white : const Color(0xFF1865F2),
-                            size: 36,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-
-                        // Progress Slider
-                        SizedBox(
-                          width: 100, // Fixed width for the slider inside the bubble
-                          child: SliderTheme(
-                            data: SliderThemeData(
-                              trackHeight: 3,
-                              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                              overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
-                              activeTrackColor: widget.isMe ? Colors.white : const Color(0xFF1865F2),
-                              inactiveTrackColor: widget.isMe ? Colors.white38 : Colors.grey[300],
-                              thumbColor: widget.isMe ? Colors.white : const Color(0xFF1865F2),
-                            ),
-                            child: Slider(
-                              min: 0,
-                              max: _duration.inSeconds.toDouble() > 0 ? _duration.inSeconds.toDouble() : 1.0,
-                              value: _position.inSeconds.toDouble().clamp(0.0, _duration.inSeconds.toDouble() > 0 ? _duration.inSeconds.toDouble() : 1.0),
-                              onChanged: (value) async {
-                                final position = Duration(seconds: value.toInt());
-                                await _audioPlayer.seek(position);
-                              },
-                            ),
-                          ),
-                        ),
-
-                        // Duration Text
+                        Icon(Icons.block, size: 16, color: Colors.grey[500]),
+                        const SizedBox(width: 6),
                         Text(
-                          _position.inSeconds > 0 ? _formatDuration(_position) : _formatDuration(_duration),
-                          style: TextStyle(color: widget.isMe ? Colors.white : Colors.black87, fontSize: 12),
+                          "This message was deleted",
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontStyle: FontStyle.italic,
+                            fontSize: 14,
+                          ),
                         ),
                       ],
-                    )
+                    ),
                   ]
 
-                  // 4. STANDARD TEXT
+                  // --- EXISTING LOGIC FOR NORMAL MESSAGES ---
                   else ...[
-                      Text(
-                        widget.message.content,
-                        style: TextStyle(
-                          color: widget.isMe ? Colors.white : Colors.black87,
-                          fontSize: 15,
+                    // 1. IMAGE (Now Clickable with Hero Animation!)
+                    if (widget.message.mediaType == 'image' && widget.message.mediaURL != null) ...[
+                      GestureDetector(
+                        onTap: () {
+                          // Navigate to the full screen viewer
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => FullScreenImageViewer(
+                                imageUrl: widget.message.mediaURL!,
+                                heroTag: widget.message.mediaURL!, // Use URL as unique tag
+                              ),
+                            ),
+                          );
+                        },
+                        child: Hero(
+                          tag: widget.message.mediaURL!, // Matches the tag in the new screen
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              widget.message.mediaURL!,
+                              width: 200,
+                              height: 200,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image),
+                            ),
+                          ),
                         ),
                       ),
-                    ],
-              ],
+                      const SizedBox(height: 4),
+                    ]
+                    else if (widget.message.mediaType == 'file' && widget.message.mediaURL != null) ...[
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(color: widget.isMe ? Colors.white24 : Colors.blue.withOpacity(0.1), shape: BoxShape.circle),
+                            child: Icon(Icons.picture_as_pdf, color: widget.isMe ? Colors.white : Colors.redAccent),
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              widget.message.content,
+                              style: TextStyle(
+                                color: widget.isMe ? Colors.white : Colors.blueAccent,
+                                fontWeight: FontWeight.bold,
+                                decoration: TextDecoration.underline,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                    ]
+                    else if (widget.message.mediaType == 'audio' && widget.message.mediaURL != null) ...[
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            GestureDetector(
+                              onTap: () async {
+                                if (_isPlaying) {
+                                  await _audioPlayer.pause();
+                                } else {
+                                  await _audioPlayer.resume();
+                                }
+                              },
+                              child: Icon(
+                                _isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
+                                color: widget.isMe ? Colors.white : const Color(0xFF1865F2),
+                                size: 36,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+
+                            SizedBox(
+                              width: 100,
+                              child: SliderTheme(
+                                data: SliderThemeData(
+                                  trackHeight: 3,
+                                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                                  activeTrackColor: widget.isMe ? Colors.white : const Color(0xFF1865F2),
+                                  inactiveTrackColor: widget.isMe ? Colors.white38 : Colors.grey[300],
+                                  thumbColor: widget.isMe ? Colors.white : const Color(0xFF1865F2),
+                                ),
+                                child: Slider(
+                                  min: 0,
+                                  max: _duration.inSeconds.toDouble() > 0 ? _duration.inSeconds.toDouble() : 1.0,
+                                  value: _position.inSeconds.toDouble().clamp(0.0, _duration.inSeconds.toDouble() > 0 ? _duration.inSeconds.toDouble() : 1.0),
+                                  onChanged: (value) async {
+                                    final position = Duration(seconds: value.toInt());
+                                    await _audioPlayer.seek(position);
+                                  },
+                                ),
+                              ),
+                            ),
+
+                            Text(
+                              _position.inSeconds > 0 ? _formatDuration(_position) : _formatDuration(_duration),
+                              style: TextStyle(color: widget.isMe ? Colors.white : Colors.black87, fontSize: 12),
+                            ),
+                          ],
+                        )
+                      ]
+                      else ...[
+                          Text(
+                            widget.message.content,
+                            style: TextStyle(
+                              color: widget.isMe ? Colors.white : Colors.black87,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ],
+                  ],
+                ],
+              ),
             ),
           ),
+
           const SizedBox(height: 4),
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -562,7 +637,8 @@ class _MessageBubbleState extends State<MessageBubble> {
                 timeString,
                 style: TextStyle(fontSize: 11, color: Colors.grey[500]),
               ),
-              if (widget.isMe) ...[
+              // Hide the blue ticks if the message is deleted
+              if (widget.isMe && !widget.message.isDeleted) ...[
                 const SizedBox(width: 4),
                 Icon(
                   Icons.done_all,
@@ -685,6 +761,49 @@ class SharedAttachmentsSheet extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ------------------------------------------------------------------------
+// NEW: Full Screen Image Viewer
+// ------------------------------------------------------------------------
+class FullScreenImageViewer extends StatelessWidget {
+  final String imageUrl;
+  final String heroTag;
+
+  const FullScreenImageViewer({
+    Key? key,
+    required this.imageUrl,
+    required this.heroTag,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        iconTheme: const IconThemeData(color: Colors.white),
+        elevation: 0,
+      ),
+      body: Center(
+        // InteractiveViewer adds pinch-to-zoom instantly!
+        child: InteractiveViewer(
+          minScale: 0.5,
+          maxScale: 4.0,
+          child: Hero(
+            tag: heroTag,
+            child: Image.network(
+              imageUrl,
+              fit: BoxFit.contain,
+              width: double.infinity,
+              height: double.infinity,
+              errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.white, size: 50),
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -7,6 +7,7 @@ class MessageModel {
   final DateTime sentAt;
   final String? mediaURL;
   final String? mediaType; // e.g., 'text', 'audio', 'document'
+  final bool isDeleted;
 
   MessageModel({
     required this.messageID,
@@ -17,6 +18,7 @@ class MessageModel {
     required this.sentAt,
     this.mediaURL,
     this.mediaType,
+    this.isDeleted = false,
   });
 
   factory MessageModel.fromJson(Map<String, dynamic> json) {
@@ -29,6 +31,7 @@ class MessageModel {
       sentAt: DateTime.parse(json['sentAt']),
       mediaURL: json['mediaURL'],
       mediaType: json['mediaType'] ?? 'text',
+      isDeleted: json['isDeleted'] ?? false,
     );
   }
 
