@@ -398,7 +398,7 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
                 final didUpdate = await Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => EditCompanyScreen(company: widget.company),
+                    builder: (context) => EditCompanyScreen(company: _company),
                   ),
                 );
 
