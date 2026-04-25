@@ -618,6 +618,7 @@ class EmployerService {
   // 👉 NEW: Save the interview schedule and update status
   Future<bool> scheduleInterview({
     required String applicantId,
+    required String seekerId, // 👉 NEW: Required to link the room to the seeker
     required DateTime date,
     required TimeOfDay startTime,
     required TimeOfDay endTime,
@@ -625,21 +626,39 @@ class EmployerService {
     String? meetingLink,
   }) async {
     try {
+      // Grab the current employer's ID
+      final currentUser = _supabase.auth.currentUser;
+      if (currentUser == null) return false;
+
       // Format TimeOfDay into standard SQL time format (HH:MM:SS)
       final startStr = '${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}:00';
       final endStr = '${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}:00';
 
-      // 1. Insert into the InterviewSchedule table
-      await _supabase.from('InterviewSchedule').insert({
+      // 1. Insert into the InterviewSchedule table AND return the new row
+      // We need .select().single() so we can grab the auto-generated scheduleID!
+      final scheduleResponse = await _supabase.from('InterviewSchedule').insert({
         'applicantID': applicantId,
         'date': date.toIso8601String().split('T')[0], // YYYY-MM-DD
         'startTime': startStr,
         'endTime': endStr,
         'meetingMethod': meetingMethod,
         'meetingLink': meetingLink,
-      });
+      }).select('scheduleID').single();
 
-      // 2. Update the JobApplicant status to 'scheduled'
+      final generatedScheduleId = scheduleResponse['scheduleID'];
+
+      // 2. 👉 NEW: If it's an internal meeting, create the Waiting Room!
+      if (meetingMethod == 'internal') {
+        await _supabase.from('InterviewRoom').insert({
+          'scheduleID': generatedScheduleId,
+          'employerID': currentUser.id,
+          'seekerID': seekerId,
+          'status': 'pending',
+          // roomCode, startedAt, and endedAt will naturally be null upon creation
+        });
+      }
+
+      // 3. Update the JobApplicant status to 'scheduled'
       await updateApplicationStatus(applicantId, 'scheduled');
 
       return true;
@@ -648,4 +667,72 @@ class EmployerService {
       return false;
     }
   }
+
+  // 👉 NEW: Fetch all scheduled interviews with candidate & job details
+  Future<List<Map<String, dynamic>>> getScheduledInterviews() async {
+    try {
+      // Note: This assumes your Supabase Foreign Keys are set up correctly between
+      // InterviewSchedule -> JobApplicant -> JobSeeker & JobPost.
+      // If your RLS policies are set correctly, this will only return the employer's interviews.
+      final response = await _supabase
+          .from('InterviewSchedule')
+          .select('''
+            *,
+            JobApplicant (
+              applicantID,
+              applicationStatus,
+              JobSeeker (fullName, email),
+              Job (title)
+            )
+          ''')
+          .order('date', ascending: true)
+          .order('startTime', ascending: true);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Error fetching schedule: $e');
+      return [];
+    }
+  }
+
+  Future<bool> markInterviewAsCompleted(String applicantId, String? scheduleId) async {
+    try {
+      // 1. Update the candidate's ATS status to 'interviewed'
+      await _supabase
+          .from('JobApplicant')
+          .update({'applicationStatus': 'interviewed'})
+          .eq('applicantID', applicantId);
+
+      // 2. Permanently close the room to prevent anyone from rejoining
+      if (scheduleId != null) {
+        await _supabase.from('InterviewRoom').update({
+          'status': 'completed',
+          'employerHasLeft': true,
+          'seekerHasLeft': true,
+          'endedAt': DateTime.now().toIso8601String(),
+        }).eq('scheduleID', scheduleId);
+      }
+
+      return true;
+    } catch (e) {
+      print('Error marking interview as completed: $e');
+      return false;
+    }
+  }
+
+  Future<CompanyModel?> getCompanyById(String companyId) async {
+    try {
+      final response = await _supabase
+          .from('Company')
+          .select()
+          .eq('companyID', companyId)
+          .single();
+
+      return CompanyModel.fromJson(response);
+    } catch (e) {
+      print('Fetch company by ID error: $e');
+      return null;
+    }
+  }
+
 }

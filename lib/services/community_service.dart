@@ -14,6 +14,7 @@ class CommunityService {
         .from('ChatRoom')
         .select('''
           roomID,
+          user2_ID,
           User!ChatRoom_user2_ID_fkey(username, role), 
           Message(content, sentAt, isRead, senderID)
         ''')
@@ -117,6 +118,7 @@ class CommunityService {
         .select('''
           commentID,
           parentCommentID,
+          userID,
           content,
           createdAt,
           User: "User"!PostComment_userID_fkey (username, role)
@@ -197,20 +199,30 @@ class CommunityService {
 
   Future<void> deletePost(String postID) async {
     try {
+      // 1. Hard delete all likes associated with this post
+      await _supabase.from('PostLike').delete().eq('postID', postID);
+
+      // 2. Hard delete all saves associated with this post
+      await _supabase.from('PostSaved').delete().eq('postID', postID);
+
+      // 3. Hard delete all comments associated with this post
+      await _supabase.from('PostComment').delete().eq('postID', postID);
+
+      // 4. Finally, hard delete the actual post
       final response = await _supabase
           .from('CommunityPost')
-          .update({'status': 'deleted'}) // Ensure 'status' is the correct column name
+          .delete() // Changed from .update({'status': 'deleted'})
           .eq('postID', postID)
-          .select(); // Adding .select() helps verify the update happened
+          .select();
 
       if (response.isEmpty) {
-        throw Exception('No post found with that ID or RLS policy blocked the update.');
+        throw Exception('No post found or RLS policy blocked the deletion.');
       }
 
-      print('SUCCESS: Post status updated to deleted in database.');
+      print('SUCCESS: Post and all related data hard deleted from database.');
     } catch (e) {
       print('Supabase Error: $e');
-      throw Exception('Failed to delete post: $e');
+      throw Exception('Failed to completely delete post: $e');
     }
   }
 
@@ -310,15 +322,48 @@ class CommunityService {
 
 
   // --- Add this inside your CommunityService class ---
+// --- Updated to perform a HARD DELETE ---
   Future<void> softDeleteMessage(String messageID) async {
     try {
       await _supabase
           .from('Message')
-          .update({'isDeleted': true})
+          .delete() // Changed from .update({'isDeleted': true})
           .eq('messageID', messageID);
     } catch (e) {
       print('Error deleting message: $e');
       throw Exception('Failed to delete message.');
+    }
+  }
+
+
+  // Inside community_service.dart
+
+  // Update this in community_service.dart
+  Future<void> editPost(String postID, String newContent, String? finalMediaUrl) async {
+    await _supabase.from('CommunityPost').update({
+      'content': newContent,
+      'mediaURL': finalMediaUrl, // 👈 Now updates the database with the new (or null) URL
+      // 'updatedAt': DateTime.now().toIso8601String(), // Uncomment if you have an updatedAt column
+    }).eq('postID', postID);
+  }
+
+  Future<void> editComment(String commentID, String newContent) async {
+    await _supabase.from('PostComment').update({
+      'content': newContent,
+    }).eq('commentID', commentID);
+  }
+
+
+  // Add this inside CommunityService class
+  Future<void> deleteComment(String commentID) async {
+    try {
+      await _supabase
+          .from('PostComment')
+          .delete() // This is already a hard delete!
+          .eq('commentID', commentID);
+    } catch (e) {
+      print('Supabase Error: $e');
+      throw Exception('Failed to delete comment: $e');
     }
   }
 
