@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:mad_job_recruitment_system/modules/admin/screens/AdminCommunityScreen.dart';
 import 'package:mad_job_recruitment_system/modules/admin/screens/AdminSubscriptionListScreen.dart';
+import '../../../core/screens/temp_main_screen.dart';
+import '../../../services/auth_service.dart';
 import 'company_verification_screen.dart';
 import 'admin_job_details.dart';
 
@@ -23,16 +26,37 @@ class _AdminDashboardState extends State<AdminDashboard> {
         title: const Text("Admin Dashboard",
             style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18)),
         centerTitle: true,
+        // 👇 Move the button into the 'actions' array
+        actions: [
+          IconButton(
+            // 👇 Change the color to black so it's visible on the white app bar
+            icon: const Icon(Icons.logout, color: Colors.black, size: 20),
+            tooltip: 'Logout',
+            onPressed: () async {
+              await AuthService().signOut();
+              if (context.mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(
+                    builder: (context) => const TempMainScreen(),
+                  ),
+                      (Route<dynamic> route) => false,
+                );
+              }
+            },
+          ),
+        ],
       ),
+
       body: IndexedStack(
         index: _currentIndex,
         children: const [
           CompanyVerificationScreen(),
           AdminJobModerationScreen(),
-          Center(child: Text("Community Moderation")),
+          AdminCommunityScreen(),
           AdminSubscriptionListScreen(),
         ],
       ),
+
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         selectedItemColor: Colors.blueAccent,
