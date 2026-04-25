@@ -719,4 +719,20 @@ class EmployerService {
       return false;
     }
   }
+
+  Future<CompanyModel?> getCompanyById(String companyId) async {
+    try {
+      final response = await _supabase
+          .from('Company')
+          .select()
+          .eq('companyID', companyId)
+          .single();
+
+      return CompanyModel.fromJson(response);
+    } catch (e) {
+      print('Fetch company by ID error: $e');
+      return null;
+    }
+  }
+
 }

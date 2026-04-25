@@ -16,6 +16,7 @@ class CompanyDetailScreen extends StatefulWidget {
 class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
   final _employerService = EmployerService();
   final _currentUser = Supabase.instance.client.auth.currentUser;
+  late CompanyModel _company;
 
   List<Map<String, dynamic>> _members = [];
   bool _isLoading = true;
@@ -24,6 +25,7 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _company = widget.company;
     _loadMembers();
   }
 
@@ -246,7 +248,7 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final company = widget.company;
+    final company = _company;
 
     final isRejected = company.verificationStatus.toLowerCase() == 'rejected';
     final isApproved =
@@ -401,7 +403,8 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
                 );
 
                 if (didUpdate == true) {
-                  _loadMembers();
+                  await _reloadCompanyDetails();
+                  await _loadMembers();
                 }
               },
               borderRadius: BorderRadius.circular(16),
@@ -750,5 +753,18 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _reloadCompanyDetails() async {
+    final companyId = _company.companyID;
+    if (companyId == null) return;
+
+    final refreshedCompany = await _employerService.getCompanyById(companyId);
+
+    if (!mounted || refreshedCompany == null) return;
+
+    setState(() {
+      _company = refreshedCompany;
+    });
   }
 }
