@@ -9,8 +9,9 @@ class JobModel {
   final String salaryRange;
   final String status; // e.g., 'active', 'draft', 'archived'
   final DateTime? createdAt;
-  final int minExperienceYears;
   final String jobType;
+  final int minExperienceYears;
+  final String? locationName;
   final String? companyName;
 
   JobModel({
@@ -24,8 +25,9 @@ class JobModel {
     required this.salaryRange,
     this.status = 'active',
     this.createdAt,
+    this.jobType = 'Full-time',
     this.minExperienceYears = 0,
-    this.jobType = 'Full-ime',
+    this.locationName,
     this.companyName,
   });
 
@@ -51,8 +53,9 @@ class JobModel {
       salaryRange: json['salaryRange'] as String,
       status: json['status'] as String,
       createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt']) : null,
-      minExperienceYears: json['minExperienceYears'] as int? ?? 0,
       jobType: json['jobType'] as String? ?? 'Full-time',
+      minExperienceYears: json['minExperienceYears'] as int? ?? 0,
+      locationName: json['locationName'] as String?,
       companyName: extractedCompanyName,
     );
   }
@@ -68,8 +71,9 @@ class JobModel {
       'longitude': longitude,
       'salaryRange': salaryRange,
       'status': status,
-      'minExperienceYears': minExperienceYears,
       'jobType': jobType,
+      'minExperienceYears': minExperienceYears,
+      'locationName': locationName,
     }; // Notice we don't send jobID or createdAt; Supabase handles those automatically!
   }
 }
