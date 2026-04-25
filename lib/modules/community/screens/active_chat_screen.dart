@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../../services/community_service.dart';
-import '../../../services/interview_service.dart'; // 👈 NEW: Import the Interview Service
 import '../../../models/message_model.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
@@ -8,7 +7,10 @@ import 'dart:io';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'interview_lobby_screen.dart'; // 👈 NEW: Import the Lobby
+
+// 👈 NEW: Import the standard call files
+import '../../../services/call_service.dart';
+import 'standard_call_screen.dart';
 
 class ActiveChatScreen extends StatefulWidget {
   final String roomID;
@@ -167,6 +169,33 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
     await _communityService.sendMessage(newMessage);
   }
 
+  // 👈 NEW: Function to start the standard phone call
+  Future<void> _startStandardCall() async {
+    try {
+      // 1. Create the call in the database
+      final callData = await CallService().initiateCall(
+          widget.currentUserID,
+          widget.otherUserID
+      );
+
+      // 2. Open the new Calling UI
+      if (context.mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => StandardCallScreen(
+              callID: callData.callID,
+              roomCode: callData.roomCode,
+              otherUserName: widget.otherUserName,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error starting call: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -179,46 +208,12 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
           ],
         ),
         actions: [
-          // -----------------------------------------
-          // 👈 REFACTORED VIDEO BUTTON LOGIC
-          // -----------------------------------------
+          // 👈 JUST THE PHONE ICON NOW
           IconButton(
-            icon: const Icon(Icons.videocam, color: Colors.blueAccent),
-            tooltip: 'Video Interview',
-            onPressed: () async {
-              try {
-                // TODO: Replace this hardcoded 'true' with your actual user role check!
-                // For example: bool isCurrentUserEmployer = currentUser.role == 'Employer';
-                bool isCurrentUserEmployer = true;
-
-                // Assign the IDs properly so the database knows who is who
-                final employerID = isCurrentUserEmployer ? widget.currentUserID : widget.otherUserID;
-                final seekerID = isCurrentUserEmployer ? widget.otherUserID : widget.currentUserID;
-
-                // Create or fetch the room from Supabase
-                // final interviewData = await InterviewService().getRoomByScheduleId(employerID, seekerID);
-
-                // Navigate to the Lobby
-                // if (context.mounted) {
-                //   Navigator.push(
-                //     context,
-                //     MaterialPageRoute(
-                //       builder: (context) => InterviewLobbyScreen(
-                //         interviewID: interviewData['interviewID'],
-                //         roomCode: interviewData['roomCode'],
-                //         isEmployer: isCurrentUserEmployer,
-                //       ),
-                //     ),
-                //   );
-                // }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-                }
-              }
-            },
+            icon: const Icon(Icons.call, color: Colors.green),
+            tooltip: 'Call',
+            onPressed: _startStandardCall,
           ),
-          IconButton(icon: const Icon(Icons.call), onPressed: () {}),
           IconButton(
             icon: const Icon(Icons.more_vert),
             onPressed: () {
@@ -348,6 +343,11 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
 }
 
 // ------------------------------------------------------------------------
+// 👈 NEW: Global Tracker to prevent multiple audios from playing at once!
+// ------------------------------------------------------------------------
+final ValueNotifier<String?> currentlyPlayingVoiceMessageId = ValueNotifier<String?>(null);
+
+// ------------------------------------------------------------------------
 // The Smart Message Bubble Widget (Now with Soft Delete!)
 // ------------------------------------------------------------------------
 class MessageBubble extends StatefulWidget {
@@ -366,7 +366,7 @@ class MessageBubble extends StatefulWidget {
 
 class _MessageBubbleState extends State<MessageBubble> {
   final AudioPlayer _audioPlayer = AudioPlayer();
-  final CommunityService _communityService = CommunityService(); // Add service for deletion
+  final CommunityService _communityService = CommunityService();
   bool _isPlaying = false;
   Duration _duration = Duration.zero;
   Duration _position = Duration.zero;
@@ -375,11 +375,17 @@ class _MessageBubbleState extends State<MessageBubble> {
   void initState() {
     super.initState();
 
-    // Only setup audio if the message is NOT deleted
+    // 👈 NEW: Listen to the global dispatcher
+    currentlyPlayingVoiceMessageId.addListener(_stopIfAnotherPlays);
+
     if (!widget.message.isDeleted && widget.message.mediaType == 'audio' && widget.message.mediaURL != null) {
       _audioPlayer.setAudioContext(AudioContext(
         iOS: AudioContextIOS(category: AVAudioSessionCategory.playback, options: [AVAudioSessionOptions.defaultToSpeaker]),
-        android: AudioContextAndroid(isSpeakerphoneOn: true, usageType: AndroidUsageType.media, audioFocus: AndroidAudioFocus.gain),
+        android: AudioContextAndroid(
+          isSpeakerphoneOn: true,
+          usageType: AndroidUsageType.media,
+          audioFocus: AndroidAudioFocus.none,
+        ),
       ));
 
       _audioPlayer.onPlayerStateChanged.listen((state) {
@@ -391,16 +397,32 @@ class _MessageBubbleState extends State<MessageBubble> {
       _audioPlayer.onPositionChanged.listen((newPosition) {
         if (mounted) setState(() => _position = newPosition);
       });
-      _audioPlayer.onPlayerComplete.listen((event) {
+
+      _audioPlayer.onPlayerComplete.listen((event) async {
         if (mounted) setState(() { _isPlaying = false; _position = Duration.zero; });
+
+        // Clear the global tracker when finished
+        if (currentlyPlayingVoiceMessageId.value == widget.message.messageID) {
+          currentlyPlayingVoiceMessageId.value = null;
+        }
+        await _audioPlayer.stop();
       });
 
       _audioPlayer.setSource(UrlSource(widget.message.mediaURL!));
     }
   }
 
+  // 👈 NEW: The function that pauses this player if another one starts
+  void _stopIfAnotherPlays() async {
+    if (currentlyPlayingVoiceMessageId.value != widget.message.messageID && _isPlaying) {
+      await _audioPlayer.pause();
+    }
+  }
+
   @override
   void dispose() {
+    // 👈 NEW: Remove the listener so it doesn't leak memory when you leave the screen
+    currentlyPlayingVoiceMessageId.removeListener(_stopIfAnotherPlays);
     _audioPlayer.dispose();
     super.dispose();
   }
@@ -412,7 +434,6 @@ class _MessageBubbleState extends State<MessageBubble> {
     return "$twoDigitMinutes:$twoDigitSeconds";
   }
 
-  // --- NEW: The Delete Dialog ---
   void _showDeleteDialog() {
     showDialog(
       context: context,
@@ -426,7 +447,7 @@ class _MessageBubbleState extends State<MessageBubble> {
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context); // Close dialog immediately
+              Navigator.pop(context);
               try {
                 await _communityService.softDeleteMessage(widget.message.messageID);
               } catch (e) {
@@ -460,11 +481,8 @@ class _MessageBubbleState extends State<MessageBubble> {
       child: Column(
         crossAxisAlignment: widget.isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
-
-          // --- NEW: GestureDetector for Long Press ---
           GestureDetector(
             onLongPress: () {
-              // Only allow deletion if it's MY message, and it isn't ALREADY deleted
               if (widget.isMe && !widget.message.isDeleted) {
                 _showDeleteDialog();
               }
@@ -473,7 +491,7 @@ class _MessageBubbleState extends State<MessageBubble> {
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
               decoration: BoxDecoration(
                 color: widget.message.isDeleted
-                    ? Colors.grey[200] // Grey out deleted messages
+                    ? Colors.grey[200]
                     : (widget.isMe ? const Color(0xFF1865F2) : Colors.grey[100]),
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(16),
@@ -486,8 +504,6 @@ class _MessageBubbleState extends State<MessageBubble> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-
-                  // --- NEW: THE DELETED TOMBSTONE ---
                   if (widget.message.isDeleted) ...[
                     Row(
                       mainAxisSize: MainAxisSize.min,
@@ -496,42 +512,32 @@ class _MessageBubbleState extends State<MessageBubble> {
                         const SizedBox(width: 6),
                         Text(
                           "This message was deleted",
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontStyle: FontStyle.italic,
-                            fontSize: 14,
-                          ),
+                          style: TextStyle(color: Colors.grey[600], fontStyle: FontStyle.italic, fontSize: 14),
                         ),
                       ],
                     ),
                   ]
-
-                  // --- EXISTING LOGIC FOR NORMAL MESSAGES ---
                   else ...[
-                    // 1. IMAGE (Now Clickable with Hero Animation!)
                     if (widget.message.mediaType == 'image' && widget.message.mediaURL != null) ...[
                       GestureDetector(
                         onTap: () {
-                          // Navigate to the full screen viewer
                           Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (context) => FullScreenImageViewer(
                                 imageUrl: widget.message.mediaURL!,
-                                heroTag: widget.message.mediaURL!, // Use URL as unique tag
+                                heroTag: widget.message.mediaURL!,
                               ),
                             ),
                           );
                         },
                         child: Hero(
-                          tag: widget.message.mediaURL!, // Matches the tag in the new screen
+                          tag: widget.message.mediaURL!,
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(8),
                             child: Image.network(
                               widget.message.mediaURL!,
-                              width: 200,
-                              height: 200,
-                              fit: BoxFit.cover,
+                              width: 200, height: 200, fit: BoxFit.cover,
                               errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image),
                             ),
                           ),
@@ -552,11 +558,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                           Flexible(
                             child: Text(
                               widget.message.content,
-                              style: TextStyle(
-                                color: widget.isMe ? Colors.white : Colors.blueAccent,
-                                fontWeight: FontWeight.bold,
-                                decoration: TextDecoration.underline,
-                              ),
+                              style: TextStyle(color: widget.isMe ? Colors.white : Colors.blueAccent, fontWeight: FontWeight.bold, decoration: TextDecoration.underline),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -573,7 +575,14 @@ class _MessageBubbleState extends State<MessageBubble> {
                                 if (_isPlaying) {
                                   await _audioPlayer.pause();
                                 } else {
-                                  await _audioPlayer.resume();
+                                  // 👈 NEW: Broadcast to all other bubbles that THIS one is playing!
+                                  currentlyPlayingVoiceMessageId.value = widget.message.messageID;
+
+                                  if (_position == Duration.zero) {
+                                    await _audioPlayer.play(UrlSource(widget.message.mediaURL!));
+                                  } else {
+                                    await _audioPlayer.resume();
+                                  }
                                 }
                               },
                               child: Icon(
@@ -617,10 +626,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                       else ...[
                           Text(
                             widget.message.content,
-                            style: TextStyle(
-                              color: widget.isMe ? Colors.white : Colors.black87,
-                              fontSize: 15,
-                            ),
+                            style: TextStyle(color: widget.isMe ? Colors.white : Colors.black87, fontSize: 15),
                           ),
                         ],
                   ],
@@ -637,7 +643,6 @@ class _MessageBubbleState extends State<MessageBubble> {
                 timeString,
                 style: TextStyle(fontSize: 11, color: Colors.grey[500]),
               ),
-              // Hide the blue ticks if the message is deleted
               if (widget.isMe && !widget.message.isDeleted) ...[
                 const SizedBox(width: 4),
                 Icon(

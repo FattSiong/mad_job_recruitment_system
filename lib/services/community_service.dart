@@ -14,11 +14,13 @@ class CommunityService {
         .from('ChatRoom')
         .select('''
           roomID,
+          user1_ID,
           user2_ID,
-          User!ChatRoom_user2_ID_fkey(username, role), 
+          user1:User!ChatRoom_user1_ID_fkey(username, role),
+          user2:User!ChatRoom_user2_ID_fkey(username, role),
           Message(content, sentAt, isRead, senderID)
         ''')
-        .eq('user1_ID', currentUserId)
+        .or('user1_ID.eq.$currentUserId,user2_ID.eq.$currentUserId')
         .order('sentAt', referencedTable: 'Message', ascending: false)
         .limit(1, referencedTable: 'Message');
 
