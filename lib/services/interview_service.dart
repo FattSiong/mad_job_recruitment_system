@@ -3,61 +3,131 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class InterviewService {
   final _supabase = Supabase.instance.client;
 
-  // 1. Employer starts the interview
-  Future<void> startInterview(String interviewID) async {
-    await _supabase
-        .from('Interviews')
-        .update({'status': 'active'})
-        .eq('interviewID', interviewID);
-  }
-
-  // 2. Employer or Seeker ends the interview
-  Future<void> endInterview(String interviewID) async {
-    await _supabase
-        .from('Interviews')
-        .update({'status': 'completed'})
-        .eq('interviewID', interviewID);
-  }
-
-  // 3. Real-time listener for the Job Seeker's Lobby
-  Stream<List<Map<String, dynamic>>> listenToInterviewStatus(String interviewID) {
-    return _supabase
-        .from('Interviews')
-        .stream(primaryKey: ['interviewID'])
-        .eq('interviewID', interviewID);
-  }
-
-
-  // Add this inside InterviewService class
-  Future<Map<String, dynamic>> getOrCreateInterview(String employerID, String seekerID) async {
+  // 👉 1. Fetch the room using the scheduleID
+  // The employer clicks "Start Video Call" on a schedule, so we use the scheduleID to find the linked room.
+  Future<Map<String, dynamic>?> getRoomByScheduleId(String scheduleID) async {
     try {
-      // 1. Check if there is already an ongoing/waiting interview between them
-      var existing = await _supabase
-          .from('Interviews')
+      final response = await _supabase
+          .from('InterviewRoom') // Make sure this matches your exact table name!
           .select()
-          .eq('employerID', employerID)
-          .eq('seekerID', seekerID)
-          .neq('status', 'completed') // Ignore old, finished interviews
+          .eq('scheduleID', scheduleID)
           .maybeSingle();
 
-      if (existing != null) return existing;
+      return response;
+    } catch (e) {
+      print('Error fetching interview room: $e');
+      return null;
+    }
+  }
 
-      // 2. If no active interview exists, generate a brand new one
-      final newInterview = await _supabase
-          .from('Interviews')
-          .insert({
-        'employerID': employerID,
-        'seekerID': seekerID,
-        'roomCode': 'room_${DateTime.now().millisecondsSinceEpoch}',
-        'status': 'waiting'
+  // 👉 2. Employer starts the interview
+  // This changes the status, records the start time, and generates the unique room code!
+  Future<String> startInterview(String interviewRoomID) async {
+    try {
+      // Generate a unique room code (You can replace this with an Agora token later if needed)
+      final generatedRoomCode = 'room_${DateTime.now().millisecondsSinceEpoch}';
+
+      await _supabase
+          .from('InterviewRoom')
+          .update({
+        'status': 'active',
+        'roomCode': generatedRoomCode,
+        'startedAt': DateTime.now().toIso8601String(), // Log exact start time
       })
+          .eq('roomID', interviewRoomID);
+
+      return generatedRoomCode;
+    } catch (e) {
+      print('Error starting interview: $e');
+      throw Exception('Failed to start the interview.');
+    }
+  }
+
+  // 👉 3. Employer or Seeker ends the interview
+  Future<void> endInterview(String interviewRoomID) async {
+    try {
+      await _supabase
+          .from('InterviewRoom')
+          .update({
+        'status': 'completed',
+        'endedAt': DateTime.now().toIso8601String(), // Log exact end time
+      })
+          .eq('roomID', interviewRoomID);
+    } catch (e) {
+      print('Error ending interview: $e');
+    }
+  }
+
+  // 👉 4. Real-time listener for the Job Seeker's Lobby
+  // The seeker's app will quietly listen to this stream. When the employer triggers
+  // startInterview() above, this stream will instantly push the new 'active' status and roomCode!
+  Stream<List<Map<String, dynamic>>> listenToInterviewStatus(String interviewRoomID) {
+    return _supabase
+        .from('InterviewRoom')
+        .stream(primaryKey: ['roomID'])
+        .eq('roomID', interviewRoomID);
+  }
+
+  Future<void> leaveInterview(String currentRoomID, bool isEmployer) async {
+    // ⚠️ IMPORTANT: Change 'roomID' below to whatever your primary key column is named in Supabase!
+    const String primaryKeyColumn = 'roomID';
+
+    try {
+      // 1. Fetch current room state
+      final room = await _supabase
+          .from('InterviewRoom')
           .select()
+          .eq(primaryKeyColumn, currentRoomID)
           .single();
 
-      return newInterview;
+      // 2. Determine who has left
+      final bool employerLeft = isEmployer ? true : (room['employerHasLeft'] ?? false);
+      final bool seekerLeft = !isEmployer ? true : (room['seekerHasLeft'] ?? false);
+
+      // 3. If BOTH have left, RESET the room so it can be restarted later!
+      if (employerLeft && seekerLeft) {
+        await _supabase.from('InterviewRoom').update({
+          'status': 'waiting', // 👉 Reverts to the starting state instead of 'completed'
+          'roomCode': null,    // 👉 Destroys the current meeting link
+          'employerHasLeft': true,
+          'seekerHasLeft': true,
+        }).eq(primaryKeyColumn, currentRoomID);
+      } else {
+        // 4. Otherwise, just update the flag that THIS specific user left.
+        await _supabase.from('InterviewRoom').update({
+          isEmployer ? 'employerHasLeft' : 'seekerHasLeft': true,
+        }).eq(primaryKeyColumn, currentRoomID);
+      }
     } catch (e) {
-      print('Error creating interview: $e');
-      throw Exception('Failed to create interview room.');
+      print('Error leaving interview: $e');
+    }
+  }
+
+  // Also update markUserAsJoined just to be safe!
+  Future<void> markUserAsJoined(String currentRoomID, bool isEmployer) async {
+    const String primaryKeyColumn = 'roomID'; // ⚠️ Change this if needed
+    try {
+      await _supabase.from('InterviewRoom').update({
+        isEmployer ? 'employerHasLeft' : 'seekerHasLeft': false,
+      }).eq(primaryKeyColumn, currentRoomID);
+    } catch (e) {
+      print('Error marking user as joined: $e');
+    }
+  }
+
+  Future<void> forceEndInterview(String currentRoomID) async {
+    // ⚠️ IMPORTANT: Change 'roomID' below to whatever your primary key column is named!
+    const String primaryKeyColumn = 'roomID';
+
+    try {
+      await _supabase.from('InterviewRoom').update({
+        'status': 'waiting', // 👉 Reverts to the starting state
+        'roomCode': null,    // 👉 Destroys the current meeting link
+        'employerHasLeft': true,
+        'seekerHasLeft': true,
+      }).eq(primaryKeyColumn, currentRoomID);
+    } catch (e) {
+      print('Error resetting interview: $e');
     }
   }
 }

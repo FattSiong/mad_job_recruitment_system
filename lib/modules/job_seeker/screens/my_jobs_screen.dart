@@ -4,6 +4,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/constants/ui_constants.dart';
 import '../../../models/job_model.dart';
 import '../../../models/job_applicant_model.dart';
+import '../../../services/interview_service.dart';
+import '../../community/screens/interview_lobby_screen.dart';
 import '../controllers/bookmarked_controller.dart';
 import '../controllers/applied_jobs_controller.dart';
 import '../widgets/job_card.dart';
@@ -270,8 +272,6 @@ class _InterviewsTabState extends State<InterviewsTab> {
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId == null) return;
 
-      // Fetches the schedule, joins the JobApplicant table to filter by the current user,
-      // and joins Job + Company to get the UI display text.
       final response = await Supabase.instance.client
           .from('InterviewSchedule')
           .select('''
@@ -296,6 +296,54 @@ class _InterviewsTabState extends State<InterviewsTab> {
     } catch (e) {
       print('Error fetching interviews: $e');
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // 👉 NEW: Logic for the Job Seeker to join the lobby!
+  Future<void> _joinInternalInterview(String? scheduleID) async {
+    if (scheduleID == null) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final interviewService = InterviewService();
+
+      // Fetch the pre-created InterviewRoom
+      final roomData = await interviewService.getRoomByScheduleId(scheduleID);
+
+      if (mounted) Navigator.pop(context); // Close loader
+
+      if (roomData != null && mounted) {
+        // Safely check for whatever the column is named in Supabase
+        final String? actualRoomID = roomData['interviewRoomID'] ?? roomData['roomID'] ?? roomData['id'];
+
+        if (actualRoomID != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => InterviewLobbyScreen(
+                roomID: actualRoomID,
+                isEmployer: false, // 👉 Important: Tells the lobby we are the job seeker
+              ),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Database Error: Could not read the room ID.')),
+          );
+        }
+      } else {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error: Could not find interview room. The employer may not have set it up yet.')));
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     }
   }
 
@@ -324,7 +372,6 @@ class _InterviewsTabState extends State<InterviewsTab> {
       itemBuilder: (context, index) {
         final interview = _interviews[index];
 
-        // Safely extract the nested joined data
         final applicantData = interview['JobApplicant'] as Map<String, dynamic>?;
         final jobData = applicantData?['Job'] as Map<String, dynamic>?;
         final companyData = jobData?['Company'] as Map<String, dynamic>?;
@@ -332,9 +379,13 @@ class _InterviewsTabState extends State<InterviewsTab> {
         final jobTitle = jobData?['title'] ?? 'Unknown Job';
         final companyName = companyData?['name'] ?? 'Unknown Company';
         final date = interview['date'] ?? 'N/A';
-        // Substring to remove the seconds (e.g., "14:30:00" -> "14:30")
         final startTime = interview['startTime']?.toString().substring(0, 5) ?? '';
         final endTime = interview['endTime']?.toString().substring(0, 5) ?? '';
+
+        // Extract method and ID
+        final meetingMethod = interview['meetingMethod'] ?? 'TBA';
+        final scheduleID = interview['scheduleID'] ?? interview['id']; // Adjust based on your primary key
+        final isInternal = meetingMethod == 'internal';
 
         return Card(
           elevation: 2,
@@ -354,9 +405,27 @@ class _InterviewsTabState extends State<InterviewsTab> {
                 const SizedBox(height: 8),
                 _buildInfoRow(Icons.access_time, '$startTime - $endTime'),
                 const SizedBox(height: 8),
-                _buildInfoRow(Icons.videocam, interview['meetingMethod'] ?? 'TBA'),
+                _buildInfoRow(isInternal ? Icons.video_camera_front : Icons.videocam, isInternal ? 'App Internal Interview' : meetingMethod),
 
-                if (interview['meetingLink'] != null && interview['meetingLink'].toString().isNotEmpty) ...[
+                // 👉 NEW: Native Join Button for Job Seekers
+                if (isInternal) ...[
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _joinInternalInterview(scheduleID),
+                      icon: const Icon(Icons.meeting_room),
+                      label: const Text('Enter Interview Lobby'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primaryBlue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                  ),
+                ]
+                else if (interview['meetingLink'] != null && interview['meetingLink'].toString().isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Text(
                     'Link: ${interview['meetingLink']}',
