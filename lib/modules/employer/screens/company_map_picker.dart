@@ -118,7 +118,7 @@ class _CompanyMapPickerScreenState extends State<CompanyMapPickerScreen> {
     final initialPosition = _pickedLocation ?? const LatLng(3.1390, 101.6869);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Pick Job Location')),
+      appBar: AppBar(title: const Text('Pick Location')),
       body: Stack(
         children: [
           GoogleMap(
