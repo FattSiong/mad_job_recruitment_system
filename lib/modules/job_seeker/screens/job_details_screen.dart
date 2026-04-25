@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../models/job_model.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/utils/location_helper.dart';
 import '../controllers/bookmarked_controller.dart';
 import 'job_application_screen.dart';
 import 'report_job_screen.dart';
@@ -175,12 +174,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                       const SizedBox(height: 14),
                       _buildInfoRow(Icons.work_outline, widget.job.jobType),
                       const SizedBox(height: 14),
-                      FutureBuilder<String>(
-                        future: LocationHelper.getCityFromCoordinates(widget.job.latitude, widget.job.longitude),
-                        builder: (context, snapshot) {
-                          return _buildInfoRow(Icons.location_on_outlined, snapshot.data ?? 'Loading location...');
-                        },
-                      ),
+                      _buildInfoRow(Icons.location_on_outlined, widget.job.locationName ?? 'Location unavailable'),
                     ],
                   ),
                 ),
@@ -265,7 +259,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.08), offset: const Offset(0, -4), blurRadius: 10)
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.08), offset: const Offset(0, -4), blurRadius: 10)
                 ],
               ),
               child: SafeArea(

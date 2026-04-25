@@ -94,20 +94,24 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
                   const SizedBox(height: 16),
 
                   // Radio Button Options
-                  ..._reportOptions.map((option) {
-                    return RadioListTile<String>(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(option, style: const TextStyle(fontSize: 15)),
-                      value: option,
-                      groupValue: _selectedCategory,
-                      activeColor: AppColors.primaryBlue,
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedCategory = value;
-                        });
-                      },
-                    );
-                  }).toList(),
+                  RadioGroup<String>(
+                    groupValue: _selectedCategory, // Fixed parameter name
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedCategory = value;
+                      });
+                    },
+                    child: Column(
+                      children: _reportOptions.map((option) {
+                        return RadioListTile<String>(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(option, style: const TextStyle(fontSize: 15)),
+                          value: option,
+                          activeColor: AppColors.primaryBlue,
+                        );
+                      }).toList(),
+                    ),
+                  ),
 
                   const SizedBox(height: 24),
 

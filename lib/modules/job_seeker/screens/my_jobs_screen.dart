@@ -219,9 +219,9 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: _getStatusColor(status).withOpacity(0.1),
+                          color: _getStatusColor(status).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: _getStatusColor(status).withOpacity(0.5)),
+                          border: Border.all(color: _getStatusColor(status).withValues(alpha: 0.5)),
                         ),
                         child: Text(status.toUpperCase(), style: TextStyle(color: _getStatusColor(status), fontWeight: FontWeight.bold, fontSize: 12)),
                       ),

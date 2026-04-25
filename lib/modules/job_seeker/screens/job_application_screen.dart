@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
 import '../../../core/utils/file_picker_helper.dart';
 import '../../../models/job_model.dart';
 import '../../../models/pre_screening_question_model.dart';
@@ -52,17 +51,6 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
 
         _isLoading = false;
       });
-    }
-  }
-
-  Future<void> _pickFile(Function(File) onFilePicked) async {
-    FilePickerResult? result = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf', 'doc', 'docx'],
-    );
-
-    if (result != null && result.files.single.path != null) {
-      onFilePicked(File(result.files.single.path!));
     }
   }
 
