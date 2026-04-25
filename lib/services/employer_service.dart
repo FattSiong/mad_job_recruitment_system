@@ -648,4 +648,31 @@ class EmployerService {
       return false;
     }
   }
+
+  // 👉 NEW: Fetch all scheduled interviews with candidate & job details
+  Future<List<Map<String, dynamic>>> getScheduledInterviews() async {
+    try {
+      // Note: This assumes your Supabase Foreign Keys are set up correctly between
+      // InterviewSchedule -> JobApplicant -> JobSeeker & JobPost.
+      // If your RLS policies are set correctly, this will only return the employer's interviews.
+      final response = await _supabase
+          .from('InterviewSchedule')
+          .select('''
+            *,
+            JobApplicant (
+              applicantID,
+              applicationStatus,
+              JobSeeker (fullName, email),
+              Job (title)
+            )
+          ''')
+          .order('date', ascending: true)
+          .order('startTime', ascending: true);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Error fetching schedule: $e');
+      return [];
+    }
+  }
 }

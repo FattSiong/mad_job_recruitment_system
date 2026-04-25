@@ -5,6 +5,10 @@ import 'package:open_filex/open_filex.dart';
 import 'package:http/http.dart' as http;
 import '../../../services/employer_service.dart';
 import 'interview_scheduling_screen.dart';
+// 👉 NEW IMPORTS: Add these at the top!
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../services/community_service.dart';
+import '../../community/screens/active_chat_screen.dart'; // Adjust path if necessary
 
 class ApplicantDetailScreen extends StatefulWidget {
   final Map<String, dynamic> applicantData;
@@ -48,6 +52,49 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
         _answers = answers;
         _isLoadingAnswers = false;
       });
+    }
+  }
+
+  Future<void> _openChat(String targetUserID, String targetUserName) async {
+    final currentUser = Supabase.instance.client.auth.currentUser;
+    if (currentUser == null) return;
+
+    // Show a loading spinner while the backend checks for a chat room
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final communityService = CommunityService();
+
+      // 👉 Calls the method that already exists in your community_service.dart!
+      final roomID = await communityService.getOrCreateChatRoom(currentUser.id, targetUserID);
+
+      if (mounted) Navigator.pop(context); // Close the loading spinner
+
+      if (mounted) {
+        // Navigate directly to your ActiveChatScreen
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ActiveChatScreen(
+              roomID: roomID,
+              currentUserID: currentUser.id,
+              otherUserName: targetUserName,
+              otherUserID: targetUserID,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Close the loading spinner
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to start chat: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -218,6 +265,7 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // --- 1. BASIC INFO ---
             Row(
               children: [
                 CircleAvatar(
@@ -233,6 +281,22 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
                       Text(seeker['fullName'] ?? 'Unknown', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                       Text(seeker['email'] ?? 'No email', style: TextStyle(color: Colors.grey.shade600, fontSize: 16)),
                     ],
+                  ),
+                ),
+
+                // 👉 NEW: The Chat Button!
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    tooltip: 'Message Candidate',
+                    icon: const Icon(Icons.chat_bubble, color: Colors.blue),
+                    onPressed: () => _openChat(
+                        widget.applicantData['seekerID'],
+                        seeker['fullName'] ?? 'Applicant'
+                    ),
                   ),
                 ),
               ],
