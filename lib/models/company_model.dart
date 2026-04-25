@@ -9,10 +9,10 @@ class CompanyModel {
   final String? rejectionReason;
   final double? latitude;
   final double? longitude;
+  final String? companyAddress;
   final String currentPlanType;
   final DateTime? subscriptionEndsAt;
   final String? companyLogoURL;
-
 
   CompanyModel({
     this.companyID,
@@ -25,6 +25,7 @@ class CompanyModel {
     this.rejectionReason,
     this.latitude,
     this.longitude,
+    this.companyAddress,
     this.currentPlanType = 'FREE',
     this.subscriptionEndsAt,
     this.companyLogoURL,
@@ -42,6 +43,7 @@ class CompanyModel {
       rejectionReason: json['rejectionReason'] as String?,
       latitude: json['latitude'] != null ? (json['latitude'] as num).toDouble() : null,
       longitude: json['longitude'] != null ? (json['longitude'] as num).toDouble() : null,
+      companyAddress: json['companyAddress'] as String?,
       currentPlanType: json['currentPlanType'] as String? ?? 'FREE',
       subscriptionEndsAt: json['subscriptionEndsAt'] != null
           ? DateTime.tryParse(json['subscriptionEndAt'])
@@ -61,6 +63,7 @@ class CompanyModel {
       if (rejectionReason != null) 'rejectionReason': rejectionReason,
       'latitude': latitude,
       'longitude': longitude,
+      'companyAddress': companyAddress,
       'currentPlanType': currentPlanType,
       'subscriptionEndsAt': subscriptionEndsAt?.toIso8601String(),
       'companyLogoURL': companyLogoURL,

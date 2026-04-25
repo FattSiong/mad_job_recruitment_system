@@ -26,15 +26,21 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
   Future<void> _loadInterviews() async {
     setState(() => _isLoading = true);
     final data = await _employerService.getScheduledInterviews();
+
     if (mounted) {
       setState(() {
-        _interviews = data;
+        // 👉 NEW: Filter the list so we ONLY show applicants who are still 'scheduled'
+        // Once they are marked as 'interviewed', they will disappear from this screen!
+        _interviews = data.where((item) {
+          final applicant = item['JobApplicant'] ?? {};
+          return applicant['applicationStatus'] == 'scheduled';
+        }).toList();
+
         _isLoading = false;
       });
     }
   }
 
-  // Helper to open external meeting URLs (Zoom, Google Meet, etc.)
   Future<void> _launchURL(String urlString) async {
     final Uri url = Uri.parse(urlString.startsWith('http') ? urlString : 'https://$urlString');
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
@@ -44,11 +50,9 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
     }
   }
 
-  // 👉 REPLACED: Now actually fetches the room and navigates to the lobby!
   Future<void> _startInternalInterview(String? scheduleID, Map<String, dynamic> applicantData) async {
     if (scheduleID == null) return;
 
-    // Show a quick loading dialog so the user knows something is happening
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -57,37 +61,28 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
 
     try {
       final interviewService = InterviewService();
-
-      // 1. Fetch the pre-created InterviewRoom using the scheduleID
       final roomData = await interviewService.getRoomByScheduleId(scheduleID);
 
-      if (mounted) Navigator.pop(context); // Close loader
+      if (mounted) Navigator.pop(context);
 
       if (roomData != null && mounted) {
-
-        // 👉 THE FIX: Safely check for whatever you named the column in Supabase!
         final String? actualRoomID = roomData['interviewRoomID'] ?? roomData['roomID'] ?? roomData['id'];
 
         if (actualRoomID != null) {
-          // 2. Navigate to the Lobby!
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => InterviewLobbyScreen(
-                roomID: actualRoomID, // Safely passes the non-null string
+                roomID: actualRoomID,
                 isEmployer: true,
               ),
             ),
           );
         } else {
-          // If the row exists but the ID column is missing, show a helpful error
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Database Error: Could not read the room ID column.')),
-          );
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Database Error: Could not read the room ID column.')));
         }
-
       } else {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error: Could not find interview room. Did you create it using the new logic?')));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error: Could not find interview room.')));
       }
     } catch (e) {
       if (mounted) {
@@ -97,7 +92,48 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
     }
   }
 
-  // Helper to get a nice month abbreviation (e.g., "MAY")
+  // 👉 NEW: Confirmation Dialog & Logic to Mark as Completed
+  Future<void> _markAsCompleted(String applicantId, String? scheduleId) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Mark as Completed?'),
+        content: const Text('This will permanently close the interview room and update the candidate\'s ATS status to "Interviewed".'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            child: const Text('Confirm', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isLoading = true);
+
+    final success = await _employerService.markInterviewAsCompleted(applicantId, scheduleId);
+
+    if (mounted) {
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Interview marked as completed!'), backgroundColor: Colors.green),
+        );
+        _loadInterviews(); // Refresh the list to remove the completed item
+      } else {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to update status.'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   String _getMonthAbbr(int month) {
     const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
     return months[month - 1];
@@ -106,7 +142,7 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF9F9F7), // Morandi background
+      backgroundColor: const Color(0xFFF9F9F7),
       appBar: AppBar(
         title: const Text('Scheduled Interviews', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
@@ -132,22 +168,19 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
         separatorBuilder: (context, index) => const SizedBox(height: 12),
         itemBuilder: (context, index) {
           final data = _interviews[index];
-
-          // Parse the data using our Model!
           final schedule = InterviewScheduleModel.fromJson(data);
 
-          // Safely extract the joined Applicant/Seeker data
           final applicant = data['JobApplicant'] ?? {};
+          final applicantId = applicant['applicantID'];
           final seeker = applicant['JobSeeker'] ?? {};
           final jobPost = applicant['Job'] ?? {};
 
           final candidateName = seeker['fullName'] ?? 'Unknown Candidate';
           final jobTitle = jobPost['title'] ?? 'Unknown Job';
 
-          // Format times
           final timeString = '${schedule.startTime.format(context)} - ${schedule.endTime.format(context)}';
           final isOnline = schedule.meetingMethod == 'online';
-          final isInternal = schedule.meetingMethod == 'internal'; // 👉 NEW
+          final isInternal = schedule.meetingMethod == 'internal';
 
           return Container(
             decoration: BoxDecoration(
@@ -159,13 +192,13 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
             ),
             child: Row(
               children: [
-                // 👉 LEFT SIDE: Date Box
+                // LEFT SIDE: Date Box
                 Container(
                   width: 80,
                   padding: const EdgeInsets.symmetric(vertical: 24),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1A2A4D), // Deep Blue from your header
-                    borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), bottomLeft: Radius.circular(16)),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF1A2A4D),
+                    borderRadius: BorderRadius.only(topLeft: Radius.circular(16), bottomLeft: Radius.circular(16)),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -183,7 +216,7 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
                   ),
                 ),
 
-                // 👉 RIGHT SIDE: Interview Details
+                // RIGHT SIDE: Interview Details
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
@@ -233,28 +266,26 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
                         ),
 
                         // --- ACTION BUTTONS ---
+                        const SizedBox(height: 16),
 
-                        // Option A: External Online Link (Zoom, Meet, etc.)
-                        if (isOnline && schedule.meetingLink != null && schedule.meetingLink!.isNotEmpty) ...[
-                          const SizedBox(height: 12),
+                        // Option A: External Online Link
+                        if (isOnline && schedule.meetingLink != null && schedule.meetingLink!.isNotEmpty)
                           SizedBox(
                             width: double.infinity,
-                            child: OutlinedButton.icon(
+                            child: ElevatedButton.icon(
                               onPressed: () => _launchURL(schedule.meetingLink!),
                               icon: const Icon(Icons.link, size: 18),
                               label: const Text('Join External Meeting'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.blueAccent,
-                                side: BorderSide(color: Colors.blueAccent.withOpacity(0.5)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF1A2A4D),
+                                foregroundColor: Colors.white,
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               ),
                             ),
-                          ),
-                        ]
+                          )
 
-                        // 👉 Option B: NEW NATIVE APP INTERVIEW BUTTON
-                        else if (isInternal) ...[
-                          const SizedBox(height: 12),
+                        // Option B: NATIVE APP INTERVIEW BUTTON
+                        else if (isInternal)
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton.icon(
@@ -268,7 +299,22 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
                               ),
                             ),
                           ),
-                        ]
+
+                        // 👉 NEW: Mark as Completed Button (Shows for all interview types)
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () => _markAsCompleted(applicantId, schedule.scheduleID),
+                            icon: const Icon(Icons.task_alt),
+                            label: const Text('Mark as Interviewed'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.green.shade700,
+                              side: BorderSide(color: Colors.green.shade300),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
