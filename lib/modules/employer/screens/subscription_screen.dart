@@ -22,6 +22,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   void initState() {
     super.initState();
     Stripe.publishableKey = publishableKey;
+    Stripe.urlScheme = 'myapp';
   }
 
   Future<void> _handleStripePayment(String planId) async {
@@ -38,22 +39,45 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           merchantDisplayName: 'MAD Job Recruitment',
           style: ThemeMode.light,
           // 🔴 必须和 AndroidManifest 里的暗号完全一致
-          returnURL: 'madjob://stripe-redirect',
+          returnURL: 'myapp://payment-return',
         ),
       );
 
       setState(() => _isLoading = false);
+
+      // 👉 1. 呼叫 Stripe 弹出付款界面
       await Stripe.instance.presentPaymentSheet();
 
       setState(() => _isLoading = true);
+
+      // 👉 2. 如果付款成功，更新 Supabase 数据库
       await _syncSubscriptionToDatabase(user.id, planId);
 
+      // 👉 3. 数据库更新成功后，弹出绿色打勾对话框
       if (mounted) _showSuccessDialog();
 
     } on StripeException catch (e) {
-      debugPrint("Stripe Error: ${e.error.localizedMessage}");
+      // 🚨 捕获 Stripe 相关的错误并显示在屏幕上
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Stripe Error: ${e.error.localizedMessage}"),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     } catch (e) {
-      debugPrint("Error: $e");
+      // 🚨 捕获所有其他错误（如：Supabase 数据库写入失败、没有权限等）
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("System Error: $e"),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 6), // 停留 6 秒让你看清楚
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -125,7 +149,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     }
   }
 
-  // 👇 这里保持你原本好看的设计
   @override
   Widget build(BuildContext context) {
     return Scaffold(
