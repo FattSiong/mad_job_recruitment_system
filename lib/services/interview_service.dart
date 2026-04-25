@@ -68,46 +68,66 @@ class InterviewService {
         .eq('roomID', interviewRoomID);
   }
 
-  Future<void> markUserAsJoined(String interviewRoomID, bool isEmployer) async {
-    try {
-      await _supabase.from('InterviewRoom').update({
-        isEmployer ? 'employerHasLeft' : 'seekerHasLeft': false,
-      }).eq('interviewRoomID', interviewRoomID);
-    } catch (e) {
-      print('Error marking user as joined: $e');
-    }
-  }
+  Future<void> leaveInterview(String currentRoomID, bool isEmployer) async {
+    // ⚠️ IMPORTANT: Change 'roomID' below to whatever your primary key column is named in Supabase!
+    const String primaryKeyColumn = 'roomID';
 
-  // 👉 REPLACED: Smart leave logic. Only closes the room if BOTH are gone!
-  Future<void> leaveInterview(String interviewRoomID, bool isEmployer) async {
     try {
       // 1. Fetch current room state
       final room = await _supabase
           .from('InterviewRoom')
           .select()
-          .eq('interviewRoomID', interviewRoomID)
+          .eq(primaryKeyColumn, currentRoomID)
           .single();
 
-      // 2. Determine who is leaving and who has already left
+      // 2. Determine who has left
       final bool employerLeft = isEmployer ? true : (room['employerHasLeft'] ?? false);
       final bool seekerLeft = !isEmployer ? true : (room['seekerHasLeft'] ?? false);
 
-      // 3. If BOTH have left, end the interview permanently.
+      // 3. If BOTH have left, RESET the room so it can be restarted later!
       if (employerLeft && seekerLeft) {
         await _supabase.from('InterviewRoom').update({
-          'status': 'completed',
+          'status': 'waiting', // 👉 Reverts to the starting state instead of 'completed'
+          'roomCode': null,    // 👉 Destroys the current meeting link
           'employerHasLeft': true,
           'seekerHasLeft': true,
-          'endedAt': DateTime.now().toIso8601String(),
-        }).eq('interviewRoomID', interviewRoomID);
+        }).eq(primaryKeyColumn, currentRoomID);
       } else {
         // 4. Otherwise, just update the flag that THIS specific user left.
         await _supabase.from('InterviewRoom').update({
           isEmployer ? 'employerHasLeft' : 'seekerHasLeft': true,
-        }).eq('interviewRoomID', interviewRoomID);
+        }).eq(primaryKeyColumn, currentRoomID);
       }
     } catch (e) {
       print('Error leaving interview: $e');
+    }
+  }
+
+  // Also update markUserAsJoined just to be safe!
+  Future<void> markUserAsJoined(String currentRoomID, bool isEmployer) async {
+    const String primaryKeyColumn = 'roomID'; // ⚠️ Change this if needed
+    try {
+      await _supabase.from('InterviewRoom').update({
+        isEmployer ? 'employerHasLeft' : 'seekerHasLeft': false,
+      }).eq(primaryKeyColumn, currentRoomID);
+    } catch (e) {
+      print('Error marking user as joined: $e');
+    }
+  }
+
+  Future<void> forceEndInterview(String currentRoomID) async {
+    // ⚠️ IMPORTANT: Change 'roomID' below to whatever your primary key column is named!
+    const String primaryKeyColumn = 'roomID';
+
+    try {
+      await _supabase.from('InterviewRoom').update({
+        'status': 'waiting', // 👉 Reverts to the starting state
+        'roomCode': null,    // 👉 Destroys the current meeting link
+        'employerHasLeft': true,
+        'seekerHasLeft': true,
+      }).eq(primaryKeyColumn, currentRoomID);
+    } catch (e) {
+      print('Error resetting interview: $e');
     }
   }
 }

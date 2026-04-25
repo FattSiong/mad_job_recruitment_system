@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../../services/interview_service.dart'; // Make sure this path is correct for your project!
+import 'dart:async'; // 👉 NEW: Required for the StreamSubscription
+import 'package:supabase_flutter/supabase_flutter.dart'; // 👉 NEW: Required to listen to the DB
 
 class InterviewCallScreen extends StatefulWidget {
   final String roomCode;
@@ -24,10 +26,33 @@ class _InterviewCallScreenState extends State<InterviewCallScreen> {
   bool _localUserJoined = false;
   late RtcEngine _engine;
 
+  StreamSubscription? _roomSubscription;
+
   @override
   void initState() {
     super.initState();
     initAgora();
+
+    _roomSubscription = Supabase.instance.client
+        .from('InterviewRoom')
+        .stream(primaryKey: ['roomID'])
+        .eq('roomID', widget.interviewID)
+        .listen((data) {
+      if (data.isNotEmpty && mounted) {
+        final status = data.first['status'];
+
+        // If the employer resets the room to waiting, kick the seeker!
+        if (status == 'waiting' && !widget.isEmployer) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('The Host has ended the meeting. Returning to lobby.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          _onCallEnded(); // Forces the seeker to leave Agora and pop the screen
+        }
+      }
+    });
   }
 
   Future<void> initAgora() async {
@@ -74,16 +99,54 @@ class _InterviewCallScreenState extends State<InterviewCallScreen> {
 
   @override
   void dispose() {
+    _roomSubscription?.cancel();
     _engine.leaveChannel();
     _engine.release();
     super.dispose();
   }
 
   void _onCallEnded() async {
-    await InterviewService().leaveInterview(widget.interviewID, widget.isEmployer);
-
-    if (mounted) {
-      Navigator.pop(context);
+    if (widget.isEmployer) {
+      // --- EMPLOYER LOGIC: Show a choice dialog ---
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Leave or End Meeting?'),
+          content: const Text('Do you want to temporarily leave the room, or permanently end the interview for everyone?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context), // Cancel and go back to call
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            ),
+            TextButton(
+              onPressed: () async {
+                // Option A: Just leave temporarily (Room stays open)
+                Navigator.pop(context); // Close dialog
+                await InterviewService().leaveInterview(widget.interviewID, true);
+                if (mounted) Navigator.pop(context); // Leave the call screen
+              },
+              child: const Text('Leave Temporarily'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                // Option B: Reset the room completely
+                Navigator.pop(context); // Close dialog
+                await InterviewService().forceEndInterview(widget.interviewID);
+                if (mounted) Navigator.pop(context); // Leave the call screen
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              // 👉 UPDATED TEXT
+              child: const Text('End Meeting & Reset Room', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+    } else {
+      // --- SEEKER LOGIC: They can only leave temporarily ---
+      await InterviewService().leaveInterview(widget.interviewID, false);
+      if (mounted) {
+        Navigator.pop(context); // Leave the call screen
+      }
     }
   }
 

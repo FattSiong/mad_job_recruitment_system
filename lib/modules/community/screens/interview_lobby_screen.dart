@@ -53,14 +53,43 @@ class _InterviewLobbyScreenState extends State<InterviewLobbyScreen> {
             return const Center(child: Text("Interview not found."));
           }
 
-          // Get the current status from Supabase
           final interviewData = snapshot.data!.first;
           final status = interviewData['status'] ?? 'waiting';
-
-          // 👉 NEW: Extract the room code from the database stream!
-          // (This will be null until the employer actually hits start)
           final streamRoomCode = interviewData['roomCode'];
 
+          // 👉 FIX 1: Add a specific UI for when the interview is over!
+          if (status == 'completed') {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.task_alt, size: 80, color: Colors.green),
+                    const SizedBox(height: 24),
+                    const Text("Interview Completed", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    const Text(
+                      "The video call has ended and the room is permanently closed.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                    const SizedBox(height: 32),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueAccent,
+                        minimumSize: const Size(double.infinity, 50),
+                      ),
+                      onPressed: () => Navigator.pop(context), // Goes back to the list
+                      child: const Text("Return to Dashboard", style: TextStyle(color: Colors.white, fontSize: 16)),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          // --- IF NOT COMPLETED, SHOW THE NORMAL LOBBY ---
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(24.0),
