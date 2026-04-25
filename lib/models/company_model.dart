@@ -6,11 +6,13 @@ class CompanyModel {
   final String? verificationDocumentURL;
   final bool isVerified;
   final String verificationStatus;
+  final String? rejectionReason;
   final double? latitude;
   final double? longitude;
   final String currentPlanType;
-  final DateTime? subscriptionEndAt;
+  final DateTime? subscriptionEndsAt;
   final String? companyLogoURL;
+
 
   CompanyModel({
     this.companyID,
@@ -20,10 +22,11 @@ class CompanyModel {
     this.verificationDocumentURL,
     this.isVerified = false,
     this.verificationStatus = 'pending',
+    this.rejectionReason,
     this.latitude,
     this.longitude,
     this.currentPlanType = 'FREE',
-    this.subscriptionEndAt,
+    this.subscriptionEndsAt,
     this.companyLogoURL,
   });
 
@@ -36,10 +39,11 @@ class CompanyModel {
       verificationDocumentURL: json['verificationDocumentURL'] as String?,
       isVerified: json['isVerified'] as bool? ?? false,
       verificationStatus: (json['verificationStatus'] ?? json['verificationstatus']) as String? ?? 'pending',
+      rejectionReason: json['rejectionReason'] as String?,
       latitude: json['latitude'] != null ? (json['latitude'] as num).toDouble() : null,
       longitude: json['longitude'] != null ? (json['longitude'] as num).toDouble() : null,
       currentPlanType: json['currentPlanType'] as String? ?? 'FREE',
-      subscriptionEndAt: json['subscriptionEndAt'] != null
+      subscriptionEndsAt: json['subscriptionEndsAt'] != null
           ? DateTime.tryParse(json['subscriptionEndAt'])
           : null,
       companyLogoURL: json['companyLogoURL'] as String?,
@@ -54,10 +58,11 @@ class CompanyModel {
       'verificationDocumentURL': verificationDocumentURL,
       'isVerified': isVerified,
       'verificationStatus': verificationStatus,
+      if (rejectionReason != null) 'rejectionReason': rejectionReason,
       'latitude': latitude,
       'longitude': longitude,
       'currentPlanType': currentPlanType,
-      'subscriptionEndAt': subscriptionEndAt?.toIso8601String(),
+      'subscriptionEndsAt': subscriptionEndsAt?.toIso8601String(),
       'companyLogoURL': companyLogoURL,
     };
   }
