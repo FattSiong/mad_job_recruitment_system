@@ -196,21 +196,21 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
                 final seekerID = isCurrentUserEmployer ? widget.otherUserID : widget.currentUserID;
 
                 // Create or fetch the room from Supabase
-                final interviewData = await InterviewService().getOrCreateInterview(employerID, seekerID);
+                // final interviewData = await InterviewService().getRoomByScheduleId(employerID, seekerID);
 
                 // Navigate to the Lobby
-                if (context.mounted) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => InterviewLobbyScreen(
-                        interviewID: interviewData['interviewID'],
-                        roomCode: interviewData['roomCode'],
-                        isEmployer: isCurrentUserEmployer,
-                      ),
-                    ),
-                  );
-                }
+                // if (context.mounted) {
+                //   Navigator.push(
+                //     context,
+                //     MaterialPageRoute(
+                //       builder: (context) => InterviewLobbyScreen(
+                //         interviewID: interviewData['interviewID'],
+                //         roomCode: interviewData['roomCode'],
+                //         isEmployer: isCurrentUserEmployer,
+                //       ),
+                //     ),
+                //   );
+                // }
               } catch (e) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));

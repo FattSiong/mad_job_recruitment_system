@@ -364,46 +364,49 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
 
                   // STAGE 1: PENDING
                   if (_currentStatus == 'pending')
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () async {
-                              // 👉 Navigate to the new scheduling screen!
-                              final didSchedule = await Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => InterviewSchedulingScreen(
-                                    applicantId: widget.applicantData['applicantID'],
-                                    applicantName: seeker['fullName'] ?? 'Applicant',
+                    if (_currentStatus == 'pending')
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () async {
+                                // 👉 Navigate to the new scheduling screen!
+                                final didSchedule = await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => InterviewSchedulingScreen(
+                                      applicantId: widget.applicantData['applicantID'],
+                                      applicantName: seeker['fullName'] ?? 'Applicant',
+                                      // 👉 NEW: Pass the seekerID right here!
+                                      seekerId: widget.applicantData['seekerID'],
+                                    ),
                                   ),
-                                ),
-                              );
+                                );
 
-                              // If they successfully saved the schedule, update the UI
-                              if (didSchedule == true) {
-                                setState(() {
-                                  _currentStatus = 'scheduled';
-                                  _hasBeenScheduled = true;
-                                });
-                              }
-                            },
-                            icon: const Icon(Icons.calendar_month),
-                            label: const Text('Schedule'),
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 16)),
+                                // If they successfully saved the schedule, update the UI
+                                if (didSchedule == true) {
+                                  setState(() {
+                                    _currentStatus = 'scheduled';
+                                    _hasBeenScheduled = true;
+                                  });
+                                }
+                              },
+                              icon: const Icon(Icons.calendar_month),
+                              label: const Text('Schedule'),
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 16)),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () => _updateStatus('rejected'),
-                            icon: const Icon(Icons.cancel),
-                            label: const Text('Reject'),
-                            style: OutlinedButton.styleFrom(foregroundColor: Colors.red, side: const BorderSide(color: Colors.red), padding: const EdgeInsets.symmetric(vertical: 16)),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => _updateStatus('rejected'),
+                              icon: const Icon(Icons.cancel),
+                              label: const Text('Reject'),
+                              style: OutlinedButton.styleFrom(foregroundColor: Colors.red, side: const BorderSide(color: Colors.red), padding: const EdgeInsets.symmetric(vertical: 16)),
+                            ),
                           ),
-                        ),
-                      ],
-                    )
+                        ],
+                      )
 
                   // STAGE 2: SCHEDULED
                   else if (_currentStatus == 'scheduled')

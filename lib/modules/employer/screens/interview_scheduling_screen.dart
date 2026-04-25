@@ -4,8 +4,14 @@ import '../../../services/employer_service.dart';
 class InterviewSchedulingScreen extends StatefulWidget {
   final String applicantId;
   final String applicantName;
+  final String seekerId; // 👉 NEW: We need this to create the InterviewRoom!
 
-  const InterviewSchedulingScreen({super.key, required this.applicantId, required this.applicantName});
+  const InterviewSchedulingScreen({
+    super.key,
+    required this.applicantId,
+    required this.applicantName,
+    required this.seekerId, // 👉 NEW
+  });
 
   @override
   State<InterviewSchedulingScreen> createState() => _InterviewSchedulingScreenState();
@@ -62,8 +68,10 @@ class _InterviewSchedulingScreenState extends State<InterviewSchedulingScreen> {
 
     setState(() => _isSaving = true);
 
+    // 👉 UPDATED: Now passing the seekerId to the service!
     final success = await _employerService.scheduleInterview(
       applicantId: widget.applicantId,
+      seekerId: widget.seekerId,
       date: _selectedDate!,
       startTime: _startTime!,
       endTime: _endTime!,
@@ -78,7 +86,7 @@ class _InterviewSchedulingScreenState extends State<InterviewSchedulingScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Interview Scheduled successfully!'), backgroundColor: Colors.green),
         );
-        Navigator.pop(context, true); // 👉 Return 'true' so the detail screen knows to refresh!
+        Navigator.pop(context, true);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Failed to schedule interview.'), backgroundColor: Colors.red),
@@ -151,7 +159,29 @@ class _InterviewSchedulingScreenState extends State<InterviewSchedulingScreen> {
           ),
           const SizedBox(height: 16),
 
-          if (_meetingMethod != 'internal')
+          // 👉 NEW: Beautiful UI state handling for Internal vs External meetings
+          if (_meetingMethod == 'internal')
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.blue.shade700),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'A secure video room will be generated automatically. You can start the meeting from your Scheduled Interviews list later.',
+                      style: TextStyle(color: Colors.blue.shade800, height: 1.4),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
             TextField(
               controller: _linkController,
               decoration: InputDecoration(
@@ -160,6 +190,7 @@ class _InterviewSchedulingScreenState extends State<InterviewSchedulingScreen> {
                 prefixIcon: Icon(_meetingMethod == 'online' ? Icons.link : Icons.location_on),
               ),
             ),
+
           const SizedBox(height: 48),
 
           _isSaving

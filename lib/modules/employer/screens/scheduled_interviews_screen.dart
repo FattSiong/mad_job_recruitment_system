@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart'; // 👉 You may need to run: flutter pub add url_launcher
+import 'package:url_launcher/url_launcher.dart';
 import '../../../models/interveiw_schedule_model.dart';
 import '../../../services/employer_service.dart';
+import '../../../services/interview_service.dart';
+import '../../community/screens/interview_lobby_screen.dart';
 
 class ScheduledInterviewsScreen extends StatefulWidget {
   const ScheduledInterviewsScreen({super.key});
@@ -32,12 +34,65 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
     }
   }
 
-  // Helper to open meeting URLs
+  // Helper to open external meeting URLs (Zoom, Google Meet, etc.)
   Future<void> _launchURL(String urlString) async {
     final Uri url = Uri.parse(urlString.startsWith('http') ? urlString : 'https://$urlString');
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open meeting link')));
+      }
+    }
+  }
+
+  // 👉 REPLACED: Now actually fetches the room and navigates to the lobby!
+  Future<void> _startInternalInterview(String? scheduleID, Map<String, dynamic> applicantData) async {
+    if (scheduleID == null) return;
+
+    // Show a quick loading dialog so the user knows something is happening
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final interviewService = InterviewService();
+
+      // 1. Fetch the pre-created InterviewRoom using the scheduleID
+      final roomData = await interviewService.getRoomByScheduleId(scheduleID);
+
+      if (mounted) Navigator.pop(context); // Close loader
+
+      if (roomData != null && mounted) {
+
+        // 👉 THE FIX: Safely check for whatever you named the column in Supabase!
+        final String? actualRoomID = roomData['interviewRoomID'] ?? roomData['roomID'] ?? roomData['id'];
+
+        if (actualRoomID != null) {
+          // 2. Navigate to the Lobby!
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => InterviewLobbyScreen(
+                roomID: actualRoomID, // Safely passes the non-null string
+                isEmployer: true,
+              ),
+            ),
+          );
+        } else {
+          // If the row exists but the ID column is missing, show a helpful error
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Database Error: Could not read the room ID column.')),
+          );
+        }
+
+      } else {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error: Could not find interview room. Did you create it using the new logic?')));
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -92,6 +147,7 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
           // Format times
           final timeString = '${schedule.startTime.format(context)} - ${schedule.endTime.format(context)}';
           final isOnline = schedule.meetingMethod == 'online';
+          final isInternal = schedule.meetingMethod == 'internal'; // 👉 NEW
 
           return Container(
             decoration: BoxDecoration(
@@ -158,14 +214,14 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Icon(
-                                isOnline ? Icons.videocam : (schedule.meetingMethod == 'internal' ? Icons.chat : Icons.location_on),
+                                isInternal ? Icons.video_camera_front : (isOnline ? Icons.videocam : Icons.location_on),
                                 size: 16,
                                 color: Colors.grey.shade600
                             ),
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
-                                schedule.meetingMethod == 'internal'
+                                isInternal
                                     ? 'App Internal Interview'
                                     : (schedule.meetingLink ?? 'No link provided'),
                                 style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
@@ -176,7 +232,9 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
                           ],
                         ),
 
-                        // 👉 ACTION BUTTON: If it's an online link, give them a quick button to launch it
+                        // --- ACTION BUTTONS ---
+
+                        // Option A: External Online Link (Zoom, Meet, etc.)
                         if (isOnline && schedule.meetingLink != null && schedule.meetingLink!.isNotEmpty) ...[
                           const SizedBox(height: 12),
                           SizedBox(
@@ -184,10 +242,28 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
                             child: OutlinedButton.icon(
                               onPressed: () => _launchURL(schedule.meetingLink!),
                               icon: const Icon(Icons.link, size: 18),
-                              label: const Text('Join Meeting'),
+                              label: const Text('Join External Meeting'),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: Colors.blueAccent,
                                 side: BorderSide(color: Colors.blueAccent.withOpacity(0.5)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                            ),
+                          ),
+                        ]
+
+                        // 👉 Option B: NEW NATIVE APP INTERVIEW BUTTON
+                        else if (isInternal) ...[
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () => _startInternalInterview(schedule.scheduleID, applicant),
+                              icon: const Icon(Icons.video_camera_front),
+                              label: const Text('Start Video Call'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF1A2A4D),
+                                foregroundColor: Colors.white,
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               ),
                             ),

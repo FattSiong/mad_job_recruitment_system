@@ -31,6 +31,7 @@ class _InterviewCallScreenState extends State<InterviewCallScreen> {
   }
 
   Future<void> initAgora() async {
+    await InterviewService().markUserAsJoined(widget.interviewID, widget.isEmployer);
     // 1. Request permissions
     await [Permission.microphone, Permission.camera].request();
 
@@ -79,9 +80,8 @@ class _InterviewCallScreenState extends State<InterviewCallScreen> {
   }
 
   void _onCallEnded() async {
-    if (widget.isEmployer) {
-      await InterviewService().endInterview(widget.interviewID);
-    }
+    await InterviewService().leaveInterview(widget.interviewID, widget.isEmployer);
+
     if (mounted) {
       Navigator.pop(context);
     }

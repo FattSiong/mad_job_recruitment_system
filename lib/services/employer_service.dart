@@ -618,6 +618,7 @@ class EmployerService {
   // 👉 NEW: Save the interview schedule and update status
   Future<bool> scheduleInterview({
     required String applicantId,
+    required String seekerId, // 👉 NEW: Required to link the room to the seeker
     required DateTime date,
     required TimeOfDay startTime,
     required TimeOfDay endTime,
@@ -625,21 +626,39 @@ class EmployerService {
     String? meetingLink,
   }) async {
     try {
+      // Grab the current employer's ID
+      final currentUser = _supabase.auth.currentUser;
+      if (currentUser == null) return false;
+
       // Format TimeOfDay into standard SQL time format (HH:MM:SS)
       final startStr = '${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}:00';
       final endStr = '${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}:00';
 
-      // 1. Insert into the InterviewSchedule table
-      await _supabase.from('InterviewSchedule').insert({
+      // 1. Insert into the InterviewSchedule table AND return the new row
+      // We need .select().single() so we can grab the auto-generated scheduleID!
+      final scheduleResponse = await _supabase.from('InterviewSchedule').insert({
         'applicantID': applicantId,
         'date': date.toIso8601String().split('T')[0], // YYYY-MM-DD
         'startTime': startStr,
         'endTime': endStr,
         'meetingMethod': meetingMethod,
         'meetingLink': meetingLink,
-      });
+      }).select('scheduleID').single();
 
-      // 2. Update the JobApplicant status to 'scheduled'
+      final generatedScheduleId = scheduleResponse['scheduleID'];
+
+      // 2. 👉 NEW: If it's an internal meeting, create the Waiting Room!
+      if (meetingMethod == 'internal') {
+        await _supabase.from('InterviewRoom').insert({
+          'scheduleID': generatedScheduleId,
+          'employerID': currentUser.id,
+          'seekerID': seekerId,
+          'status': 'pending',
+          // roomCode, startedAt, and endedAt will naturally be null upon creation
+        });
+      }
+
+      // 3. Update the JobApplicant status to 'scheduled'
       await updateApplicationStatus(applicantId, 'scheduled');
 
       return true;
