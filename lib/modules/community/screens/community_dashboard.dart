@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../../services/community_service.dart';
-import '../../../models/community_post_model.dart'; // Import your model here
+import '../../../models/community_post_model.dart';
 import 'active_chat_screen.dart';
 import 'create_post_screen.dart';
 import 'chat_list_screen.dart';
+import 'edit_screen.dart';
+import 'report_screen.dart';
+import 'saved_posts_screen.dart';
+import 'my_posts_screen.dart';
 
 // ------------------------------------------------------------------------
 // Global Helper Function for Time Formatting
@@ -47,6 +51,32 @@ class _CommunityDashboardState extends State<CommunityDashboard> {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Community Hub'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.person_outline),
+              tooltip: 'My Posts',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => MyPostsScreen(currentUserID: widget.currentUserID),
+                  ),
+                ).then((_) => _refreshFeed());
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.bookmarks_outlined),
+              tooltip: 'Saved Posts',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => SavedPostsScreen(currentUserID: widget.currentUserID),
+                  ),
+                ).then((_) => _refreshFeed());
+              },
+            )
+          ],
           bottom: const TabBar(
             tabs: [
               Tab(icon: Icon(Icons.dynamic_feed), text: 'Posts'),
@@ -96,7 +126,6 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
   Widget build(BuildContext context) {
     return RefreshIndicator(
       onRefresh: _handleRefresh,
-      // 👈 Changed to List<CommunityPostModel>
       child: FutureBuilder<List<CommunityPostModel>>(
         future: _communityService.getCommunityPosts(),
         builder: (context, snapshot) {
@@ -123,7 +152,7 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
             separatorBuilder: (context, index) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
               return PostCard(
-                post: posts[index], // Passes the clean Model!
+                post: posts[index],
                 currentUserID: widget.currentUserID,
                 onDelete: _handleRefresh,
               );
@@ -136,10 +165,10 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
 }
 
 // ------------------------------------------------------------------------
-// The Smart Post Card Widget (Now using CommunityPostModel)
+// The Smart Post Card Widget
 // ------------------------------------------------------------------------
 class PostCard extends StatefulWidget {
-  final CommunityPostModel post; // 👈 Look how clean this is!
+  final CommunityPostModel post;
   final String currentUserID;
   final VoidCallback onDelete;
 
@@ -166,7 +195,6 @@ class _PostCardState extends State<PostCard> {
   @override
   void initState() {
     super.initState();
-    // 👈 Setup is instantly readable using the helper methods from your model
     _likeCount = widget.post.likeCount;
     _savedCount = widget.post.savedCount;
     _commentCount = widget.post.commentCount;
@@ -191,36 +219,39 @@ class _PostCardState extends State<PostCard> {
   }
 
   void _handleSave() async {
+    final bool wasSaved = _isSaved;
+
     setState(() {
       _isSaved = !_isSaved;
       _savedCount += _isSaved ? 1 : -1;
     });
+
     try {
-      await _communityService.toggleSave(widget.post.postID, widget.currentUserID, !_isSaved);
+      await _communityService.toggleSave(widget.post.postID, widget.currentUserID, wasSaved);
     } catch (e) {
       setState(() {
-        _isSaved = !_isSaved;
+        _isSaved = wasSaved;
         _savedCount += _isSaved ? 1 : -1;
       });
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save post: $e')));
     }
   }
 
   void _showDeleteConfirmationDialog(BuildContext context, String postID) {
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Delete Post'),
           content: const Text('Are you sure you want to delete this post? This action cannot be undone.'),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
               onPressed: () async {
-                Navigator.pop(context);
+                Navigator.pop(dialogContext);
                 try {
                   await _communityService.deletePost(postID);
                   if (mounted) {
@@ -237,72 +268,6 @@ class _PostCardState extends State<PostCard> {
           ],
         );
       },
-    );
-  }
-
-  void _showReportDialog(BuildContext context, String postID) {
-    String selectedCategory = 'Spam';
-    final TextEditingController detailsController = TextEditingController();
-    bool isSubmitting = false;
-
-    showDialog(
-        context: context,
-        builder: (context) {
-          return StatefulBuilder(
-              builder: (context, setDialogState) {
-                return AlertDialog(
-                  title: const Text('Report Post'),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      DropdownButtonFormField<String>(
-                        value: selectedCategory,
-                        items: ['Spam', 'Inappropriate Content', 'Harassment', 'Other'].map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                        onChanged: (val) => setDialogState(() => selectedCategory = val!),
-                        decoration: const InputDecoration(labelText: 'Reason'),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: detailsController,
-                        decoration: const InputDecoration(labelText: 'Additional Details (Optional)', border: OutlineInputBorder()),
-                        maxLines: 3,
-                      ),
-                    ],
-                  ),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
-                    ElevatedButton(
-                      onPressed: isSubmitting
-                          ? null
-                          : () async {
-                        setDialogState(() => isSubmitting = true);
-                        try {
-                          await _communityService.reportPost(
-                            postID: postID,
-                            reporterID: widget.currentUserID,
-                            category: selectedCategory,
-                            details: detailsController.text.trim(),
-                          );
-                          if (context.mounted) {
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Report submitted.')));
-                          }
-                        } catch (e) {
-                          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
-                        } finally {
-                          setDialogState(() => isSubmitting = false);
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[50]),
-                      child: isSubmitting
-                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Text('Submit Report', style: TextStyle(color: Colors.orange)),
-                    ),
-                  ],
-                );
-              }
-          );
-        }
     );
   }
 
@@ -346,7 +311,6 @@ class _PostCardState extends State<PostCard> {
                   borderRadius: BorderRadius.circular(24),
                   onTap: () {
                     if (currentUID == creatorID) return;
-                    // Bottom Sheet Profile Popup (Same as before)
                     showModalBottomSheet(
                       context: context,
                       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
@@ -400,21 +364,56 @@ class _PostCardState extends State<PostCard> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          // 👈 Clean attribute access
                           Text(widget.post.username, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                           PopupMenuButton<String>(
                             icon: const Icon(Icons.more_horiz, color: Colors.grey),
-                            onSelected: (value) {
+                            onSelected: (value) async {
                               if (value == 'report') {
-                                _showReportDialog(context, widget.post.postID);
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ReportScreen(
+                                      targetID: widget.post.postID,
+                                      currentUserID: widget.currentUserID,
+                                      isPost: true,
+                                    ),
+                                  ),
+                                );
                               } else if (value == 'delete') {
                                 _showDeleteConfirmationDialog(context, widget.post.postID);
+                              } else if (value == 'edit') {
+                                bool? wasEdited = await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => EditScreen(
+                                      targetID: widget.post.postID,
+                                      initialContent: widget.post.content,
+                                      initialMediaURL: widget.post.mediaURL,
+                                      currentUserID: widget.currentUserID,
+                                      isPost: true,
+                                    ),
+                                  ),
+                                );
+                                if (wasEdited == true) {
+                                  widget.onDelete();
+                                }
                               }
                             },
                             itemBuilder: (BuildContext context) => [
-                              if (currentUID == creatorID && creatorID.isNotEmpty)
-                                const PopupMenuItem<String>(value: 'delete', child: Row(children: [Icon(Icons.delete_outline, color: Colors.red, size: 20), SizedBox(width: 8), Text('Delete Post', style: TextStyle(color: Colors.red))])),
-                              const PopupMenuItem<String>(value: 'report', child: Row(children: [Icon(Icons.flag_outlined, color: Colors.orange, size: 20), SizedBox(width: 8), Text('Report Post', style: TextStyle(color: Colors.orange))])),
+                              if (currentUID == creatorID && creatorID.isNotEmpty) ...[
+                                const PopupMenuItem<String>(
+                                    value: 'edit',
+                                    child: Row(children: [Icon(Icons.edit_outlined, color: Colors.blue, size: 20), SizedBox(width: 8), Text('Edit Post', style: TextStyle(color: Colors.blue))])
+                                ),
+                                const PopupMenuItem<String>(
+                                    value: 'delete',
+                                    child: Row(children: [Icon(Icons.delete_outline, color: Colors.red, size: 20), SizedBox(width: 8), Text('Delete Post', style: TextStyle(color: Colors.red))])
+                                ),
+                              ],
+                              const PopupMenuItem<String>(
+                                  value: 'report',
+                                  child: Row(children: [Icon(Icons.flag_outlined, color: Colors.orange, size: 20), SizedBox(width: 8), Text('Report Post', style: TextStyle(color: Colors.orange))])
+                              ),
                             ],
                           ),
                         ],
@@ -442,7 +441,6 @@ class _PostCardState extends State<PostCard> {
 
             Text(widget.post.content, style: const TextStyle(fontSize: 15, height: 1.4)),
 
-            // 👈 NEW: Render Attached Image or PDF!
             if (widget.post.mediaURL != null) ...[
               const SizedBox(height: 12),
               if (widget.post.mediaURL!.toLowerCase().contains('.pdf'))
@@ -489,8 +487,7 @@ class _PostCardState extends State<PostCard> {
                     ),
                   );
                 }),
-                const SizedBox(width: 16),
-                _buildClickableAction(Icons.share_outlined, '0', Colors.grey[600]!, () {}),
+
                 const Spacer(),
                 IconButton(icon: Icon(_isSaved ? Icons.bookmark : Icons.bookmark_border), color: _isSaved ? Colors.blue : Colors.grey[600], onPressed: _handleSave),
               ],
@@ -503,7 +500,7 @@ class _PostCardState extends State<PostCard> {
 }
 
 // ------------------------------------------------------------------------
-// The Comment Bottom Sheet (No model changes needed here)
+// The Comment Bottom Sheet
 // ------------------------------------------------------------------------
 class CommentSheet extends StatefulWidget {
   final String postID;
@@ -557,76 +554,46 @@ class _CommentSheetState extends State<CommentSheet> {
     }
   }
 
-  void _showReportCommentDialog(BuildContext context, String commentID) {
-    String selectedCategory = 'Spam';
-    final TextEditingController detailsController = TextEditingController();
-    bool isSubmitting = false;
-
+  void _showDeleteCommentConfirmationDialog(BuildContext context, String commentID) {
     showDialog(
-        context: context,
-        builder: (context) {
-          return StatefulBuilder(
-              builder: (context, setDialogState) {
-                return AlertDialog(
-                  title: const Text('Report Comment'),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      DropdownButtonFormField<String>(
-                        value: selectedCategory,
-                        items: ['Spam', 'Inappropriate Content', 'Harassment', 'Other']
-                            .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                            .toList(),
-                        onChanged: (val) => setDialogState(() => selectedCategory = val!),
-                        decoration: const InputDecoration(labelText: 'Reason'),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: detailsController,
-                        decoration: const InputDecoration(labelText: 'Additional Details (Optional)', border: OutlineInputBorder()),
-                        maxLines: 3,
-                      ),
-                    ],
-                  ),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
-                    ElevatedButton(
-                      onPressed: isSubmitting
-                          ? null
-                          : () async {
-                        setDialogState(() => isSubmitting = true);
-                        try {
-                          await _communityService.reportComment(
-                            commentID: commentID,
-                            reporterID: widget.currentUserID,
-                            category: selectedCategory,
-                            details: detailsController.text.trim(),
-                          );
-                          if (context.mounted) {
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Comment reported successfully.')));
-                          }
-                        } catch (e) {
-                          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to report: $e')));
-                        } finally {
-                          setDialogState(() => isSubmitting = false);
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red[50]),
-                      child: isSubmitting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Submit Report', style: TextStyle(color: Colors.red)),
-                    ),
-                  ],
-                );
-              }
-          );
-        }
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Delete Comment'),
+          content: const Text('Are you sure you want to delete this comment? This action cannot be undone.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                try {
+                  await _communityService.deleteComment(commentID);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Comment deleted successfully.')));
+                    setState(() {});
+                  }
+                } catch (e) {
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red[50]),
+              child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
     );
   }
 
-  Widget _buildCommentRow(Map<String, dynamic> comment, {bool isReply = false}) {
+  // 👈 NEW: Added repliedToUsername parameter
+  Widget _buildCommentRow(Map<String, dynamic> comment, {bool isReply = false, String? repliedToUsername}) {
     final user = comment['User'] ?? {};
     final timeAgo = getRelativeTime(comment['createdAt']);
     final commentID = comment['commentID'];
+    final String commentCreatorID = comment['userID'] ?? '';
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -641,22 +608,77 @@ class _CommentSheetState extends State<CommentSheet> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Text(user['username'] ?? 'Unknown', style: TextStyle(fontWeight: FontWeight.bold, fontSize: isReply ? 12 : 13)),
-                      const SizedBox(width: 8),
-                      Text(timeAgo, style: TextStyle(color: Colors.grey[500], fontSize: 11)),
-                    ],
+                  // 👈 NEW: RichText logic to show "[User] ▶ [Parent]"
+                  Flexible(
+                    child: RichText(
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      text: TextSpan(
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: isReply ? 12 : 13, color: Colors.black87, fontFamily: 'Roboto'),
+                        children: [
+                          TextSpan(text: user['username'] ?? 'Unknown'),
+                          if (isReply && repliedToUsername != null) ...[
+                            const TextSpan(text: ' ▶ ', style: TextStyle(color: Colors.grey, fontSize: 10)),
+                            TextSpan(text: repliedToUsername, style: const TextStyle(color: Colors.blueGrey)),
+                          ],
+                        ],
+                      ),
+                    ),
                   ),
+                  const SizedBox(width: 8),
+                  Text(timeAgo, style: TextStyle(color: Colors.grey[500], fontSize: 11)),
+
                   PopupMenuButton<String>(
                     icon: const Icon(Icons.more_horiz, color: Colors.grey, size: 16),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
-                    onSelected: (value) {
-                      if (value == 'report') _showReportCommentDialog(context, commentID);
+                    onSelected: (value) async {
+                      if (value == 'report') {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ReportScreen(
+                              targetID: commentID,
+                              currentUserID: widget.currentUserID,
+                              isPost: false,
+                            ),
+                          ),
+                        );
+                      } else if (value == 'delete') {
+                        _showDeleteCommentConfirmationDialog(context, commentID);
+                      } else if (value == 'edit') {
+                        bool? wasEdited = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => EditScreen(
+                              targetID: commentID,
+                              initialContent: comment['content'] ?? '',
+                              initialMediaURL: null,
+                              currentUserID: widget.currentUserID,
+                              isPost: false,
+                            ),
+                          ),
+                        );
+                        if (wasEdited == true) {
+                          setState(() {});
+                        }
+                      }
                     },
                     itemBuilder: (BuildContext context) => [
-                      const PopupMenuItem<String>(value: 'report', child: Row(children: [Icon(Icons.flag_outlined, color: Colors.red, size: 18), SizedBox(width: 8), Text('Report Comment', style: TextStyle(color: Colors.red, fontSize: 14))])),
+                      if (widget.currentUserID == commentCreatorID) ...[
+                        const PopupMenuItem<String>(
+                            value: 'edit',
+                            child: Row(children: [Icon(Icons.edit_outlined, color: Colors.blue, size: 18), SizedBox(width: 8), Text('Edit Comment', style: TextStyle(color: Colors.blue, fontSize: 14))])
+                        ),
+                        const PopupMenuItem<String>(
+                            value: 'delete',
+                            child: Row(children: [Icon(Icons.delete_outline, color: Colors.red, size: 18), SizedBox(width: 8), Text('Delete Comment', style: TextStyle(color: Colors.red, fontSize: 14))])
+                        ),
+                      ],
+                      const PopupMenuItem<String>(
+                          value: 'report',
+                          child: Row(children: [Icon(Icons.flag_outlined, color: Colors.orange, size: 18), SizedBox(width: 8), Text('Report Comment', style: TextStyle(color: Colors.orange, fontSize: 14))])
+                      ),
                     ],
                   ),
                 ],
@@ -720,6 +742,9 @@ class _CommentSheetState extends State<CommentSheet> {
                     final replies = repliesMap[commentID] ?? [];
                     final isExpanded = _expandedThreads.contains(commentID);
 
+                    // 👈 Extract parent author name to pass down to replies!
+                    final String parentAuthorName = parentComment['User']?['username'] ?? 'Unknown';
+
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -772,7 +797,11 @@ class _CommentSheetState extends State<CommentSheet> {
                             child: Container(
                               decoration: BoxDecoration(border: Border(left: BorderSide(color: Colors.grey.shade300, width: 2))),
                               padding: const EdgeInsets.only(left: 12.0),
-                              child: Column(children: replies.map((reply) => Padding(padding: const EdgeInsets.only(bottom: 12.0), child: _buildCommentRow(reply, isReply: true))).toList()),
+                              child: Column(children: replies.map((reply) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 12.0),
+                                  // 👈 NEW: Pass parentAuthorName here!
+                                  child: _buildCommentRow(reply, isReply: true, repliedToUsername: parentAuthorName)
+                              )).toList()),
                             ),
                           ),
                       ],
