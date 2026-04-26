@@ -90,7 +90,7 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
        final requestBody = {
           'app_id': oneSignalAppId,
           'target_channel': 'push',
-          'include_player_ids': [token], 
+          'include_subscription_ids': [token],
           'headings': {'en': isCall ? 'Incoming Call 📞' : 'New Message from You 💬'},
           'contents': {'en': content},
           'data': {
