@@ -190,7 +190,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                   _buildInfoRow(
                       Icons.monetization_on,
                       'Salary',
-                      _currentJob.salaryRange ?? 'Not specified'
+                      _currentJob.salaryRange
                   ),
                   const Divider(),
                   _buildInfoRow(
