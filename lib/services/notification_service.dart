@@ -68,10 +68,13 @@ class NotificationService {
   }
 
   static Future<void> _openIncomingCallFromNotification(Map<String, dynamic> data) async {
-    String? callID = data['callID']?.toString();
-    String? roomCode = data['roomCode']?.toString();
+    final String? incomingCallID = data['callID']?.toString();
+    final String? incomingRoomCode = data['roomCode']?.toString();
     String callerName = data['callerName']?.toString() ?? 'Incoming Caller';
     final String? callerProfilePic = data['callerProfilePic']?.toString();
+
+    String? callID = incomingCallID;
+    String? roomCode = incomingRoomCode;
 
     if (callID == null || roomCode == null) {
       final fallbackCall = await _findLatestRingingCall();
@@ -87,20 +90,25 @@ class NotificationService {
     }
 
     if (callID == null || roomCode == null) return;
-    if (_lastHandledCallID == callID) return;
 
-    final callStatus = await Supabase.instance.client.from('Calls').select('status').eq('callID', callID).maybeSingle();
+    final resolvedCallID = callID;
+    final resolvedRoomCode = roomCode;
+
+    if (resolvedCallID.isEmpty || resolvedRoomCode.isEmpty) return;
+    if (_lastHandledCallID == resolvedCallID) return;
+
+    final callStatus = await Supabase.instance.client.from('Calls').select('status').eq('callID', resolvedCallID).maybeSingle();
     if (callStatus == null || callStatus['status']?.toString() != 'ringing') return;
 
     final navigator = navigatorKey.currentState;
     if (navigator == null) return;
 
-    _lastHandledCallID = callID;
+    _lastHandledCallID = resolvedCallID;
     navigator.push(
       MaterialPageRoute(
         builder: (_) => IncomingCallScreen(
-          callID: callID,
-          roomCode: roomCode,
+          callID: resolvedCallID,
+          roomCode: resolvedRoomCode,
           callerName: callerName,
           callerProfilePic: callerProfilePic,
         ),
