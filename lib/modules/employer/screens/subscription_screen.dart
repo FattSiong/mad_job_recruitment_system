@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:http/http.dart' as http;
+import 'package:onesignal_flutter/onesignal_flutter.dart'; // 👈 OneSignal Import
 
 class SubscriptionScreen extends StatefulWidget {
   const SubscriptionScreen({super.key});
@@ -14,6 +15,13 @@ class SubscriptionScreen extends StatefulWidget {
 class _SubscriptionScreenState extends State<SubscriptionScreen> {
   final supabase = Supabase.instance.client;
   bool _isLoading = false;
+  bool _isLoadingData = true;
+
+  // Stores the plan the user currently owns ('monthly', 'annually', or 'free')
+  String? _activePlanType;
+
+  // Track which plan is currently selected in the UI
+  String _selectedPlan = 'monthly';
 
   final String publishableKey = "pk_test_51TPT4D8sWAvwhsmDNXUbF8LCTGtSuW7jRjuiAKqtMz0EYa0dNcG1cLXRzDP7LHAPKqtYfx0PuxLt3gl2erO0ttb000Wt76CdRo";
   final String secretKey = "sk_test_51TPT4D8sWAvwhsmD5iilTCVsbs5qqhjte28Ofz6T0ugvjzyjsksl2JHUy67ULUnTyBtHq1urXpAivqVrUHR0lIQD00IRQ57Ffg";
@@ -23,6 +31,78 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     super.initState();
     Stripe.publishableKey = publishableKey;
     Stripe.urlScheme = 'myapp';
+
+    _fetchCurrentPlan();
+    _setupNotifications(); // 👈 Ask for notification permission when screen opens
+  }
+
+  // 👉 NEW: Ask for permission and save token
+  Future<void> _setupNotifications() async {
+    final hasPermission = await OneSignal.Notifications.requestPermission(true);
+
+    if (hasPermission) {
+      final user = supabase.auth.currentUser;
+
+      await Future.delayed(const Duration(seconds: 2));
+      final String? deviceToken = OneSignal.User.pushSubscription.id;
+
+      if (user != null && deviceToken != null && deviceToken.isNotEmpty) {
+        try {
+          // 1. Get the Company ID for this user
+          final memberData = await supabase
+              .from('CompanyMember')
+              .select('companyID')
+              .eq('employerID', user.id)
+              .limit(1)
+              .maybeSingle();
+
+          final companyId = memberData?['companyID'];
+
+          // 2. Save the token to the Company table
+          if (companyId != null) {
+            await supabase
+                .from('Company')
+                .update({'notification_token': deviceToken})
+                .eq('companyID', companyId);
+
+            debugPrint("✅ OneSignal Token saved to Company: $companyId");
+          }
+        } catch (e) {
+          debugPrint("❌ Failed to save token: $e");
+        }
+      }
+    }
+  }
+
+  Future<void> _fetchCurrentPlan() async {
+    try {
+      final user = supabase.auth.currentUser;
+      if (user == null) return;
+
+      final memberData = await supabase.from('CompanyMember').select('companyID').eq('employerID', user.id).limit(1).maybeSingle();
+      final companyId = memberData?['companyID'];
+
+      if (companyId != null) {
+        final companyData = await supabase.from('Company').select('currentPlanType').eq('companyID', companyId).limit(1).maybeSingle();
+        final planType = companyData?['currentPlanType'] as String?;
+
+        if (mounted) {
+          setState(() {
+            if (planType == 'MONTHLY') {
+              _activePlanType = 'monthly';
+            } else if (planType == 'ANNUALLY') {
+              _activePlanType = 'annually';
+            } else {
+              _activePlanType = 'free';
+            }
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching active plan: $e");
+    } finally {
+      if (mounted) setState(() => _isLoadingData = false);
+    }
   }
 
   Future<void> _handleStripePayment(String planId) async {
@@ -31,51 +111,40 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       final user = supabase.auth.currentUser;
       if (user == null) throw "Please login first";
 
-      final paymentIntent = await _createPaymentIntent('9900', 'MYR');
+      final String stripeAmount = planId == 'monthly' ? '9900' : '99900';
+      final double paidAmount = planId == 'monthly' ? 99.0 : 999.0;
+
+      final paymentIntent = await _createPaymentIntent(stripeAmount, 'MYR');
 
       await Stripe.instance.initPaymentSheet(
         paymentSheetParameters: SetupPaymentSheetParameters(
           paymentIntentClientSecret: paymentIntent['client_secret'],
           merchantDisplayName: 'MAD Job Recruitment',
           style: ThemeMode.light,
-          // 🔴 必须和 AndroidManifest 里的暗号完全一致
           returnURL: 'myapp://payment-return',
         ),
       );
 
       setState(() => _isLoading = false);
 
-      // 👉 1. 呼叫 Stripe 弹出付款界面
       await Stripe.instance.presentPaymentSheet();
 
       setState(() => _isLoading = true);
 
-      // 👉 2. 如果付款成功，更新 Supabase 数据库
-      await _syncSubscriptionToDatabase(user.id, planId);
+      await _syncSubscriptionToDatabase(user.id, planId, paidAmount);
 
-      // 👉 3. 数据库更新成功后，弹出绿色打勾对话框
-      if (mounted) _showSuccessDialog();
+      if (mounted) _showSuccessDialog(planId);
 
     } on StripeException catch (e) {
-      // 🚨 捕获 Stripe 相关的错误并显示在屏幕上
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Stripe Error: ${e.error.localizedMessage}"),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
+          SnackBar(content: Text("Stripe Error: ${e.error.localizedMessage}"), backgroundColor: Colors.red),
         );
       }
     } catch (e) {
-      // 🚨 捕获所有其他错误（如：Supabase 数据库写入失败、没有权限等）
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("System Error: $e"),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 6), // 停留 6 秒让你看清楚
-          ),
+          SnackBar(content: Text("System Error: $e"), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -83,7 +152,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     }
   }
 
-  void _showSuccessDialog() {
+  void _showSuccessDialog(String planId) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -97,7 +166,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               Text("Payment Successful!", style: TextStyle(fontWeight: FontWeight.bold)),
             ],
           ),
-          content: const Text("Your account is now upgraded to Premium!", textAlign: TextAlign.center),
+          content: Text("Your account is now upgraded to Premium ${planId.capitalize()}!", textAlign: TextAlign.center),
           actions: [
             Center(
               child: ElevatedButton(
@@ -105,7 +174,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   Navigator.of(context).pop();
                   Navigator.of(context).pop();
                 },
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.purple),
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1a56ff)),
                 child: const Text("Go to Dashboard", style: TextStyle(color: Colors.white)),
               ),
             ),
@@ -125,79 +194,229 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     return json.decode(response.body);
   }
 
-  Future<void> _syncSubscriptionToDatabase(String userId, String planId) async {
+  Future<void> _syncSubscriptionToDatabase(String userId, String planType, double amount) async {
     final now = DateTime.now();
-    final endDate = now.add(const Duration(days: 30));
+    final int daysToAdd = planType == 'annually' ? 365 : 30;
+
+    final existingSub = await supabase.from('PaymentSubscription').select().eq('paidByEmployerID', userId).limit(1).maybeSingle();
+
+    DateTime baseDate = now;
+
+    if (existingSub != null && existingSub['endDate'] != null) {
+      final currentEndDate = DateTime.parse(existingSub['endDate']);
+      if (currentEndDate.isAfter(now)) {
+        baseDate = currentEndDate;
+      }
+    }
+
+    final endDate = baseDate.add(Duration(days: daysToAdd));
+
     final memberData = await supabase.from('CompanyMember').select('companyID').eq('employerID', userId).limit(1).maybeSingle();
+    final String? companyId = memberData?['companyID']?.toString();
 
     final Map<String, dynamic> subData = {
-      'companyID': memberData?['companyID'].toString(),
+      'companyID': companyId,
       'paidByEmployerID': userId,
-      'planType': planId,
-      'amountPaid': 99.0,
+      'planType': planType,
+      'amountPaid': amount,
       'paymentDate': now.toIso8601String(),
       'status': 'active',
       'startDate': now.toIso8601String(),
       'endDate': endDate.toIso8601String(),
     };
 
-    final existingSub = await supabase.from('PaymentSubscription').select().eq('paidByEmployerID', userId).limit(1).maybeSingle();
     if (existingSub == null) {
       await supabase.from('PaymentSubscription').insert(subData);
     } else {
       await supabase.from('PaymentSubscription').update(subData).eq('paidByEmployerID', userId);
+    }
+
+    if (companyId != null) {
+      String exactPlanWord = planType == 'monthly' ? 'MONTHLY' : 'ANNUALLY';
+
+      await supabase
+          .from('Company')
+          .update({'currentPlanType': exactPlanWord})
+          .eq('companyID', companyId);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Billing & Plans", style: TextStyle(fontWeight: FontWeight.bold)), centerTitle: true),
-      body: _isLoading
+      backgroundColor: Colors.grey[50],
+      appBar: AppBar(
+        title: const Text("Upgrade Plan", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.black),
+      ),
+      body: _isLoading || _isLoadingData
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
         child: Column(
           children: [
-            _buildPlanCard("Basic Plan", "0", Colors.blueGrey, "basic", ['Standard Job Posting']),
+            _buildPlanCard(
+              id: 'monthly',
+              title: 'Premium Monthly',
+              price: '99',
+              period: '/month',
+              isMostPopular: false,
+              features: [
+                'All AI features unlocked',
+                'AI Resume Ranking',
+                'AI Question Generator',
+                'Priority support',
+                'Standard analytics'
+              ],
+            ),
             const SizedBox(height: 24),
-            _buildPlanCard("Premium AI", "99", Colors.purple, "premium", ['AI Question Generator', 'AI Resume Ranking']),
+            _buildPlanCard(
+              id: 'annually',
+              title: 'Premium Annually',
+              price: '999',
+              period: '/year',
+              isMostPopular: true,
+              features: [
+                'Save ~20% compared to monthly',
+                'All AI features unlocked',
+                'AI Resume Ranking',
+                'AI Question Generator',
+                '24/7 dedicated support',
+                'Advanced AI analytics'
+              ],
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildPlanCard(String name, String price, Color color, String id, List<String> features) {
-    bool isPremium = id == 'premium';
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: isPremium ? color : color.withOpacity(0.3), width: isPremium ? 2 : 1),
-        boxShadow: [BoxShadow(color: color.withOpacity(0.1), blurRadius: 15, offset: const Offset(0, 5))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(child: Text(name, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: color))),
-          const SizedBox(height: 8),
-          Center(child: Text("RM $price / month", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600))),
-          const Padding(padding: EdgeInsets.symmetric(vertical: 16.0), child: Divider()),
-          ...features.map((f) => Padding(
-            padding: const EdgeInsets.only(bottom: 12.0),
-            child: Row(children: [Icon(Icons.check_circle, color: isPremium ? color : Colors.green, size: 20), const SizedBox(width: 12), Text(f)]),
-          )),
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: () => isPremium ? _handleStripePayment(id) : null,
-            style: ElevatedButton.styleFrom(backgroundColor: color, minimumSize: const Size(double.infinity, 54), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-            child: const Text("Select Plan", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+  Widget _buildPlanCard({
+    required String id,
+    required String title,
+    required String price,
+    required String period,
+    required bool isMostPopular,
+    required List<String> features,
+  }) {
+    bool isCurrentPlan = _activePlanType == id;
+    bool isDowngradeAttempt = _activePlanType == 'annually' && id == 'monthly';
+    Color cardColor = isCurrentPlan ? const Color(0xFF00C853) : const Color(0xFF1a56ff);
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isCurrentPlan ? cardColor : Colors.grey.shade300,
+              width: 1.5,
+            ),
+            boxShadow: isCurrentPlan
+                ? [BoxShadow(color: cardColor.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))]
+                : [],
           ),
-        ],
-      ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.black87),
+                  ),
+                  if (isCurrentPlan)
+                    Icon(Icons.check_circle, color: cardColor, size: 28)
+                  else
+                    const Icon(Icons.lock_outline, color: Colors.grey, size: 24),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  const Text("RM", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black)),
+                  Text(price, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.black)),
+                  Text(period, style: const TextStyle(fontSize: 16, color: Colors.grey)),
+                ],
+              ),
+              const SizedBox(height: 24),
+              ...features.map((f) => Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: Row(
+                  children: [
+                    const Icon(Icons.check, color: Colors.green, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(f, style: TextStyle(color: Colors.grey.shade800, fontSize: 14))),
+                  ],
+                ),
+              )),
+
+              if (!isCurrentPlan) ...[
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: (_isLoading || isDowngradeAttempt) ? null : () => _handleStripePayment(id),
+                  icon: Icon(
+                      isDowngradeAttempt ? Icons.info_outline : Icons.lock_open,
+                      size: 18,
+                      color: isDowngradeAttempt ? Colors.grey : Colors.white
+                  ),
+                  label: Text(
+                      isDowngradeAttempt ? "Included in Annual" : "Unlock $title",
+                      style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: isDowngradeAttempt ? Colors.grey : Colors.white
+                      )
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isDowngradeAttempt ? Colors.grey.shade200 : cardColor,
+                    disabledBackgroundColor: Colors.grey.shade200,
+                    minimumSize: const Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ]
+            ],
+          ),
+        ),
+
+        if (isCurrentPlan || isMostPopular)
+          Positioned(
+            top: -14,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                decoration: BoxDecoration(
+                  color: cardColor,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  isCurrentPlan ? "Current Plan" : "Most Popular",
+                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
+  }
+}
+
+extension StringExtension on String {
+  String capitalize() {
+    if (isEmpty) return this;
+    return "${this[0].toUpperCase()}${substring(1)}";
   }
 }
