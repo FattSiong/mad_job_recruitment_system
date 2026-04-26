@@ -93,9 +93,10 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
               'roomID': widget.roomID,
               ...?additionalData,
             },
-            if (isCall) 'priority': 10,
-            if (isCall) 'android_priority': 'high',
-            if (isCall) 'ttl': 60,
+            'priority': 10,
+            'android_priority': 'high',
+            if (isCall) 'android_channel_id': 'incoming_calls',
+            'ttl': isCall ? 60 : 2419200,
             if (isCall && additionalData?['callID'] != null) 'collapse_id': 'call_${additionalData?['callID']}',
           }),
         );

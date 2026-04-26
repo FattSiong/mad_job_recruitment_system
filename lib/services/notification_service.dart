@@ -24,6 +24,7 @@ class NotificationService {
     _registerAuthStateListener();
     _registerPushSubscriptionObserver();
     _registerNotificationClickListener();
+    _registerForegroundDisplayListener();
 
     await OneSignal.Notifications.requestPermission(true);
     await syncPushTokenToCurrentUser();
@@ -50,6 +51,12 @@ class NotificationService {
       if (data['type']?.toString() == 'call') {
         await _openIncomingCallFromNotification(data);
       }
+    });
+  }
+
+  static void _registerForegroundDisplayListener() {
+    OneSignal.Notifications.addForegroundLifecycleListener((event) {
+      event.notification.display();
     });
   }
 
