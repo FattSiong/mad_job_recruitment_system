@@ -69,101 +69,61 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
       debugPrint('Push type: ${isCall ? 'call' : 'message'}');
       debugPrint('Receiver userID: ${widget.otherUserID}');
 
-      // 1. Fetch the receiver's OneSignal Player ID from Supabase
-      final userData = await Supabase.instance.client
-          .from('User')
-          .select('notification_token')
-          .eq('userID', widget.otherUserID)
-          .maybeSingle();
+      const String oneSignalAppId = '16f92d86-ad69-4841-8a4f-b6c0cbb8f9f6';
+      const String oneSignalRestApiKey = 'os_v2_app_c34s3bvnnfeedcspw3amxohz62pdusnidibetufmo2b5zeh25cmys643hvxviodmkoa3i4rljlt67paibzgnuq57gdipg4eztmebpqq';
 
-      debugPrint('Supabase userData: $userData');
+      final requestBody = {
+        'app_id': oneSignalAppId,
+        'target_channel': 'push',
+        'include_aliases': {
+          'external_id': [widget.otherUserID],
+        },
+        'headings': {'en': isCall ? 'Incoming Call' : 'New Message'},
+        'contents': {'en': content},
+        'data': {
+          'type': isCall ? 'call' : 'chat',
+          'roomID': widget.roomID,
+          ...?additionalData,
+        },
+        'android_channel_id': isCall ? 'incoming_calls' : 'chat_messages',
+        'ttl': isCall ? 60 : 2419200,
+        if (isCall && additionalData?['callID'] != null) 'collapse_id': 'call_${additionalData?['callID']}',
+        'priority': 10,
+        'ios_sound': 'default',
+        'android_sound': 'default',
+        'android_visibility': 1,
+      };
 
-      if (userData != null && userData['notification_token'] != null) {
-        final String token = userData['notification_token'].toString();
-        debugPrint('OneSignal token found: $token');
+      debugPrint('OneSignal request body: \n' + jsonEncode(requestBody));
 
-        // Use the correct app_id (update as needed)
-        const String oneSignalAppId = '16f92d86-ad69-4841-8a4f-b6c0cbb8f9f6';
-        // Use the correct REST API Key (update as needed)
-        const String oneSignalRestApiKey = 'os_v2_app_c34s3bvnnfeedcspw3amxohz62pdusnidibetufmo2b5zeh25cmys643hvxviodmkoa3i4rljlt67paibzgnuq57gdipg4eztmebpqq';
+      var response = await http.post(
+        Uri.parse('https://api.onesignal.com/notifications'),
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Authorization': 'Key $oneSignalRestApiKey',
+        },
+        body: jsonEncode(requestBody),
+      );
 
-       final requestBody = {
-          'app_id': oneSignalAppId,
-          'target_channel': 'push',
-          'include_subscription_ids': [token],
-          'headings': {'en': isCall ? 'Incoming Call 📞' : 'New Message from You 💬'},
-          'contents': {'en': content},
-          'data': {
-            'type': isCall ? 'call' : 'chat',
-            'roomID': widget.roomID,
-            ...?additionalData,
-          },
-          'android_channel_id': isCall ? 'incoming_calls' : 'chat_messages',
-          'ttl': isCall ? 60 : 2419200,
-          if (isCall && additionalData?['callID'] != null) 'collapse_id': 'call_${additionalData?['callID']}',
-          
-          // 👇 ADD THESE 4 LINES to force heads-up/popout banners
-          'priority': 10,                 // 10 = Max/Urgent priority
-          'ios_sound': 'default',         // Required for iOS banner drops
-          'android_sound': 'default',     // Required for Android heads-up displays
-          'android_visibility': 1,        // 1 = Public (Shows on lock screen)
-        };
-        debugPrint('OneSignal request body: \\n' + jsonEncode(requestBody));
+      if (response.statusCode == 400 && response.body.contains('Could not find android_channel_id')) {
+        debugPrint('OneSignal channel id not found in dashboard. Retrying without android_channel_id...');
 
-        // Send notification with correct header
-// Use the standard OneSignal REST API endpoint
-        var response = await http.post(
-          // 👇 The NEW endpoint required for os_v2_app_ keys
-          Uri.parse('https://api.onesignal.com/notifications'), 
+        final fallbackBody = Map<String, dynamic>.from(requestBody)
+          ..remove('android_channel_id');
+
+        response = await http.post(
+          Uri.parse('https://api.onesignal.com/notifications'),
           headers: {
             'Content-Type': 'application/json; charset=utf-8',
-            // 👇 Requires "Key " prefix
-            'Authorization': 'key os_v2_app_c34s3bvnnfeedcspw3amxohz62pdusnidibetufmo2b5zeh25cmys643hvxviodmkoa3i4rljlt67paibzgnuq57gdipg4eztmebpqq',
+            'Authorization': 'Key $oneSignalRestApiKey',
           },
-          body: jsonEncode({
-            'app_id': oneSignalAppId,
-            'target_channel': 'push',
-            // 👇 Required for OneSignal v5 SDK
-            'include_subscription_ids': [token], 
-            'headings': {'en': isCall ? 'Incoming Call 📞' : 'New Message from You 💬'},
-            'contents': {'en': content},
-            'data': {
-              'type': isCall ? 'call' : 'chat',
-              'roomID': widget.roomID,
-              ...?additionalData,
-            },
-            'android_channel_id': isCall ? 'incoming_calls' : 'chat_messages',
-            'ttl': isCall ? 60 : 2419200,
-            if (isCall && additionalData?['callID'] != null) 'collapse_id': 'call_${additionalData?['callID']}',
-            'priority': 10,
-            'ios_sound': 'default',
-            'android_sound': 'default',
-            'android_visibility': 1,
-          }),
+          body: jsonEncode(fallbackBody),
         );
-
-        if (response.statusCode == 400 && response.body.contains('Could not find android_channel_id')) {
-          debugPrint('OneSignal channel id not found in dashboard. Retrying without android_channel_id...');
-
-          final fallbackBody = Map<String, dynamic>.from(requestBody)
-            ..remove('android_channel_id');
-
-          response = await http.post(
-            Uri.parse('https://api.onesignal.com/notifications'),
-            headers: {
-              'Content-Type': 'application/json; charset=utf-8',
-              'Authorization': 'key $oneSignalRestApiKey',
-            },
-            body: jsonEncode(fallbackBody),
-          );
-        }
-
-        debugPrint('OneSignal response status: \\n${response.statusCode}');
-        debugPrint('OneSignal response body: \\n${response.body}');
-        debugPrint('--- Push debug end ---');
-      } else {
-        debugPrint('No notification_token found for receiver \\${widget.otherUserID}');
       }
+
+      debugPrint('OneSignal response status: \n${response.statusCode}');
+      debugPrint('OneSignal response body: \n${response.body}');
+      debugPrint('--- Push debug end ---');
     } catch (e) {
       debugPrint('Error sending push notification: $e');
     }
@@ -951,3 +911,4 @@ class FullScreenImageViewer extends StatelessWidget {
     );
   }
 }
+
