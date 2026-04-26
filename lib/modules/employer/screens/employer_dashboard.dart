@@ -173,7 +173,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
           NavigationDestination(
             icon: Icon(Icons.chat_bubble_outline),
             selectedIcon: Icon(Icons.chat_bubble),
-            label: 'Chats',
+            label: 'Messages',
           ),
           NavigationDestination(
             icon: Icon(Icons.groups_outlined),
