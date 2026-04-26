@@ -113,17 +113,18 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
         // Send notification with correct header
 // Use the standard OneSignal REST API endpoint
         var response = await http.post(
-          // Ensure you are using the v1 endpoint 
-          Uri.parse('https://onesignal.com/api/v1/notifications'), //
+          // 👇 The NEW endpoint required for os_v2_app_ keys
+          Uri.parse('https://api.onesignal.com/notifications'), 
           headers: {
             'Content-Type': 'application/json; charset=utf-8',
-            // Hardcode the string directly with "Key " at the start
-            'Authorization': 'Key os_v2_app_c34s3bvnnfeedcspw3amxohz62jhsjzxra4upr54r45mep7kmid5zhkliargm5bgje2q3n5qcscr6xg4pgde7ntjngl3fbuacu4yu7i', //
+            // 👇 Requires "Key " prefix
+            'Authorization': 'Key os_v2_app_c34s3bvnnfeedcspw3amxohz62jhsjzxra4upr54r45mep7kmid5zhkliargm5bgje2q3n5qcscr6xg4pgde7ntjngl3fbuacu4yu7i', 
           },
           body: jsonEncode({
             'app_id': oneSignalAppId,
             'target_channel': 'push',
-            'include_subscription_ids': [token], // Use subscription IDs instead of player IDs
+            // 👇 Required for OneSignal v5 SDK
+            'include_subscription_ids': [token], 
             'headings': {'en': isCall ? 'Incoming Call 📞' : 'New Message from You 💬'},
             'contents': {'en': content},
             'data': {
@@ -140,7 +141,7 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
             'android_visibility': 1,
           }),
         );
-        
+
         if (response.statusCode == 400 && response.body.contains('Could not find android_channel_id')) {
           debugPrint('OneSignal channel id not found in dashboard. Retrying without android_channel_id...');
 
