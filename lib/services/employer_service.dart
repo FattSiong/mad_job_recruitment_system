@@ -211,6 +211,45 @@ class EmployerService {
     }
   }
 
+  Future<List<JobModel>> getWorkspaceJobsForEmployer(
+    String employerId, {
+    bool includeDeleted = false,
+  }) async {
+    try {
+      final memberResponse = await _supabase
+          .from(TableConstants.companyMember)
+          .select('companyID')
+          .eq('employerID', employerId)
+          .eq('status', 'active');
+
+      if (memberResponse.isEmpty) return [];
+
+      final companyIds = memberResponse
+          .map((item) => item['companyID'])
+          .whereType<String>()
+          .toSet()
+          .toList();
+
+      if (companyIds.isEmpty) return [];
+
+      var query = _supabase
+          .from(TableConstants.job)
+          .select()
+          .filter('companyID', 'in', companyIds);
+
+      if (!includeDeleted) {
+        query = query.neq('status', 'deleted');
+      }
+
+      final response = await query.order('createdAt', ascending: false);
+
+      return (response as List).map((json) => JobModel.fromJson(json)).toList();
+    } catch (e) {
+      print('Error fetching workspace jobs: $e');
+      return [];
+    }
+  }
+
   Future<List<CompanyModel>> getMyAcceptedCompanies() async {
     try {
       final currentUser = _supabase.auth.currentUser;

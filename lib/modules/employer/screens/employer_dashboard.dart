@@ -118,7 +118,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
       final results = await Future.wait<dynamic>([
         _employerService.getEmployerProfile(currentUser.id),
         _employerService.getCompanies(currentUser.id, 'employer'),
-        _employerService.getEmployerJobs(currentUser.id),
+        _employerService.getWorkspaceJobsForEmployer(currentUser.id),
         _employerService.getMyPendingInvitations(),
         _employerService.getScheduledInterviews(),
       ]);
