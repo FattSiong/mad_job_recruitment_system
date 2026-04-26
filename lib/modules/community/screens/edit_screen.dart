@@ -6,8 +6,8 @@ import '../../../services/community_service.dart';
 class EditScreen extends StatefulWidget {
   final String targetID;
   final String initialContent;
-  final String? initialMediaURL; // 👈 NEW: Accepts the existing image URL
-  final String currentUserID;    // 👈 NEW: Needed for uploading files
+  final String? initialMediaURL;
+  final String currentUserID;
   final bool isPost;
 
   const EditScreen({
@@ -121,17 +121,34 @@ class _EditScreenState extends State<EditScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text(widget.isPost ? 'Edit Post' : 'Edit Comment'),
         backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
         elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.black87),
+        title: Text(
+            widget.isPost ? 'Edit Post' : 'Edit Comment',
+            style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)
+        ),
         actions: [
-          IconButton(
-            icon: _isSaving
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.check, color: Colors.blueAccent),
-            onPressed: _isSaving ? null : _saveChanges,
+          Padding(
+            padding: const EdgeInsets.only(right: 8.0, top: 8.0, bottom: 8.0),
+            child: _isSaving
+                ? const Center(
+                child: Padding(
+                    padding: EdgeInsets.only(right: 16.0),
+                    child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                )
+            )
+                : TextButton(
+              onPressed: _saveChanges,
+              style: TextButton.styleFrom(
+                backgroundColor: const Color(0xFF6B8BFE).withValues(alpha: 0.1),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+              ),
+              child: const Text('Save', style: TextStyle(color: Color(0xFF6B8BFE), fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
           )
         ],
       ),
@@ -140,20 +157,30 @@ class _EditScreenState extends State<EditScreen> {
           padding: const EdgeInsets.all(16.0),
           child: Column(
             children: [
+              // User Header inside edit screen
+              Row(
+                children: [
+                  CircleAvatar(radius: 20, backgroundColor: Colors.grey[200], child: const Icon(Icons.person, color: Colors.grey)),
+                  const SizedBox(width: 12),
+                  Text(
+                      widget.isPost ? 'Editing Post' : 'Editing Comment',
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: Colors.black87)
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
               Expanded(
                 child: TextField(
                   controller: _contentController,
                   maxLines: null,
-                  expands: true,
-                  textAlignVertical: TextAlignVertical.top,
+                  autofocus: true,
+                  keyboardType: TextInputType.multiline,
+                  style: const TextStyle(fontSize: 18, color: Colors.black87, height: 1.4),
                   decoration: InputDecoration(
                     hintText: "What's on your mind?",
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    filled: true,
-                    fillColor: Colors.grey[50],
+                    hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 18),
+                    border: InputBorder.none,
                   ),
                 ),
               ),
@@ -162,34 +189,39 @@ class _EditScreenState extends State<EditScreen> {
               if (_currentMediaURL != null || _selectedNewFile != null) ...[
                 const SizedBox(height: 12),
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    border: Border.all(color: Colors.grey.shade300),
-                    borderRadius: BorderRadius.circular(8),
+                    color: Colors.grey[50],
+                    border: Border.all(color: Colors.grey.shade200),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                   child: Row(
                     children: [
-                      Icon(
-                        (_currentMediaURL?.contains('.pdf') ?? false) || (_selectedNewFile?.path.endsWith('.pdf') ?? false)
-                            ? Icons.picture_as_pdf
-                            : Icons.image,
-                        color: Colors.blue,
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                        child: Icon(
+                          (_currentMediaURL?.contains('.pdf') ?? false) || (_selectedNewFile?.path.endsWith('.pdf') ?? false)
+                              ? Icons.picture_as_pdf
+                              : Icons.image,
+                          color: const Color(0xFF6B8BFE),
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           _selectedNewFile != null
-                              ? _selectedNewFile!.path.split(Platform.pathSeparator).last // Show new file name
-                              : "Existing Attachment", // Show generic text for old network file
+                              ? _selectedNewFile!.path.split(Platform.pathSeparator).last
+                              : "Existing Attachment",
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.black87),
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.close, color: Colors.red),
-                        onPressed: _removeMedia, // Deletes the image entirely
+                        icon: const Icon(Icons.close, color: Colors.redAccent),
+                        onPressed: _removeMedia,
                         tooltip: 'Remove Attachment',
                       ),
                     ],
@@ -197,19 +229,30 @@ class _EditScreenState extends State<EditScreen> {
                 ),
               ],
 
-              const Divider(),
+              const Divider(height: 1),
 
               // --- Bottom Toolbar ---
               if (widget.isPost) // Only allow media attachments for Posts
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.image, color: Colors.grey),
-                      onPressed: _pickDocument,
-                      tooltip: 'Change/Add Attachment',
-                    ),
-                    const Text("Attach Image/PDF", style: TextStyle(color: Colors.grey)),
-                  ],
+                Padding(
+                  padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
+                  child: Row(
+                    children: [
+                      InkWell(
+                        onTap: _pickDocument,
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.image_outlined, color: Color(0xFF6B8BFE)),
+                              SizedBox(width: 8),
+                              Text('Change Media', style: TextStyle(color: Color(0xFF6B8BFE), fontWeight: FontWeight.w600))
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
             ],
           ),

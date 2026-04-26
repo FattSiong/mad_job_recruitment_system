@@ -17,7 +17,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   final CommunityService _communityService = CommunityService();
 
   bool _isLoading = false;
-  File? _selectedFile; // Holds the chosen file
+  File? _selectedFile;
 
   // Function to open the device's file explorer
   Future<void> _pickDocument() async {
@@ -33,7 +33,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     }
   }
 
-  // The Preview Dialog you used in Company Registration
+  // The Preview Dialog
   void _previewDocument(BuildContext context) {
     if (_selectedFile == null) return;
 
@@ -44,12 +44,16 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Text('Attachment Preview'),
           content: SizedBox(
             width: double.maxFinite,
             height: MediaQuery.of(context).size.height * 0.5,
             child: isImage
-                ? Image.file(_selectedFile!, fit: BoxFit.contain)
+                ? ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.file(_selectedFile!, fit: BoxFit.contain)
+            )
                 : const Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -62,7 +66,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close', style: TextStyle(color: Colors.black87))
+            ),
           ],
         );
       },
@@ -95,7 +102,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       await _communityService.createCommunityPost(
         authorID: widget.currentUserID,
         content: content,
-        mediaURL: uploadedUrl, // Passes the new URL
+        mediaURL: uploadedUrl,
       );
 
       if (mounted) {
@@ -118,85 +125,133 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Create Post'),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.black87),
+        title: const Text('Create Post', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
         actions: [
-          IconButton(
-            onPressed: _isLoading ? null : _submitPost,
-            icon: _isLoading
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.send, color: Colors.blue),
+          Padding(
+            padding: const EdgeInsets.only(right: 8.0, top: 8.0, bottom: 8.0),
+            child: _isLoading
+                ? const Center(
+                child: Padding(
+                    padding: EdgeInsets.only(right: 16.0),
+                    child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                )
+            )
+                : TextButton(
+              onPressed: _submitPost,
+              style: TextButton.styleFrom(
+                backgroundColor: const Color(0xFF6B8BFE).withValues(alpha: 0.1),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+              ),
+              child: const Text('Post', style: TextStyle(color: Color(0xFF6B8BFE), fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
           )
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _contentController,
-                maxLines: null,
-                keyboardType: TextInputType.multiline,
-                decoration: const InputDecoration(
-                  hintText: 'What do you want to talk about?',
-                  border: InputBorder.none,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              // User Header inside create post
+              Row(
+                children: [
+                  CircleAvatar(radius: 20, backgroundColor: Colors.grey[200], child: const Icon(Icons.person, color: Colors.grey)),
+                  const SizedBox(width: 12),
+                  const Text('Posting to Community', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: Colors.black87)),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              Expanded(
+                child: TextField(
+                  controller: _contentController,
+                  maxLines: null,
+                  autofocus: true,
+                  keyboardType: TextInputType.multiline,
+                  style: const TextStyle(fontSize: 18, color: Colors.black87, height: 1.4),
+                  decoration: InputDecoration(
+                    hintText: 'What do you wanna post?',
+                    hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 18),
+                    border: InputBorder.none,
+                  ),
                 ),
               ),
-            ),
 
-            // --- The Attached File UI ---
-            if (_selectedFile != null)
-              Container(
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(8),
+              // --- The Attached File UI ---
+              if (_selectedFile != null)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    border: Border.all(color: Colors.grey.shade200),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                        child: Icon(
+                          _selectedFile!.path.toLowerCase().endsWith('.pdf') ? Icons.picture_as_pdf : Icons.image,
+                          color: const Color(0xFF6B8BFE),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _selectedFile!.path.split(Platform.pathSeparator).last,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.black87),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.visibility_outlined, color: Colors.black54),
+                        onPressed: () => _previewDocument(context),
+                        tooltip: 'Preview',
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.redAccent),
+                        onPressed: () => setState(() => _selectedFile = null),
+                        tooltip: 'Remove',
+                      ),
+                    ],
+                  ),
                 ),
+
+              const Divider(height: 1),
+
+              // --- Interactive Buttons (Bottom Bar) ---
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
                 child: Row(
                   children: [
-                    Icon(
-                      _selectedFile!.path.toLowerCase().endsWith('.pdf') ? Icons.picture_as_pdf : Icons.image,
-                      color: Colors.blue,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        _selectedFile!.path.split(Platform.pathSeparator).last,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                    InkWell(
+                      onTap: _pickDocument,
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.image_outlined, color: Color(0xFF6B8BFE)),
+                            SizedBox(width: 8),
+                            Text('Attach Media', style: TextStyle(color: Color(0xFF6B8BFE), fontWeight: FontWeight.w600))
+                          ],
+                        ),
                       ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.visibility),
-                      onPressed: () => _previewDocument(context),
-                      tooltip: 'Preview',
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Colors.red),
-                      onPressed: () => setState(() => _selectedFile = null),
-                      tooltip: 'Remove',
                     ),
                   ],
                 ),
-              ),
-
-            const Divider(),
-
-            // --- Interactive Buttons ---
-            Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.image, color: Colors.grey),
-                  onPressed: _pickDocument,
-                  tooltip: 'Attach Image/Document',
-                ),
-              ],
-            )
-          ],
+              )
+            ],
+          ),
         ),
       ),
     );
