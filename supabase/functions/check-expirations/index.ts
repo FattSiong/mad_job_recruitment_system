@@ -2,8 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 // 👉 PASTE YOUR ACTUAL KEYS HERE
-const ONESIGNAL_APP_ID = "595705d0-3319-4ced-90ab-22185bb761dc";
-const ONESIGNAL_REST_API_KEY = "os_v2_app_lflqlubtdfgo3efleimfxn3b3r2pcgb4dmvu53ff2dejac4fschvkyxktqwln34ueqxmweuerp3zo6tgz5tyho62fckklslqf3ecm7q";
+const ONESIGNAL_APP_ID = "16f92d86-ad69-4841-8a4f-b6c0cbb8f9f6";
+const ONESIGNAL_REST_API_KEY = "os_v2_app_c34s3bvnnfeedcspw3amxohz62pdusnidibetufmo2b5zeh25cmys643hvxviodmkoa3i4rljlt67paibzgnuq57gdipg4eztmebpqq";
 
 serve(async (req) => {
   try {
