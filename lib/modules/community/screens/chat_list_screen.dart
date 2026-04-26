@@ -38,13 +38,31 @@ class _ChatListScreenState extends State<ChatListScreen> {
   // 👈 NEW: The Listener Function
   // 👈 UPDATED FUNCTION
   void _listenForCalls() {
-    _incomingCallSubscription = _callService.listenForIncomingCalls(widget.currentUserID).listen((calls) {
+    // 👈 Notice we added "async" here!
+    _incomingCallSubscription = _callService.listenForIncomingCalls(widget.currentUserID).listen((calls) async {
       if (calls.isNotEmpty) {
         final incomingCall = calls.first;
 
-        // Ensure we don't pop up the screen 10 times for the same call!
         if (_currentlyRingingCallID != incomingCall.callID) {
           _currentlyRingingCallID = incomingCall.callID;
+
+          // -----------------------------------------------------
+          // 👈 THE FIX: Quickly fetch the Caller's name from Supabase!
+          // -----------------------------------------------------
+          String realCallerName = "Unknown Caller";
+          try {
+            final callerData = await Supabase.instance.client
+                .from('User') // ⚠️ Change to your actual table name if it's 'Users' or 'profiles'
+                .select('name') // ⚠️ Change to your actual column name if it's 'username' or 'fullName'
+                .eq('userID', incomingCall.callerID)
+                .maybeSingle();
+
+            if (callerData != null && callerData['name'] != null) {
+              realCallerName = callerData['name'];
+            }
+          } catch (e) {
+            debugPrint("Could not fetch caller name: $e");
+          }
 
           if (mounted) {
             Navigator.push(
@@ -53,11 +71,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 builder: (context) => IncomingCallScreen(
                   callID: incomingCall.callID,
                   roomCode: incomingCall.roomCode,
-                  callerName: "Incoming Call...",
+                  // 👈 We pass the REAL name here instead of the hardcoded string!
+                  callerName: realCallerName,
                 ),
               ),
             );
-            // 👈 THE FIX: We completely deleted the .then() block that was resetting the ID to null!
           }
         }
       }

@@ -8,7 +8,11 @@ import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:audioplayers/audioplayers.dart';
 
-// 👈 NEW: Import the standard call files
+// Required for Supabase queries and HTTP requests to OneSignal
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
 import '../../../services/call_service.dart';
 import 'standard_call_screen.dart';
 
@@ -35,7 +39,6 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
   final TextEditingController _messageController = TextEditingController();
 
   bool _isUploading = false;
-
   late final AudioRecorder _audioRecorder;
   bool _isRecording = false;
 
@@ -51,6 +54,44 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
     _messageController.dispose();
     _audioRecorder.dispose();
     super.dispose();
+  }
+
+  // ------------------------------------------------------------------------
+  // The Push Notification Trigger Engine
+  // ------------------------------------------------------------------------
+  Future<void> _sendPushNotification(String content, {bool isCall = false}) async {
+    try {
+      // 1. Fetch the receiver's OneSignal Player ID from Supabase
+      final userData = await Supabase.instance.client
+          .from('User')
+          .select('notification_token')
+          .eq('userID', widget.otherUserID)
+          .maybeSingle();
+
+      if (userData != null && userData['notification_token'] != null) {
+        String token = userData['notification_token'];
+
+        // 2. Ping OneSignal to send the notification
+        await http.post(
+          Uri.parse('https://onesignal.com/api/v1/notifications'),
+          headers: {
+            'Content-Type': 'application/json',
+            // Your exact REST API Key
+            'Authorization': 'Key os_v2_app_lflqlubtdfgo3efleimfxn3b3r2pcgb4dmvu53ff2dejac4fschvkyxktqwln34ueqxmweuerp3zo6tgz5tyho62fckklslqf3ecm7q',
+          },
+          body: jsonEncode({
+            'app_id': '595705d0-3319-4ced-90ab-22185bb761dc', // Your App ID
+            'include_subscription_ids': [token],
+            'headings': {'en': isCall ? 'Incoming Call 📞' : 'New Message from You 💬'},
+            'contents': {'en': content},
+            'data': {'type': isCall ? 'call' : 'chat', 'roomID': widget.roomID}
+          }),
+        );
+        debugPrint("Push notification sent to $token");
+      }
+    } catch (e) {
+      debugPrint('Error sending push notification: $e');
+    }
   }
 
   Future<void> _startRecording() async {
@@ -69,19 +110,14 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
         });
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to start recording: $e')));
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to start: $e')));
     }
   }
 
   Future<void> _stopAndSendRecording() async {
     try {
       final String? path = await _audioRecorder.stop();
-
-      setState(() {
-        _isRecording = false;
-      });
+      setState(() => _isRecording = false);
 
       if (path != null) {
         setState(() => _isUploading = true);
@@ -102,12 +138,13 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
           );
 
           await _communityService.sendMessage(newMessage);
+
+          // Trigger Audio Push Notification
+          _sendPushNotification('🎤 Voice Message');
         }
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to send recording: $e')));
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to send: $e')));
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }
@@ -143,10 +180,13 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
           );
 
           await _communityService.sendMessage(newMessage);
+
+          // Trigger File/Image Push Notification
+          _sendPushNotification(mediaType == 'image' ? '📷 Photo' : '📎 Attachment: $fileName');
         }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error sending file: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }
@@ -155,11 +195,13 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
   void _sendMessage() async {
     if (_messageController.text.trim().isEmpty) return;
 
+    final textContent = _messageController.text.trim();
+
     final newMessage = MessageModel(
       messageID: '',
       roomID: widget.roomID,
       senderID: widget.currentUserID,
-      content: _messageController.text.trim(),
+      content: textContent,
       isRead: false,
       sentAt: DateTime.now(),
       mediaType: 'text',
@@ -167,32 +209,42 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
 
     _messageController.clear();
     await _communityService.sendMessage(newMessage);
+
+    // Trigger Text Push Notification
+    _sendPushNotification(textContent);
   }
 
-  // 👈 NEW: Function to start the standard phone call
   Future<void> _startStandardCall() async {
     try {
-      // 1. Create the call in the database
       final callData = await CallService().initiateCall(
           widget.currentUserID,
           widget.otherUserID
       );
 
-      // 2. Open the new Calling UI
+      // Trigger Call Push Notification
+      _sendPushNotification('📞 Incoming Voice Call...', isCall: true);
+
       if (context.mounted) {
-        Navigator.push(
+        final result = await Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => StandardCallScreen(
               callID: callData.callID,
               roomCode: callData.roomCode,
               otherUserName: widget.otherUserName,
+              chatRoomID: widget.roomID,
+              currentUserID: widget.currentUserID,
+              isCaller: true,
             ),
           ),
         );
+
+        if (result == 'recall') {
+          _startStandardCall();
+        }
       }
     } catch (e) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error starting call: $e')));
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
@@ -208,7 +260,6 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
           ],
         ),
         actions: [
-          // 👈 JUST THE PHONE ICON NOW
           IconButton(
             icon: const Icon(Icons.call, color: Colors.green),
             tooltip: 'Call',
@@ -240,12 +291,11 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
                   return const Center(child: Text("Say hi!", style: TextStyle(color: Colors.grey)));
                 }
 
-                // Reverse the list so the newest messages are at index 0 (the bottom).
                 final messages = snapshot.data!.reversed.toList();
 
                 return ListView.builder(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  reverse: true, // Keeps the scroll anchored to the bottom
+                  reverse: true,
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
                     final msg = messages[index];
@@ -260,7 +310,6 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
               },
             ),
           ),
-
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
@@ -272,7 +321,6 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
                         : const Icon(Icons.attach_file, color: Colors.grey),
                     onPressed: _isUploading ? null : _pickAndSendFile,
                   ),
-
                   Expanded(
                     child: _isRecording
                         ? Container(
@@ -308,7 +356,6 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
                       ),
                     ),
                   ),
-
                   GestureDetector(
                     onLongPressStart: (_) => _startRecording(),
                     onLongPressEnd: (_) => _stopAndSendRecording(),
@@ -327,7 +374,6 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
                       ),
                     ),
                   ),
-
                   IconButton(
                     icon: const Icon(Icons.send, color: Colors.blueAccent),
                     onPressed: _sendMessage,
@@ -343,7 +389,7 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
 }
 
 // ------------------------------------------------------------------------
-// 👈 NEW: Global Tracker to prevent multiple audios from playing at once!
+// Global Tracker to prevent multiple audios from playing at once
 // ------------------------------------------------------------------------
 final ValueNotifier<String?> currentlyPlayingVoiceMessageId = ValueNotifier<String?>(null);
 
@@ -375,7 +421,6 @@ class _MessageBubbleState extends State<MessageBubble> {
   void initState() {
     super.initState();
 
-    // 👈 NEW: Listen to the global dispatcher
     currentlyPlayingVoiceMessageId.addListener(_stopIfAnotherPlays);
 
     if (!widget.message.isDeleted && widget.message.mediaType == 'audio' && widget.message.mediaURL != null) {
@@ -401,7 +446,6 @@ class _MessageBubbleState extends State<MessageBubble> {
       _audioPlayer.onPlayerComplete.listen((event) async {
         if (mounted) setState(() { _isPlaying = false; _position = Duration.zero; });
 
-        // Clear the global tracker when finished
         if (currentlyPlayingVoiceMessageId.value == widget.message.messageID) {
           currentlyPlayingVoiceMessageId.value = null;
         }
@@ -412,7 +456,6 @@ class _MessageBubbleState extends State<MessageBubble> {
     }
   }
 
-  // 👈 NEW: The function that pauses this player if another one starts
   void _stopIfAnotherPlays() async {
     if (currentlyPlayingVoiceMessageId.value != widget.message.messageID && _isPlaying) {
       await _audioPlayer.pause();
@@ -421,7 +464,6 @@ class _MessageBubbleState extends State<MessageBubble> {
 
   @override
   void dispose() {
-    // 👈 NEW: Remove the listener so it doesn't leak memory when you leave the screen
     currentlyPlayingVoiceMessageId.removeListener(_stopIfAnotherPlays);
     _audioPlayer.dispose();
     super.dispose();
@@ -575,7 +617,6 @@ class _MessageBubbleState extends State<MessageBubble> {
                                 if (_isPlaying) {
                                   await _audioPlayer.pause();
                                 } else {
-                                  // 👈 NEW: Broadcast to all other bubbles that THIS one is playing!
                                   currentlyPlayingVoiceMessageId.value = widget.message.messageID;
 
                                   if (_position == Duration.zero) {
@@ -772,7 +813,7 @@ class SharedAttachmentsSheet extends StatelessWidget {
 }
 
 // ------------------------------------------------------------------------
-// NEW: Full Screen Image Viewer
+// Full Screen Image Viewer
 // ------------------------------------------------------------------------
 class FullScreenImageViewer extends StatelessWidget {
   final String imageUrl;
@@ -794,7 +835,6 @@ class FullScreenImageViewer extends StatelessWidget {
         elevation: 0,
       ),
       body: Center(
-        // InteractiveViewer adds pinch-to-zoom instantly!
         child: InteractiveViewer(
           minScale: 0.5,
           maxScale: 4.0,
