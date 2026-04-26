@@ -30,6 +30,10 @@ class _InterviewSchedulingScreenState extends State<InterviewSchedulingScreen> {
 
   bool _isSaving = false;
 
+  String? _formError;
+  String? _scheduleError;
+  String? _meetingDetailsError;
+
   Future<void> _pickDate() async {
     final date = await showDatePicker(
       context: context,
@@ -38,7 +42,11 @@ class _InterviewSchedulingScreenState extends State<InterviewSchedulingScreen> {
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
     if (date != null) {
-      setState(() => _selectedDate = date);
+      setState(() {
+        _selectedDate = date;
+        _scheduleError = null;
+        _formError = null;
+      });
     }
   }
 
@@ -54,34 +62,40 @@ class _InterviewSchedulingScreenState extends State<InterviewSchedulingScreen> {
         } else {
           _endTime = time;
         }
+        _scheduleError = null;
+        _formError = null;
       });
     }
   }
 
   Future<void> _saveSchedule() async {
-    if (_selectedDate == null || _startTime == null || _endTime == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Please select a date and time.',
-            style: TextStyle(color: Colors.white),
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
+    setState(() {
+      _formError = null;
+      _scheduleError = null;
+      _meetingDetailsError = null;
+    });
 
-    if (_meetingMethod != 'internal' && _linkController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Please provide a meeting link or location.',
-            style: TextStyle(color: Colors.white),
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
+    final hasMissingSchedule =
+        _selectedDate == null || _startTime == null || _endTime == null;
+    final hasMissingMeetingDetails =
+        _meetingMethod != 'internal' && _linkController.text.trim().isEmpty;
+
+    if (hasMissingSchedule || hasMissingMeetingDetails) {
+      setState(() {
+        if (hasMissingSchedule) {
+          _scheduleError =
+          'Please select an interview date, start time, and end time.';
+        }
+
+        if (hasMissingMeetingDetails) {
+          _meetingDetailsError = _meetingMethod == 'online'
+              ? 'Please provide the meeting link.'
+              : 'Please provide the office location or address.';
+        }
+
+        _formError =
+        'Please complete all required fields before confirming the schedule.';
+      });
       return;
     }
 
@@ -100,25 +114,23 @@ class _InterviewSchedulingScreenState extends State<InterviewSchedulingScreen> {
 
     setState(() => _isSaving = false);
 
-    if (mounted) {
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Interview scheduled successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pop(context, true);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to schedule interview.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+    if (!mounted) return;
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Interview scheduled successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.pop(context, true);
+    } else {
+      setState(() {
+        _formError = 'Failed to schedule interview. Please try again.';
+      });
     }
   }
+
 
   @override
   void dispose() {
@@ -211,6 +223,17 @@ class _InterviewSchedulingScreenState extends State<InterviewSchedulingScreen> {
                       ],
                     ),
                   ),
+                  if (_scheduleError != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _scheduleError!,
+                      style: const TextStyle(
+                        color: Color(0xFFC24E4E),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -248,7 +271,14 @@ class _InterviewSchedulingScreenState extends State<InterviewSchedulingScreen> {
                     ],
                     onChanged: (val) {
                       if (val == null) return;
-                      setState(() => _meetingMethod = val);
+                      setState(() {
+                        _meetingMethod = val;
+                        _formError = null;
+                        if (val == 'internal' ||
+                            _linkController.text.trim().isNotEmpty) {
+                          _meetingDetailsError = null;
+                        }
+                      });
                     },
                   ),
                   const SizedBox(height: 16),
@@ -257,6 +287,15 @@ class _InterviewSchedulingScreenState extends State<InterviewSchedulingScreen> {
                   else
                     TextField(
                       controller: _linkController,
+                      onChanged: (_) {
+                        if (_meetingDetailsError == null && _formError == null) {
+                          return;
+                        }
+                        setState(() {
+                          _meetingDetailsError = null;
+                          _formError = null;
+                        });
+                      },
                       decoration: _buildInputDecoration(
                         label: _meetingMethod == 'online'
                             ? 'Meeting Link (URL)'
@@ -264,6 +303,7 @@ class _InterviewSchedulingScreenState extends State<InterviewSchedulingScreen> {
                         icon: _meetingMethod == 'online'
                             ? Icons.link_rounded
                             : Icons.location_on_rounded,
+                        errorText: _meetingDetailsError,
                       ),
                     ),
                 ],
@@ -297,6 +337,25 @@ class _InterviewSchedulingScreenState extends State<InterviewSchedulingScreen> {
               ),
             ),
             const SizedBox(height: 24),
+            if (_formError != null) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFCE9E9),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  _formError!,
+                  style: const TextStyle(
+                    color: Color(0xFFC24E4E),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             _isSaving
                 ? Container(
               width: double.infinity,
@@ -666,9 +725,11 @@ class _InterviewSchedulingScreenState extends State<InterviewSchedulingScreen> {
   InputDecoration _buildInputDecoration({
     required String label,
     required IconData icon,
+    String? errorText,
   }) {
     return InputDecoration(
       labelText: label,
+      errorText: errorText,
       filled: true,
       fillColor: const Color(0xFFF7F9FC),
       prefixIcon: Icon(icon, color: const Color(0xFF163B65)),
@@ -684,6 +745,17 @@ class _InterviewSchedulingScreenState extends State<InterviewSchedulingScreen> {
         borderRadius: BorderRadius.circular(18),
         borderSide: const BorderSide(
           color: Color(0xFF163B65),
+          width: 1.4,
+        ),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: Color(0xFFC24E4E)),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(
+          color: Color(0xFFC24E4E),
           width: 1.4,
         ),
       ),
