@@ -241,6 +241,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
                         final otherUserName =
                             otherUserMap['username'] ?? 'Unknown User';
                         final otherUserRole = otherUserMap['role'] ?? 'Member';
+                        final otherUserProfilePictureUrl =
+                            otherUserMap['profilePictureURL']?.toString();
 
                         final messageList =
                             room['Message'] as List<dynamic>? ?? [];
@@ -265,6 +267,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                           otherUserID: otherUserID,
                           otherUserName: otherUserName.toString(),
                           otherUserRole: otherUserRole.toString(),
+                          profilePictureUrl: otherUserProfilePictureUrl,
                           latestMessage: latestMessage.toString(),
                           sentAt: sentAt?.toString(),
                           isUnread: isUnread,
@@ -392,6 +395,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
     required String otherUserID,
     required String otherUserName,
     required String otherUserRole,
+    required String? profilePictureUrl,
     required String latestMessage,
     required String? sentAt,
     required bool isUnread,
@@ -399,6 +403,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
     final avatarLetter = otherUserName.trim().isEmpty
         ? 'U'
         : otherUserName.trim().substring(0, 1).toUpperCase();
+    final hasProfilePicture =
+        profilePictureUrl != null && profilePictureUrl.trim().isNotEmpty;
 
     return Material(
       color: Colors.white,
@@ -429,16 +435,24 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 decoration: BoxDecoration(
                   color: const Color(0xFFDCEBFB),
                   borderRadius: BorderRadius.circular(18),
+                  image: hasProfilePicture
+                      ? DecorationImage(
+                          image: NetworkImage(profilePictureUrl!),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
                 ),
                 child: Center(
-                  child: Text(
-                    avatarLetter,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF163B65),
-                    ),
-                  ),
+                  child: !hasProfilePicture
+                      ? Text(
+                          avatarLetter,
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF163B65),
+                          ),
+                        )
+                      : null,
                 ),
               ),
               const SizedBox(width: 14),

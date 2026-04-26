@@ -24,7 +24,62 @@ class CommunityService {
         .order('sentAt', referencedTable: 'Message', ascending: false)
         .limit(1, referencedTable: 'Message');
 
-    return List<Map<String, dynamic>>.from(response);
+    final rooms = List<Map<String, dynamic>>.from(response);
+    if (rooms.isEmpty) return rooms;
+
+    final userIds = <String>{};
+    for (final room in rooms) {
+      final user1Id = room['user1_ID']?.toString();
+      final user2Id = room['user2_ID']?.toString();
+
+      if (user1Id != null && user1Id.isNotEmpty) {
+        userIds.add(user1Id);
+      }
+
+      if (user2Id != null && user2Id.isNotEmpty) {
+        userIds.add(user2Id);
+      }
+    }
+
+    if (userIds.isEmpty) return rooms;
+
+    try {
+      final employerProfiles = await _supabase
+          .from('Employer')
+          .select('employerID, profilePictureURL')
+          .filter('employerID', 'in', userIds.toList());
+
+      final profileMap = <String, String?>{};
+      for (final item in employerProfiles) {
+        final employerId = item['employerID']?.toString();
+        if (employerId == null || employerId.isEmpty) continue;
+
+        profileMap[employerId] = item['profilePictureURL']?.toString();
+      }
+
+      for (final room in rooms) {
+        final user1Id = room['user1_ID']?.toString();
+        final user2Id = room['user2_ID']?.toString();
+
+        final user1 = Map<String, dynamic>.from(room['user1'] ?? {});
+        final user2 = Map<String, dynamic>.from(room['user2'] ?? {});
+
+        if (user1Id != null && profileMap.containsKey(user1Id)) {
+          user1['profilePictureURL'] = profileMap[user1Id];
+        }
+
+        if (user2Id != null && profileMap.containsKey(user2Id)) {
+          user2['profilePictureURL'] = profileMap[user2Id];
+        }
+
+        room['user1'] = user1;
+        room['user2'] = user2;
+      }
+    } catch (e) {
+      print('Error merging employer profile pictures into chat rooms: $e');
+    }
+
+    return rooms;
   }
 
   // 2. Real-Time Message Stream for the Active Chat Screen
