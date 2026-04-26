@@ -57,6 +57,10 @@ class NotificationService {
     final session = Supabase.instance.client.auth.currentSession;
     final token = OneSignal.User.pushSubscription.id;
 
+    debugPrint('--- Token sync debug ---');
+    debugPrint('Current session user: ${session?.user.id}');
+    debugPrint('Current OneSignal subscription ID: $token');
+
     if (session == null || token == null || token.isEmpty) return;
 
     try {
@@ -65,6 +69,8 @@ class NotificationService {
     } catch (e) {
       debugPrint('Failed to sync OneSignal token: $e');
     }
+
+    debugPrint('--- Token sync debug end ---');
   }
 
   static Future<void> _openIncomingCallFromNotification(Map<String, dynamic> data) async {

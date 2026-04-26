@@ -65,6 +65,10 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
     Map<String, dynamic>? additionalData,
   }) async {
     try {
+      debugPrint('--- Push debug start ---');
+      debugPrint('Push type: ${isCall ? 'call' : 'message'}');
+      debugPrint('Receiver userID: ${widget.otherUserID}');
+
       // 1. Fetch the receiver's OneSignal Player ID from Supabase
       final userData = await Supabase.instance.client
           .from('User')
@@ -72,36 +76,49 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
           .eq('userID', widget.otherUserID)
           .maybeSingle();
 
+      debugPrint('Supabase userData: $userData');
+
       if (userData != null && userData['notification_token'] != null) {
-        String token = userData['notification_token'];
+        final String token = userData['notification_token'].toString();
+        debugPrint('OneSignal token found: $token');
+
+        final requestBody = {
+          'app_id': '595705d0-3319-4ced-90ab-22185bb761dc',
+          'target_channel': 'push',
+          'include_subscription_ids': [token],
+          'headings': {'en': isCall ? 'Incoming Call 📞' : 'New Message from You 💬'},
+          'contents': {'en': content},
+          'data': {
+            'type': isCall ? 'call' : 'chat',
+            'roomID': widget.roomID,
+            ...?additionalData,
+          },
+          'priority': 10,
+          'android_priority': 'high',
+          if (isCall) 'android_channel_id': 'incoming_calls',
+          'ttl': isCall ? 60 : 2419200,
+          if (isCall && additionalData?['callID'] != null) 'collapse_id': 'call_${additionalData?['callID']}',
+        };
+
+        debugPrint('OneSignal request body: ${jsonEncode(requestBody)}');
 
         // 2. Ping OneSignal to send the notification
-        await http.post(
+        final response = await http.post(
           Uri.parse('https://api.onesignal.com/notifications'),
           headers: {
             'Content-Type': 'application/json',
             // Your exact REST API Key
             'Authorization': 'Key os_v2_app_lflqlubtdfgo3efleimfxn3b3r2pcgb4dmvu53ff2dejac4fschvkyxktqwln34ueqxmweuerp3zo6tgz5tyho62fckklslqf3ecm7q',
           },
-          body: jsonEncode({
-            'app_id': '595705d0-3319-4ced-90ab-22185bb761dc', // Your App ID
-            'target_channel': 'push',
-            'include_subscription_ids': [token],
-            'headings': {'en': isCall ? 'Incoming Call 📞' : 'New Message from You 💬'},
-            'contents': {'en': content},
-            'data': {
-              'type': isCall ? 'call' : 'chat',
-              'roomID': widget.roomID,
-              ...?additionalData,
-            },
-            'priority': 10,
-            'android_priority': 'high',
-            if (isCall) 'android_channel_id': 'incoming_calls',
-            'ttl': isCall ? 60 : 2419200,
-            if (isCall && additionalData?['callID'] != null) 'collapse_id': 'call_${additionalData?['callID']}',
-          }),
+          body: jsonEncode(requestBody),
         );
-        debugPrint("Push notification sent to $token");
+
+        debugPrint('OneSignal response status: ${response.statusCode}');
+        debugPrint('OneSignal response body: ${response.body}');
+        debugPrint('--- Push debug end ---');
+      }
+      else {
+        debugPrint('No notification_token found for receiver ${widget.otherUserID}');
       }
     } catch (e) {
       debugPrint('Error sending push notification: $e');
