@@ -51,6 +51,7 @@ class NotificationService {
   static void _registerPushSubscriptionObserver() {
     OneSignal.User.pushSubscription.addObserver((state) {
       final token = state.current.id;
+      debugPrint('OneSignal subscription update: id=${state.current.id}, optedIn=${state.current.optedIn}, token=$token');
       if (token != null && token.isNotEmpty) {
         syncPushTokenToCurrentUser();
       } else {
@@ -104,10 +105,12 @@ class NotificationService {
   static Future<void> syncPushTokenToCurrentUser() async {
     final session = Supabase.instance.client.auth.currentSession;
     final token = OneSignal.User.pushSubscription.id;
+    final optedIn = OneSignal.User.pushSubscription.optedIn;
 
     debugPrint('--- Token sync debug ---');
     debugPrint('Current session user: ${session?.user.id}');
     debugPrint('Current OneSignal subscription ID: $token');
+    debugPrint('Current OneSignal optedIn: $optedIn');
 
     if (session == null) return;
 
