@@ -63,7 +63,7 @@ class _InterviewCallScreenState extends State<InterviewCallScreen> {
     // 2. Initialize the Agora Engine
     _engine = createAgoraRtcEngine();
     await _engine.initialize(const RtcEngineContext(
-      appId: "5258f95e9daa4744b8538323423c8077", // 👈 REMEMBER TO PUT YOUR APP ID HERE
+      appId: "16f92d86-ad69-4841-8a4f-b6c0cbb8f9f6", // 👈 REMEMBER TO PUT YOUR APP ID HERE
       channelProfile: ChannelProfileType.channelProfileCommunication,
     ));
 

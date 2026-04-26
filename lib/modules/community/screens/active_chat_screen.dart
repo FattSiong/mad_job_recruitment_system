@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../../services/community_service.dart';
-import '../../../services/interview_service.dart'; // 👈 NEW: Import the Interview Service
 import '../../../models/message_model.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
@@ -8,7 +7,14 @@ import 'dart:io';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'interview_lobby_screen.dart'; // 👈 NEW: Import the Lobby
+
+// Required for Supabase queries and HTTP requests to OneSignal
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
+import '../../../services/call_service.dart';
+import 'standard_call_screen.dart';
 
 class ActiveChatScreen extends StatefulWidget {
   final String roomID;
@@ -33,7 +39,6 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
   final TextEditingController _messageController = TextEditingController();
 
   bool _isUploading = false;
-
   late final AudioRecorder _audioRecorder;
   bool _isRecording = false;
 
@@ -49,6 +54,69 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
     _messageController.dispose();
     _audioRecorder.dispose();
     super.dispose();
+  }
+
+  // ------------------------------------------------------------------------
+  // The Push Notification Trigger Engine
+  // ------------------------------------------------------------------------
+  Future<void> _sendPushNotification(
+    String content, {
+    bool isCall = false,
+    Map<String, dynamic>? additionalData,
+  }) async {
+    try {
+      debugPrint('--- Push debug start ---');
+      debugPrint('Push type: ${isCall ? 'call' : 'message'}');
+      debugPrint('Receiver userID: ${widget.otherUserID}');
+
+      const String oneSignalAppId = '16f92d86-ad69-4841-8a4f-b6c0cbb8f9f6';
+      const String oneSignalRestApiKey = 'os_v2_app_c34s3bvnnfeedcspw3amxohz62pdusnidibetufmo2b5zeh25cmys643hvxviodmkoa3i4rljlt67paibzgnuq57gdipg4eztmebpqq';
+
+      final requestBody = {
+        'app_id': oneSignalAppId,
+        'target_channel': 'push',
+        'include_aliases': {
+          'external_id': [widget.otherUserID],
+        },
+        'headings': {'en': isCall ? 'Incoming Call' : 'New Message'},
+        'contents': {'en': content},
+        'data': {
+          'type': isCall ? 'call' : 'chat',
+          'roomID': widget.roomID,
+          ...?additionalData,
+        },
+        'android_channel_id': isCall
+            ? '3e4bd85b-81e9-4907-b42b-34dea3a5de8f'
+            : 'a0d1ce94-07ac-4bbf-95ab-dc7482dce5ee',
+        'ttl': isCall ? 60 : 2419200,
+        if (isCall && additionalData?['callID'] != null) 'collapse_id': 'call_${additionalData?['callID']}',
+        'priority': 10,
+        'ios_sound': 'default',
+        'android_sound': 'default',
+        'android_visibility': 1,
+      };
+
+      debugPrint('OneSignal request body: \n' + jsonEncode(requestBody));
+
+      final response = await http.post(
+        Uri.parse('https://api.onesignal.com/notifications'),
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Authorization': 'Key $oneSignalRestApiKey',
+        },
+        body: jsonEncode(requestBody),
+      );
+
+      if (response.statusCode != 200) {
+        debugPrint('OneSignal push failed. Check the channel exists in OneSignal Dashboard and is set to High/Urgent.');
+      }
+
+      debugPrint('OneSignal response status: \n${response.statusCode}');
+      debugPrint('OneSignal response body: \n${response.body}');
+      debugPrint('--- Push debug end ---');
+    } catch (e) {
+      debugPrint('Error sending push notification: $e');
+    }
   }
 
   Future<void> _startRecording() async {
@@ -67,19 +135,14 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
         });
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to start recording: $e')));
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to start: $e')));
     }
   }
 
   Future<void> _stopAndSendRecording() async {
     try {
       final String? path = await _audioRecorder.stop();
-
-      setState(() {
-        _isRecording = false;
-      });
+      setState(() => _isRecording = false);
 
       if (path != null) {
         setState(() => _isUploading = true);
@@ -100,12 +163,13 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
           );
 
           await _communityService.sendMessage(newMessage);
+
+          // Trigger Audio Push Notification
+          _sendPushNotification('🎤 Voice Message');
         }
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to send recording: $e')));
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to send: $e')));
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }
@@ -141,10 +205,13 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
           );
 
           await _communityService.sendMessage(newMessage);
+
+          // Trigger File/Image Push Notification
+          _sendPushNotification(mediaType == 'image' ? '📷 Photo' : '📎 Attachment: $fileName');
         }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error sending file: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }
@@ -153,11 +220,13 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
   void _sendMessage() async {
     if (_messageController.text.trim().isEmpty) return;
 
+    final textContent = _messageController.text.trim();
+
     final newMessage = MessageModel(
       messageID: '',
       roomID: widget.roomID,
       senderID: widget.currentUserID,
-      content: _messageController.text.trim(),
+      content: textContent,
       isRead: false,
       sentAt: DateTime.now(),
       mediaType: 'text',
@@ -165,6 +234,66 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
 
     _messageController.clear();
     await _communityService.sendMessage(newMessage);
+
+    // Trigger Text Push Notification
+    _sendPushNotification(textContent);
+  }
+
+  Future<void> _startStandardCall() async {
+    try {
+      final callData = await CallService().initiateCall(
+          widget.currentUserID,
+          widget.otherUserID
+      );
+
+      String callerName = 'Incoming Caller';
+      try {
+        final me = await Supabase.instance.client
+            .from('User')
+            .select('username')
+            .eq('userID', widget.currentUserID)
+            .maybeSingle();
+        if (me != null && me['username'] != null) {
+          callerName = me['username'].toString();
+        }
+      } catch (_) {
+        // Fallback name is fine for notifications.
+      }
+
+      // Trigger Call Push Notification
+      _sendPushNotification(
+        '📞 Incoming Voice Call...',
+        isCall: true,
+        additionalData: {
+          'callID': callData.callID,
+          'roomCode': callData.roomCode,
+          'callerID': widget.currentUserID,
+          'callerName': callerName,
+        },
+      );
+
+      if (context.mounted) {
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => StandardCallScreen(
+              callID: callData.callID,
+              roomCode: callData.roomCode,
+              otherUserName: widget.otherUserName,
+              chatRoomID: widget.roomID,
+              currentUserID: widget.currentUserID,
+              isCaller: true,
+            ),
+          ),
+        );
+
+        if (result == 'recall') {
+          _startStandardCall();
+        }
+      }
+    } catch (e) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
   }
 
   @override
@@ -179,46 +308,11 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
           ],
         ),
         actions: [
-          // -----------------------------------------
-          // 👈 REFACTORED VIDEO BUTTON LOGIC
-          // -----------------------------------------
           IconButton(
-            icon: const Icon(Icons.videocam, color: Colors.blueAccent),
-            tooltip: 'Video Interview',
-            onPressed: () async {
-              try {
-                // TODO: Replace this hardcoded 'true' with your actual user role check!
-                // For example: bool isCurrentUserEmployer = currentUser.role == 'Employer';
-                bool isCurrentUserEmployer = true;
-
-                // Assign the IDs properly so the database knows who is who
-                final employerID = isCurrentUserEmployer ? widget.currentUserID : widget.otherUserID;
-                final seekerID = isCurrentUserEmployer ? widget.otherUserID : widget.currentUserID;
-
-                // Create or fetch the room from Supabase
-                // final interviewData = await InterviewService().getRoomByScheduleId(employerID, seekerID);
-
-                // Navigate to the Lobby
-                // if (context.mounted) {
-                //   Navigator.push(
-                //     context,
-                //     MaterialPageRoute(
-                //       builder: (context) => InterviewLobbyScreen(
-                //         interviewID: interviewData['interviewID'],
-                //         roomCode: interviewData['roomCode'],
-                //         isEmployer: isCurrentUserEmployer,
-                //       ),
-                //     ),
-                //   );
-                // }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-                }
-              }
-            },
+            icon: const Icon(Icons.call, color: Colors.green),
+            tooltip: 'Call',
+            onPressed: _startStandardCall,
           ),
-          IconButton(icon: const Icon(Icons.call), onPressed: () {}),
           IconButton(
             icon: const Icon(Icons.more_vert),
             onPressed: () {
@@ -245,12 +339,11 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
                   return const Center(child: Text("Say hi!", style: TextStyle(color: Colors.grey)));
                 }
 
-                // Reverse the list so the newest messages are at index 0 (the bottom).
                 final messages = snapshot.data!.reversed.toList();
 
                 return ListView.builder(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  reverse: true, // Keeps the scroll anchored to the bottom
+                  reverse: true,
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
                     final msg = messages[index];
@@ -265,7 +358,6 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
               },
             ),
           ),
-
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
@@ -277,7 +369,6 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
                         : const Icon(Icons.attach_file, color: Colors.grey),
                     onPressed: _isUploading ? null : _pickAndSendFile,
                   ),
-
                   Expanded(
                     child: _isRecording
                         ? Container(
@@ -313,7 +404,6 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
                       ),
                     ),
                   ),
-
                   GestureDetector(
                     onLongPressStart: (_) => _startRecording(),
                     onLongPressEnd: (_) => _stopAndSendRecording(),
@@ -332,7 +422,6 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
                       ),
                     ),
                   ),
-
                   IconButton(
                     icon: const Icon(Icons.send, color: Colors.blueAccent),
                     onPressed: _sendMessage,
@@ -346,6 +435,11 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
     );
   }
 }
+
+// ------------------------------------------------------------------------
+// Global Tracker to prevent multiple audios from playing at once
+// ------------------------------------------------------------------------
+final ValueNotifier<String?> currentlyPlayingVoiceMessageId = ValueNotifier<String?>(null);
 
 // ------------------------------------------------------------------------
 // The Smart Message Bubble Widget (Now with Soft Delete!)
@@ -366,7 +460,7 @@ class MessageBubble extends StatefulWidget {
 
 class _MessageBubbleState extends State<MessageBubble> {
   final AudioPlayer _audioPlayer = AudioPlayer();
-  final CommunityService _communityService = CommunityService(); // Add service for deletion
+  final CommunityService _communityService = CommunityService();
   bool _isPlaying = false;
   Duration _duration = Duration.zero;
   Duration _position = Duration.zero;
@@ -375,11 +469,16 @@ class _MessageBubbleState extends State<MessageBubble> {
   void initState() {
     super.initState();
 
-    // Only setup audio if the message is NOT deleted
+    currentlyPlayingVoiceMessageId.addListener(_stopIfAnotherPlays);
+
     if (!widget.message.isDeleted && widget.message.mediaType == 'audio' && widget.message.mediaURL != null) {
       _audioPlayer.setAudioContext(AudioContext(
         iOS: AudioContextIOS(category: AVAudioSessionCategory.playback, options: [AVAudioSessionOptions.defaultToSpeaker]),
-        android: AudioContextAndroid(isSpeakerphoneOn: true, usageType: AndroidUsageType.media, audioFocus: AndroidAudioFocus.gain),
+        android: AudioContextAndroid(
+          isSpeakerphoneOn: true,
+          usageType: AndroidUsageType.media,
+          audioFocus: AndroidAudioFocus.none,
+        ),
       ));
 
       _audioPlayer.onPlayerStateChanged.listen((state) {
@@ -391,16 +490,29 @@ class _MessageBubbleState extends State<MessageBubble> {
       _audioPlayer.onPositionChanged.listen((newPosition) {
         if (mounted) setState(() => _position = newPosition);
       });
-      _audioPlayer.onPlayerComplete.listen((event) {
+
+      _audioPlayer.onPlayerComplete.listen((event) async {
         if (mounted) setState(() { _isPlaying = false; _position = Duration.zero; });
+
+        if (currentlyPlayingVoiceMessageId.value == widget.message.messageID) {
+          currentlyPlayingVoiceMessageId.value = null;
+        }
+        await _audioPlayer.stop();
       });
 
       _audioPlayer.setSource(UrlSource(widget.message.mediaURL!));
     }
   }
 
+  void _stopIfAnotherPlays() async {
+    if (currentlyPlayingVoiceMessageId.value != widget.message.messageID && _isPlaying) {
+      await _audioPlayer.pause();
+    }
+  }
+
   @override
   void dispose() {
+    currentlyPlayingVoiceMessageId.removeListener(_stopIfAnotherPlays);
     _audioPlayer.dispose();
     super.dispose();
   }
@@ -412,7 +524,6 @@ class _MessageBubbleState extends State<MessageBubble> {
     return "$twoDigitMinutes:$twoDigitSeconds";
   }
 
-  // --- NEW: The Delete Dialog ---
   void _showDeleteDialog() {
     showDialog(
       context: context,
@@ -426,7 +537,7 @@ class _MessageBubbleState extends State<MessageBubble> {
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context); // Close dialog immediately
+              Navigator.pop(context);
               try {
                 await _communityService.softDeleteMessage(widget.message.messageID);
               } catch (e) {
@@ -460,11 +571,8 @@ class _MessageBubbleState extends State<MessageBubble> {
       child: Column(
         crossAxisAlignment: widget.isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
-
-          // --- NEW: GestureDetector for Long Press ---
           GestureDetector(
             onLongPress: () {
-              // Only allow deletion if it's MY message, and it isn't ALREADY deleted
               if (widget.isMe && !widget.message.isDeleted) {
                 _showDeleteDialog();
               }
@@ -473,7 +581,7 @@ class _MessageBubbleState extends State<MessageBubble> {
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
               decoration: BoxDecoration(
                 color: widget.message.isDeleted
-                    ? Colors.grey[200] // Grey out deleted messages
+                    ? Colors.grey[200]
                     : (widget.isMe ? const Color(0xFF1865F2) : Colors.grey[100]),
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(16),
@@ -486,8 +594,6 @@ class _MessageBubbleState extends State<MessageBubble> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-
-                  // --- NEW: THE DELETED TOMBSTONE ---
                   if (widget.message.isDeleted) ...[
                     Row(
                       mainAxisSize: MainAxisSize.min,
@@ -496,42 +602,32 @@ class _MessageBubbleState extends State<MessageBubble> {
                         const SizedBox(width: 6),
                         Text(
                           "This message was deleted",
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontStyle: FontStyle.italic,
-                            fontSize: 14,
-                          ),
+                          style: TextStyle(color: Colors.grey[600], fontStyle: FontStyle.italic, fontSize: 14),
                         ),
                       ],
                     ),
                   ]
-
-                  // --- EXISTING LOGIC FOR NORMAL MESSAGES ---
                   else ...[
-                    // 1. IMAGE (Now Clickable with Hero Animation!)
                     if (widget.message.mediaType == 'image' && widget.message.mediaURL != null) ...[
                       GestureDetector(
                         onTap: () {
-                          // Navigate to the full screen viewer
                           Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (context) => FullScreenImageViewer(
                                 imageUrl: widget.message.mediaURL!,
-                                heroTag: widget.message.mediaURL!, // Use URL as unique tag
+                                heroTag: widget.message.mediaURL!,
                               ),
                             ),
                           );
                         },
                         child: Hero(
-                          tag: widget.message.mediaURL!, // Matches the tag in the new screen
+                          tag: widget.message.mediaURL!,
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(8),
                             child: Image.network(
                               widget.message.mediaURL!,
-                              width: 200,
-                              height: 200,
-                              fit: BoxFit.cover,
+                              width: 200, height: 200, fit: BoxFit.cover,
                               errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image),
                             ),
                           ),
@@ -552,11 +648,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                           Flexible(
                             child: Text(
                               widget.message.content,
-                              style: TextStyle(
-                                color: widget.isMe ? Colors.white : Colors.blueAccent,
-                                fontWeight: FontWeight.bold,
-                                decoration: TextDecoration.underline,
-                              ),
+                              style: TextStyle(color: widget.isMe ? Colors.white : Colors.blueAccent, fontWeight: FontWeight.bold, decoration: TextDecoration.underline),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -573,7 +665,13 @@ class _MessageBubbleState extends State<MessageBubble> {
                                 if (_isPlaying) {
                                   await _audioPlayer.pause();
                                 } else {
-                                  await _audioPlayer.resume();
+                                  currentlyPlayingVoiceMessageId.value = widget.message.messageID;
+
+                                  if (_position == Duration.zero) {
+                                    await _audioPlayer.play(UrlSource(widget.message.mediaURL!));
+                                  } else {
+                                    await _audioPlayer.resume();
+                                  }
                                 }
                               },
                               child: Icon(
@@ -617,10 +715,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                       else ...[
                           Text(
                             widget.message.content,
-                            style: TextStyle(
-                              color: widget.isMe ? Colors.white : Colors.black87,
-                              fontSize: 15,
-                            ),
+                            style: TextStyle(color: widget.isMe ? Colors.white : Colors.black87, fontSize: 15),
                           ),
                         ],
                   ],
@@ -637,7 +732,6 @@ class _MessageBubbleState extends State<MessageBubble> {
                 timeString,
                 style: TextStyle(fontSize: 11, color: Colors.grey[500]),
               ),
-              // Hide the blue ticks if the message is deleted
               if (widget.isMe && !widget.message.isDeleted) ...[
                 const SizedBox(width: 4),
                 Icon(
@@ -767,7 +861,7 @@ class SharedAttachmentsSheet extends StatelessWidget {
 }
 
 // ------------------------------------------------------------------------
-// NEW: Full Screen Image Viewer
+// Full Screen Image Viewer
 // ------------------------------------------------------------------------
 class FullScreenImageViewer extends StatelessWidget {
   final String imageUrl;
@@ -789,7 +883,6 @@ class FullScreenImageViewer extends StatelessWidget {
         elevation: 0,
       ),
       body: Center(
-        // InteractiveViewer adds pinch-to-zoom instantly!
         child: InteractiveViewer(
           minScale: 0.5,
           maxScale: 4.0,
@@ -808,3 +901,4 @@ class FullScreenImageViewer extends StatelessWidget {
     );
   }
 }
+

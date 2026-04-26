@@ -1,24 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'core/constants/supabase_constants.dart';
-import 'shared_widgets/auth_gate.dart';
-import 'shared_widgets/main_screen.dart';
 
-// Change main() to be an async function
+import 'core/constants/supabase_constants.dart';
+import 'services/notification_service.dart';
+import 'shared_widgets/auth_gate.dart';
+
 Future<void> main() async {
-  // 1. You must include this line before initializing Supabase
+  // 1. Mandatory line for plugin initialization
   WidgetsFlutterBinding.ensureInitialized();
 
+  // 2. Load environment variables
   await dotenv.load(fileName: ".env");
 
-  // 2. Wake up the database connection using your keys
+  // 3. Initialize Supabase
   await Supabase.initialize(
     url: SupabaseConstants.supabaseUrl,
     anonKey: SupabaseConstants.supabaseAnonKey,
   );
 
-  // 3. Run the app
+  // 4. Initialize push notifications and incoming call notification handling.
+  await NotificationService.initialize();
+
   runApp(const RecruitmentApp());
 }
 
@@ -28,7 +31,9 @@ class RecruitmentApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Recruitment Platform',
+      title: 'MAD Job Recruitment System',
+      debugShowCheckedModeBanner: false,
+      navigatorKey: NotificationService.navigatorKey,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
