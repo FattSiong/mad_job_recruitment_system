@@ -77,7 +77,7 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
 
         // 2. Ping OneSignal to send the notification
         await http.post(
-          Uri.parse('https://onesignal.com/api/v1/notifications'),
+          Uri.parse('https://api.onesignal.com/notifications'),
           headers: {
             'Content-Type': 'application/json',
             // Your exact REST API Key
@@ -85,6 +85,7 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
           },
           body: jsonEncode({
             'app_id': '595705d0-3319-4ced-90ab-22185bb761dc', // Your App ID
+            'target_channel': 'push',
             'include_subscription_ids': [token],
             'headings': {'en': isCall ? 'Incoming Call 📞' : 'New Message from You 💬'},
             'contents': {'en': content},
