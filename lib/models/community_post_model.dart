@@ -3,6 +3,7 @@ class CommunityPostModel {
   final String authorID;
   final String content;
   final String? mediaURL;
+  final String status; // 👈 NEW: Added status tracking
   final DateTime createdAt;
 
   // Joined User Data
@@ -23,6 +24,7 @@ class CommunityPostModel {
     required this.authorID,
     required this.content,
     this.mediaURL,
+    this.status = 'active', // 👈 NEW: Defaults to 'active'
     required this.createdAt,
     required this.username,
     required this.role,
@@ -45,6 +47,7 @@ class CommunityPostModel {
       authorID: json['authorID'] ?? user['userID'] ?? '',
       content: json['content'] ?? '',
       mediaURL: json['mediaURL'],
+      status: json['status'] ?? 'active', // 👈 NEW: Reads status from your database
       createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt']).toLocal() : DateTime.now(),
       username: user['username'] ?? 'Unknown User',
       role: user['role'] ?? 'Member',

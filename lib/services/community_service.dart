@@ -369,4 +369,25 @@ class CommunityService {
     }
   }
 
+  // Fetch ALL posts for a specific user, including deleted ones
+  Future<List<CommunityPostModel>> getMyPostHistory(String userID) async {
+    try {
+      // 👇 USE THE EXACT SAME .from() AND .select() AS YOUR getCommunityPosts() METHOD!
+      final response = await _supabase
+          .from('CommunityPost')
+          .select('*, User!CommunityPost_authorID_fkey(*), PostLike(*), PostComment(*), PostSaved(*)')
+          .eq('authorID', userID) // 👈 Then just add this filter at the end
+          .order('createdAt', ascending: false);
+
+      final List<dynamic> data = response;
+      return data.map((json) => CommunityPostModel.fromJson(json)).toList();
+
+    } catch (e) {
+      print('Error: $e');
+      // 👇 Change this temporarily so the actual error shows on your screen!
+      throw Exception(e.toString());
+    }
+  }
+
+
 }
