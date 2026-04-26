@@ -694,4 +694,45 @@ class EmployerService {
       return [];
     }
   }
+
+  Future<bool> markInterviewAsCompleted(String applicantId, String? scheduleId) async {
+    try {
+      // 1. Update the candidate's ATS status to 'interviewed'
+      await _supabase
+          .from('JobApplicant')
+          .update({'applicationStatus': 'interviewed'})
+          .eq('applicantID', applicantId);
+
+      // 2. Permanently close the room to prevent anyone from rejoining
+      if (scheduleId != null) {
+        await _supabase.from('InterviewRoom').update({
+          'status': 'completed',
+          'employerHasLeft': true,
+          'seekerHasLeft': true,
+          'endedAt': DateTime.now().toIso8601String(),
+        }).eq('scheduleID', scheduleId);
+      }
+
+      return true;
+    } catch (e) {
+      print('Error marking interview as completed: $e');
+      return false;
+    }
+  }
+
+  Future<CompanyModel?> getCompanyById(String companyId) async {
+    try {
+      final response = await _supabase
+          .from('Company')
+          .select()
+          .eq('companyID', companyId)
+          .single();
+
+      return CompanyModel.fromJson(response);
+    } catch (e) {
+      print('Fetch company by ID error: $e');
+      return null;
+    }
+  }
+
 }
