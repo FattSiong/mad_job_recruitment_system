@@ -59,36 +59,6 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
   // ------------------------------------------------------------------------
   // The Push Notification Trigger Engine
   // ------------------------------------------------------------------------
-  Future<void> _sendPushNotification(String content, {bool isCall = false}) async {
-    try {
-      // 1. Fetch the receiver's OneSignal Player ID from Supabase
-      final userData = await Supabase.instance.client
-          .from('User')
-          .select('notification_token')
-          .eq('userID', widget.otherUserID)
-          .maybeSingle();
-
-      if (userData != null && userData['notification_token'] != null) {
-        String token = userData['notification_token'];
-
-        // 2. Ping OneSignal to send the notification
-        await http.post(
-          Uri.parse('https://onesignal.com/api/v1/notifications'),
-          headers: {
-            'Content-Type': 'application/json',
-            // Your exact REST API Key
-            'Authorization': 'Key os_v2_app_lflqlubtdfgo3efleimfxn3b3r2pcgb4dmvu53ff2dejac4fschvkyxktqwln34ueqxmweuerp3zo6tgz5tyho62fckklslqf3ecm7q',
-          },
-          body: jsonEncode({
-            'app_id': '595705d0-3319-4ced-90ab-22185bb761dc', // Your App ID
-            'include_subscription_ids': [token],
-            'headings': {'en': isCall ? 'Incoming Call 📞' : 'New Message from You 💬'},
-            'contents': {'en': content},
-            'data': {'type': isCall ? 'call' : 'chat', 'roomID': widget.roomID}
-          }),
-        );
-        debugPrint("Push notification sent to $token");
-      }
     } catch (e) {
       debugPrint('Error sending push notification: $e');
     }
@@ -221,8 +191,6 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
           widget.otherUserID
       );
 
-      // Trigger Call Push Notification
-      _sendPushNotification('📞 Incoming Voice Call...', isCall: true);
 
       if (context.mounted) {
         final result = await Navigator.push(
