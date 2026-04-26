@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -16,6 +17,8 @@ class NotificationService {
   static bool _isInitialized = false;
   static String? _lastHandledCallID;
   static bool _isRetrySyncRunning = false;
+  static const MethodChannel _incomingCallChannel = MethodChannel('incoming_call_bridge');
+  static Map<String, dynamic>? _pendingIncomingCall;
 
   static Future<void> initialize() async {
     if (_isInitialized) return;
@@ -27,6 +30,7 @@ class NotificationService {
     _registerAuthStateListener();
     _registerPushSubscriptionObserver();
     _registerNotificationClickListener();
+    _registerNativeIncomingCallBridge();
 
     // 👇 ADD THIS BLOCK to force popouts while the user is actively inside the app
     OneSignal.Notifications.addForegroundWillDisplayListener((event) {
@@ -102,6 +106,38 @@ class NotificationService {
     });
   }
 
+  static void _registerNativeIncomingCallBridge() {
+    _incomingCallChannel.setMethodCallHandler((call) async {
+      if (call.method != 'showIncomingCall') return;
+      final arguments = Map<String, dynamic>.from(call.arguments as Map);
+      await _openIncomingCallFromNotification(arguments);
+    });
+
+    unawaited(_consumeInitialIncomingCall());
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_flushPendingIncomingCall());
+    });
+  }
+
+  static Future<void> _consumeInitialIncomingCall() async {
+    try {
+      final initialCall = await _incomingCallChannel.invokeMethod<dynamic>('getInitialIncomingCall');
+      if (initialCall is Map) {
+        await _openIncomingCallFromNotification(Map<String, dynamic>.from(initialCall));
+      }
+    } catch (e) {
+      debugPrint('No initial incoming call payload: $e');
+    }
+  }
+
+  static Future<void> _flushPendingIncomingCall() async {
+    final pending = _pendingIncomingCall;
+    if (pending == null) return;
+    _pendingIncomingCall = null;
+    await _openIncomingCallFromNotification(pending);
+  }
+
   static Future<void> syncPushTokenToCurrentUser() async {
     final session = Supabase.instance.client.auth.currentSession;
     final token = OneSignal.User.pushSubscription.id;
@@ -167,7 +203,19 @@ class NotificationService {
     if (callStatus == null || callStatus['status']?.toString() != 'ringing') return;
 
     final navigator = navigatorKey.currentState;
-    if (navigator == null) return;
+    if (navigator == null) {
+      _pendingIncomingCall = {
+        'callID': resolvedCallID,
+        'roomCode': resolvedRoomCode,
+        'callerName': callerName,
+        'callerProfilePic': callerProfilePic,
+        'type': 'call',
+      };
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_flushPendingIncomingCall());
+      });
+      return;
+    }
 
     _lastHandledCallID = resolvedCallID;
     navigator.push(
