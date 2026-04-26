@@ -1,12 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'dart:async'; // 👈 NEW: Required for the call stream subscription
 
+import '../../../services/call_service.dart';
 import '../../../services/community_service.dart';
-import '../../../services/call_service.dart'; // 👈 NEW: Import the call service
 import 'active_chat_screen.dart';
 import 'community_dashboard.dart';
-import 'incoming_call_screen.dart'; // 👈 NEW: Import the incoming call UI
+import 'incoming_call_screen.dart';
 
 class ChatListScreen extends StatefulWidget {
   final String currentUserID;
@@ -19,66 +20,60 @@ class ChatListScreen extends StatefulWidget {
 
 class _ChatListScreenState extends State<ChatListScreen> {
   final CommunityService _communityService = CommunityService();
-  final CallService _callService = CallService(); // 👈 NEW: Initialize CallService
+  final CallService _callService = CallService();
 
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
   RealtimeChannel? _messageSubscription;
-  StreamSubscription? _incomingCallSubscription; // 👈 NEW: Tracks incoming calls
-  String? _currentlyRingingCallID; // 👈 NEW: Prevents duplicate popups
+  StreamSubscription? _incomingCallSubscription;
+  String? _currentlyRingingCallID;
 
   @override
   void initState() {
     super.initState();
     _setupRealtimeListener();
-    _listenForCalls(); // 👈 NEW: Start listening for calls instantly
+    _listenForCalls();
   }
 
-  // 👈 NEW: The Listener Function
-  // 👈 UPDATED FUNCTION
   void _listenForCalls() {
-    // 👈 Notice we added "async" here!
-    _incomingCallSubscription = _callService.listenForIncomingCalls(widget.currentUserID).listen((calls) async {
-      if (calls.isNotEmpty) {
-        final incomingCall = calls.first;
+    _incomingCallSubscription = _callService
+        .listenForIncomingCalls(widget.currentUserID)
+        .listen((calls) async {
+      if (calls.isEmpty) return;
 
-        if (_currentlyRingingCallID != incomingCall.callID) {
-          _currentlyRingingCallID = incomingCall.callID;
+      final incomingCall = calls.first;
+      if (_currentlyRingingCallID == incomingCall.callID) return;
 
-          // -----------------------------------------------------
-          // 👈 THE FIX: Quickly fetch the Caller's name from Supabase!
-          // -----------------------------------------------------
-          String realCallerName = "Unknown Caller";
-          try {
-            final callerData = await Supabase.instance.client
-                .from('User') // ⚠️ Change to your actual table name if it's 'Users' or 'profiles'
-                .select('name') // ⚠️ Change to your actual column name if it's 'username' or 'fullName'
-                .eq('userID', incomingCall.callerID)
-                .maybeSingle();
+      _currentlyRingingCallID = incomingCall.callID;
 
-            if (callerData != null && callerData['name'] != null) {
-              realCallerName = callerData['name'];
-            }
-          } catch (e) {
-            debugPrint("Could not fetch caller name: $e");
-          }
+      String realCallerName = 'Unknown Caller';
+      try {
+        final callerData = await Supabase.instance.client
+            .from('User')
+            .select('name')
+            .eq('userID', incomingCall.callerID)
+            .maybeSingle();
 
-          if (mounted) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => IncomingCallScreen(
-                  callID: incomingCall.callID,
-                  roomCode: incomingCall.roomCode,
-                  // 👈 We pass the REAL name here instead of the hardcoded string!
-                  callerName: realCallerName,
-                ),
-              ),
-            );
-          }
+        if (callerData != null && callerData['name'] != null) {
+          realCallerName = callerData['name'];
         }
+      } catch (e) {
+        debugPrint('Could not fetch caller name: $e');
       }
+
+      if (!mounted) return;
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => IncomingCallScreen(
+            callID: incomingCall.callID,
+            roomCode: incomingCall.roomCode,
+            callerName: realCallerName,
+          ),
+        ),
+      );
     });
   }
 
@@ -86,170 +81,475 @@ class _ChatListScreenState extends State<ChatListScreen> {
     _messageSubscription = Supabase.instance.client
         .channel('public:Message')
         .onPostgresChanges(
-        event: PostgresChangeEvent.insert,
-        schema: 'public',
-        table: 'Message',
-        callback: (payload) {
-          if (mounted) setState(() {});
-        })
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'Message',
+          callback: (payload) {
+            if (mounted) {
+              setState(() {});
+            }
+          },
+        )
         .subscribe();
+  }
+
+  Future<void> _refreshChats() async {
+    if (!mounted) return;
+    setState(() {});
   }
 
   @override
   void dispose() {
     _searchController.dispose();
     _messageSubscription?.unsubscribe();
-    _incomingCallSubscription?.cancel(); // 👈 NEW: Stop listening when leaving the screen
+    _incomingCallSubscription?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.white,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: TextField(
-              controller: _searchController,
-              onChanged: (value) => setState(() => _searchQuery = value.toLowerCase()),
-              decoration: InputDecoration(
-                hintText: 'Search messages...',
-                hintStyle: TextStyle(color: Colors.grey[400]),
-                prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                filled: true,
-                fillColor: Colors.grey[100],
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30.0),
-                  borderSide: BorderSide.none,
+      color: const Color(0xFFF4F7FB),
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Direct Messages',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF1B2433),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Search conversations, catch unread updates, and jump back into active chats quickly.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.4,
+                      color: Color(0xFF687588),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  _buildSearchField(),
+                ],
+              ),
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _refreshChats,
+                child: FutureBuilder<List<Map<String, dynamic>>>(
+                  future: _communityService.getChatRooms(widget.currentUserID),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
+                    if (snapshot.hasError) {
+                      return ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+                        children: [
+                          _buildMessageStateCard(
+                            icon: Icons.error_outline_rounded,
+                            title: 'Unable to load messages',
+                            message:
+                                'There was a problem loading your chats. Pull to refresh and try again.\n\n${snapshot.error}',
+                            accentColor: const Color(0xFFC24E4E),
+                            backgroundColor: const Color(0xFFFCE9E9),
+                          ),
+                        ],
+                      );
+                    }
+
+                    final chatRooms = snapshot.data ?? [];
+                    if (chatRooms.isEmpty) {
+                      return ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+                        children: [
+                          _buildMessageStateCard(
+                            icon: Icons.chat_bubble_outline_rounded,
+                            title: 'No active chats yet',
+                            message:
+                                'Once you start a conversation from the community, it will show up here.',
+                            accentColor: const Color(0xFF163B65),
+                            backgroundColor: Colors.white,
+                          ),
+                        ],
+                      );
+                    }
+
+                    final filteredRooms = chatRooms.where((room) {
+                      final isUser1 = room['user1_ID'] == widget.currentUserID;
+                      final userMap = isUser1
+                          ? (room['user2'] ?? {})
+                          : (room['user1'] ?? {});
+
+                      final otherUserName = (userMap['username'] ?? 'Unknown User')
+                          .toString()
+                          .toLowerCase();
+                      final messageList = room['Message'] as List<dynamic>? ?? [];
+                      final latestMessage = messageList.isNotEmpty
+                          ? messageList[0]['content'].toString().toLowerCase()
+                          : '';
+
+                      return otherUserName.contains(_searchQuery) ||
+                          latestMessage.contains(_searchQuery);
+                    }).toList();
+
+                    if (filteredRooms.isEmpty) {
+                      return ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+                        children: [
+                          _buildMessageStateCard(
+                            icon: Icons.search_off_rounded,
+                            title: 'No messages match your search',
+                            message:
+                                'Try another name or keyword to find the conversation you need.',
+                            accentColor: const Color(0xFF687588),
+                            backgroundColor: Colors.white,
+                          ),
+                        ],
+                      );
+                    }
+
+                    return ListView.separated(
+                      physics: const BouncingScrollPhysics(
+                        parent: AlwaysScrollableScrollPhysics(),
+                      ),
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+                      itemCount: filteredRooms.length,
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(height: 14),
+                      itemBuilder: (context, index) {
+                        final room = filteredRooms[index];
+                        final isUser1 = room['user1_ID'] == widget.currentUserID;
+                        final otherUserID =
+                            isUser1 ? room['user2_ID'] : room['user1_ID'];
+                        final otherUserMap = isUser1
+                            ? (room['user2'] ?? {})
+                            : (room['user1'] ?? {});
+
+                        final otherUserName =
+                            otherUserMap['username'] ?? 'Unknown User';
+                        final otherUserRole = otherUserMap['role'] ?? 'Member';
+
+                        final messageList =
+                            room['Message'] as List<dynamic>? ?? [];
+                        final latestMessage = messageList.isNotEmpty
+                            ? messageList[0]['content']
+                            : 'Started a chat';
+                        final sentAt = messageList.isNotEmpty
+                            ? messageList[0]['sentAt']
+                            : null;
+                        final senderID = messageList.isNotEmpty
+                            ? messageList[0]['senderID']
+                            : null;
+                        final isMessageRead = messageList.isNotEmpty
+                            ? (messageList[0]['isRead'] as bool)
+                            : true;
+
+                        final isUnread =
+                            !isMessageRead && senderID != widget.currentUserID;
+
+                        return _buildChatCard(
+                          roomID: room['roomID'],
+                          otherUserID: otherUserID,
+                          otherUserName: otherUserName.toString(),
+                          otherUserRole: otherUserRole.toString(),
+                          latestMessage: latestMessage.toString(),
+                          sentAt: sentAt?.toString(),
+                          isUnread: isUnread,
+                        );
+                      },
+                    );
+                  },
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchField() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: TextField(
+        controller: _searchController,
+        onChanged: (value) {
+          setState(() => _searchQuery = value.toLowerCase());
+        },
+        decoration: InputDecoration(
+          hintText: 'Search Chat',
+          hintStyle: const TextStyle(color: Color(0xFF9AA5B5)),
+          prefixIcon: const Icon(
+            Icons.search_rounded,
+            color: Color(0xFF687588),
           ),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: () async => setState(() {}),
-              child: FutureBuilder<List<Map<String, dynamic>>>(
-                future: _communityService.getChatRooms(widget.currentUserID),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
+          suffixIcon: _searchQuery.isEmpty
+              ? null
+              : IconButton(
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() => _searchQuery = '');
+                  },
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    color: Color(0xFF687588),
+                  ),
+                ),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 18,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(22),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(22),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(22),
+            borderSide: const BorderSide(
+              color: Color(0xFF163B65),
+              width: 1.3,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
-                  if (snapshot.hasError) {
-                    return Center(child: Text("Database Error:\n${snapshot.error}", style: const TextStyle(color: Colors.red)));
-                  }
-
-                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                    return const Center(child: Text("No active chats yet.", style: TextStyle(color: Colors.grey)));
-                  }
-
-                  final chatRooms = snapshot.data!;
-
-                  final filteredRooms = chatRooms.where((room) {
-                    final isUser1 = room['user1_ID'] == widget.currentUserID;
-                    final userMap = isUser1 ? (room['user2'] ?? {}) : (room['user1'] ?? {});
-
-                    final otherUserName = (userMap['username'] ?? 'Unknown User').toString().toLowerCase();
-                    final messageList = room['Message'] as List<dynamic>? ?? [];
-                    final latestMessage = messageList.isNotEmpty ? messageList[0]['content'].toString().toLowerCase() : '';
-
-                    return otherUserName.contains(_searchQuery) || latestMessage.contains(_searchQuery);
-                  }).toList();
-
-                  if (filteredRooms.isEmpty) {
-                    return const Center(child: Text("No messages match your search.", style: TextStyle(color: Colors.grey)));
-                  }
-
-                  return ListView.separated(
-                    itemCount: filteredRooms.length,
-                    separatorBuilder: (context, index) => Divider(color: Colors.grey[200], height: 1, indent: 76),
-                    itemBuilder: (context, index) {
-                      final room = filteredRooms[index];
-
-                      final isUser1 = room['user1_ID'] == widget.currentUserID;
-                      final otherUserID = isUser1 ? room['user2_ID'] : room['user1_ID'];
-                      final otherUserMap = isUser1 ? (room['user2'] ?? {}) : (room['user1'] ?? {});
-
-                      final otherUserName = otherUserMap['username'] ?? 'Unknown User';
-                      final otherUserRole = otherUserMap['role'] ?? 'Member';
-
-                      final messageList = room['Message'] as List<dynamic>? ?? [];
-                      final latestMessage = messageList.isNotEmpty ? messageList[0]['content'] : 'Started a chat';
-                      final sentAt = messageList.isNotEmpty ? messageList[0]['sentAt'] : null;
-                      final senderID = messageList.isNotEmpty ? messageList[0]['senderID'] : null;
-                      final isMessageRead = messageList.isNotEmpty ? (messageList[0]['isRead'] as bool) : true;
-
-                      final isUnread = !isMessageRead && (senderID != widget.currentUserID);
-
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        leading: const CircleAvatar(
-                          radius: 26,
-                          backgroundColor: Colors.blueAccent,
-                          child: Icon(Icons.person, color: Colors.white, size: 30),
-                        ),
-                        title: Text(otherUserName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(height: 4),
-                            Text(
-                              latestMessage,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                  color: isUnread ? Colors.black87 : Colors.grey[600],
-                                  fontWeight: isUnread ? FontWeight.bold : FontWeight.normal,
-                                  fontSize: 14
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(otherUserRole, style: TextStyle(fontSize: 12, color: Colors.blueGrey[400])),
-                          ],
-                        ),
-                        trailing: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              getRelativeTime(sentAt),
-                              style: TextStyle(fontSize: 12, color: isUnread ? Colors.blue : Colors.grey[500], fontWeight: isUnread ? FontWeight.bold : FontWeight.normal),
-                            ),
-                            const SizedBox(height: 6),
-                            if (isUnread)
-                              Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: const BoxDecoration(color: Color(0xFF1865F2), shape: BoxShape.circle),
-                                child: const Text('1', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                              )
-                            else
-                              const SizedBox(height: 24),
-                          ],
-                        ),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => ActiveChatScreen(
-                                roomID: room['roomID'],
-                                currentUserID: widget.currentUserID,
-                                otherUserName: otherUserName,
-                                otherUserID: otherUserID,
-                              ),
-                            ),
-                          ).then((_) => setState(() {}));
-                        },
-                      );
-                    },
-                  );
-                },
-              ),
+  Widget _buildMessageStateCard({
+    required IconData icon,
+    required String title,
+    required String message,
+    required Color accentColor,
+    required Color backgroundColor,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: accentColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: Icon(icon, size: 34, color: accentColor),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1B2433),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 14,
+              height: 1.45,
+              color: Color(0xFF687588),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildChatCard({
+    required String roomID,
+    required String otherUserID,
+    required String otherUserName,
+    required String otherUserRole,
+    required String latestMessage,
+    required String? sentAt,
+    required bool isUnread,
+  }) {
+    final avatarLetter = otherUserName.trim().isEmpty
+        ? 'U'
+        : otherUserName.trim().substring(0, 1).toUpperCase();
+
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(26),
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ActiveChatScreen(
+                roomID: roomID,
+                currentUserID: widget.currentUserID,
+                otherUserName: otherUserName,
+                otherUserID: otherUserID,
+              ),
+            ),
+          ).then((_) => _refreshChats());
+        },
+        borderRadius: BorderRadius.circular(26),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 58,
+                height: 58,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDCEBFB),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Center(
+                  child: Text(
+                    avatarLetter,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF163B65),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            otherUserName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF1B2433),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          getRelativeTime(sentAt),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isUnread
+                                ? const Color(0xFF163B65)
+                                : const Color(0xFF9AA5B5),
+                            fontWeight:
+                                isUnread ? FontWeight.w700 : FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        _buildRoleBadge(otherUserRole),
+                        if (isUnread)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFDCEBFB),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: const Text(
+                              'Unread',
+                              style: TextStyle(
+                                color: Color(0xFF163B65),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      latestMessage,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        height: 1.45,
+                        color: isUnread
+                            ? const Color(0xFF1B2433)
+                            : const Color(0xFF687588),
+                        fontWeight:
+                            isUnread ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 16,
+                color: isUnread
+                    ? const Color(0xFF163B65)
+                    : const Color(0xFF9AA5B5),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRoleBadge(String role) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF3F8),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        role,
+        style: const TextStyle(
+          color: Color(0xFF687588),
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }

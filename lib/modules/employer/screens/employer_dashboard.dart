@@ -7,11 +7,13 @@ import '../../community/screens/chat_list_screen.dart';
 import '../../community/screens/community_dashboard.dart';
 import 'company_list_screen.dart';
 import 'create_job_screen.dart';
+import 'edit_employer_profile_screen.dart';
+import 'employer_profile_tab.dart';
 import 'job_company_list_screen.dart';
 import 'pending_invites_screen.dart';
+import 'register_company_screen.dart';
 import 'scheduled_interviews_screen.dart';
 import 'subscription_screen.dart';
-import 'register_company_screen.dart'; // Added from second file
 import '../../../core/constants/table_constants.dart';
 import '../../../models/company_model.dart';
 import '../../../models/job_model.dart';
@@ -34,6 +36,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
 
   String _fullName = 'Employer';
   String _email = '';
+  String? _profilePictureUrl;
 
   int _companyCount = 0;
   int _verifiedCompanyCount = 0;
@@ -116,7 +119,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
       final results = await Future.wait<dynamic>([
         Supabase.instance.client
             .from(TableConstants.employer)
-            .select('fullName, email')
+            .select('fullName, email, profilePictureURL')
             .eq('employerID', currentUser.id)
             .maybeSingle(),
         _employerService.getCompanies(currentUser.id, 'employer'),
@@ -151,6 +154,11 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
         _email = (profile?['email'] as String?)?.trim().isNotEmpty == true
             ? (profile!['email'] as String).trim()
             : (currentUser.email ?? '');
+        _profilePictureUrl = (profile?['profilePictureURL'] as String?)
+            ?.trim()
+            .isNotEmpty == true
+            ? (profile!['profilePictureURL'] as String).trim()
+            : null;
 
         _companyCount = companies.length;
         _verifiedCompanyCount = verifiedCompanies;
@@ -170,6 +178,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
     } catch (e) {
       setState(() {
         _email = currentUser.email ?? '';
+        _profilePictureUrl = null;
         _isLoadingStats = false;
       });
     }
@@ -640,20 +649,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
       return const Center(child: Text('Not logged in'));
     }
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text(
-          'Messages',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-      ),
-      body: ChatListScreen(currentUserID: _currentUser!.id),
-    );
+    return ChatListScreen(currentUserID: _currentUser!.id);
   }
 
   Widget _buildCommunityTab() {
@@ -665,172 +661,43 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
   }
 
   Widget _buildProfileTab() {
-    final email = _email.isNotEmpty
-        ? _email
-        : (_currentUser?.email ?? 'employer@email.com');
-    final displayName = _fullName;
-    final firstLetter = displayName.isNotEmpty
-        ? displayName[0].toUpperCase()
-        : 'E';
+    return EmployerProfileTab(
+      email: _email.isNotEmpty
+          ? _email
+          : (_currentUser?.email ?? 'employer@email.com'),
+      displayName: _fullName,
+      profilePictureUrl: _profilePictureUrl,
+      isPremium: _isPremium,
+      onEditProfile: () async {
+        final currentUser = _currentUser;
+        if (currentUser == null) return;
 
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-        child: Column(
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(28),
-              ),
-              child: Column(
-                children: [
-                  CircleAvatar(
-                    radius: 34,
-                    backgroundColor: _isPremium ? Colors.purple.shade100 : const Color(0xFFDCEBFB),
-                    child: Text(
-                      firstLetter,
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: _isPremium ? Colors.purple.shade700 : const Color(0xFF163B65),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        displayName,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1B2433),
-                        ),
-                      ),
-                      if (_isPremium) ...[
-                        const SizedBox(width: 8),
-                        const Icon(Icons.verified, color: Colors.purple, size: 20),
-                      ]
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    email,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF687588),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Merged: Subscription UI
-            if (!_isPremium)
-              _buildProfileTile(
-                icon: Icons.workspace_premium_outlined,
-                title: 'Upgrade to Premium',
-                subtitle: 'Unlock all AI features',
-                color: Colors.purple,
-                onTap: () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const SubscriptionScreen()),
-                  );
-                  _checkPremiumStatus();
-                },
-              )
-            else
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                decoration: BoxDecoration(
-                  color: Colors.purple.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: Colors.purple.withOpacity(0.2)),
-                ),
-                child: const Column(
-                  children: [
-                    Icon(Icons.workspace_premium, color: Colors.purple, size: 36),
-                    SizedBox(height: 8),
-                    Text(
-                      "Premium Active",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.purple),
-                    ),
-                    Text(
-                      "Full access to all AI features.",
-                      style: TextStyle(color: Colors.purple, fontSize: 13),
-                    )
-                  ],
-                ),
-              ),
-
-            const SizedBox(height: 12),
-            _buildProfileTile(
-              icon: Icons.app_registration,
-              title: 'Register Company',
-              subtitle: 'Create a new profile',
-              color: const Color(0xFF335D8A),
-              onTap: () => _openScreen(const RegisterCompanyScreen()),
-            ),
-            const SizedBox(height: 12),
-            _buildProfileTile(
-              icon: Icons.business_rounded,
-              title: 'Manage Companies',
-              subtitle: 'Open your company list',
-              color: const Color(0xFF163B65),
-              onTap: () =>
-                  _openScreen(const CompanyListScreen(userRole: 'employer')),
-            ),
-            const SizedBox(height: 12),
-            _buildProfileTile(
-              icon: Icons.work_outline_rounded,
-              title: 'Manage Jobs',
-              subtitle: 'Review all job postings',
-              color: const Color(0xFF1E8F8B),
-              onTap: () => _openScreen(const ManageJobsCompanyListScreen()),
-            ),
-            const SizedBox(height: 12),
-            _buildProfileTile(
-              icon: Icons.calendar_month_rounded,
-              title: 'Scheduled Interviews',
-              subtitle: 'Check interview plans',
-              color: const Color(0xFFE4A73B),
-              onTap: () => _openScreen(const ScheduledInterviewsScreen()),
-            ),
-            const SizedBox(height: 12),
-            _buildProfileTile(
-              icon: Icons.mail_outline_rounded,
-              title: 'Pending Invites',
-              subtitle: 'View team invitations',
-              color: const Color(0xFFE27D60),
-              onTap: () => _openScreen(const PendingInvitationsScreen()),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _logout,
-                icon: const Icon(Icons.logout),
-                label: const Text('Logout'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF163B65),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+        await _openScreen(
+          EditEmployerProfileScreen(
+            employerId: currentUser.id,
+            initialFullName: _fullName,
+            initialEmail: _email.isNotEmpty
+                ? _email
+                : (currentUser.email ?? ''),
+            initialProfilePictureUrl: _profilePictureUrl,
+          ),
+        );
+      },
+      onOpenSubscription: () async {
+        await _openScreen(const SubscriptionScreen());
+        await _checkPremiumStatus();
+      },
+      onOpenRegisterCompany: () =>
+          _openScreen(const RegisterCompanyScreen()),
+      onOpenManageCompanies: () =>
+          _openScreen(const CompanyListScreen(userRole: 'employer')),
+      onOpenManageJobs: () =>
+          _openScreen(const ManageJobsCompanyListScreen()),
+      onOpenScheduledInterviews: () =>
+          _openScreen(const ScheduledInterviewsScreen()),
+      onOpenPendingInvites: () =>
+          _openScreen(const PendingInvitationsScreen()),
+      onLogout: _logout,
     );
   }
 
@@ -858,61 +725,4 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
     );
   }
 
-  Widget _buildProfileTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(22),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(22),
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Row(
-            children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(icon, color: color),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1B2433),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF687588),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.arrow_forward_ios_rounded, size: 16, color: color),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }

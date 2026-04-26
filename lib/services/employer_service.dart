@@ -585,6 +585,46 @@ class EmployerService {
     }
   }
 
+  Future<bool> updateEmployerProfile({
+    required String employerId,
+    required String fullName,
+    File? newProfileImage,
+  }) async {
+    try {
+      String? finalProfileImageUrl;
+
+      if (newProfileImage != null) {
+        final fileExt = newProfileImage.path.split('.').last;
+        final fileName =
+            'employer_$employerId\_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+
+        await _supabase.storage
+            .from('profile_pictures')
+            .upload(fileName, newProfileImage);
+
+        finalProfileImageUrl = _supabase.storage
+            .from('profile_pictures')
+            .getPublicUrl(fileName);
+      }
+
+      final Map<String, dynamic> updateData = {'fullName': fullName};
+
+      if (finalProfileImageUrl != null) {
+        updateData['profilePictureURL'] = finalProfileImageUrl;
+      }
+
+      await _supabase
+          .from(TableConstants.employer)
+          .update(updateData)
+          .eq('employerID', employerId);
+
+      return true;
+    } catch (e) {
+      print('Update Employer Profile Error: $e');
+      return false;
+    }
+  }
+
   // 1. Fetch all applicants for a specific job
   Future<List<Map<String, dynamic>>> getJobApplicants(String jobId) async {
     try {
