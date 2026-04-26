@@ -113,18 +113,17 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
         // Send notification with correct header
 // Use the standard OneSignal REST API endpoint
         var response = await http.post(
+          // Ensure you are using the v1 endpoint 
           Uri.parse('https://onesignal.com/api/v1/notifications'), //
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Key $oneSignalRestApiKey', //
+            'Content-Type': 'application/json; charset=utf-8',
+            // Hardcode the string directly with "Key " at the start
+            'Authorization': 'Key os_v2_app_c34s3bvnnfeedcspw3amxohz62jhsjzxra4upr54r45mep7kmid5zhkliargm5bgje2q3n5qcscr6xg4pgde7ntjngl3fbuacu4yu7i', //
           },
           body: jsonEncode({
             'app_id': oneSignalAppId,
             'target_channel': 'push',
-            
-            // 👇 THIS WAS THE MAIN BUG! 
-            'include_subscription_ids': [token], //
-            
+            'include_subscription_ids': [token], // Use subscription IDs instead of player IDs
             'headings': {'en': isCall ? 'Incoming Call 📞' : 'New Message from You 💬'},
             'contents': {'en': content},
             'data': {
@@ -135,15 +134,13 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
             'android_channel_id': isCall ? 'incoming_calls' : 'chat_messages',
             'ttl': isCall ? 60 : 2419200,
             if (isCall && additionalData?['callID'] != null) 'collapse_id': 'call_${additionalData?['callID']}',
-            
-            // The flags we added earlier to force the heads-up popout banner
-            'priority': 10,                 
-            'ios_sound': 'default',         
-            'android_sound': 'default',     
-            'android_visibility': 1,        
+            'priority': 10,
+            'ios_sound': 'default',
+            'android_sound': 'default',
+            'android_visibility': 1,
           }),
         );
-
+        
         if (response.statusCode == 400 && response.body.contains('Could not find android_channel_id')) {
           debugPrint('OneSignal channel id not found in dashboard. Retrying without android_channel_id...');
 
