@@ -34,7 +34,11 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
         // Once they are marked as 'interviewed', they will disappear from this screen!
         _interviews = data.where((item) {
           final applicant = item['JobApplicant'] ?? {};
-          return applicant['applicationStatus'] == 'scheduled';
+          final job = applicant['Job'] ?? {};
+          final jobStatus = (job['status'] ?? '').toString().toLowerCase();
+
+          return applicant['applicationStatus'] == 'scheduled' &&
+              jobStatus != 'deleted';
         }).toList();
 
         _isLoading = false;

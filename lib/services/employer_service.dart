@@ -173,14 +173,21 @@ class EmployerService {
     }
   }
 
-  /// Fetches all jobs posted by a specific employer
-  Future<List<JobModel>> getEmployerJobs(String employerId) async {
+  Future<List<JobModel>> getEmployerJobs(
+    String employerId, {
+    bool includeDeleted = false,
+  }) async {
     try {
-      final response = await _supabase
+      var query = _supabase
           .from(TableConstants.job)
           .select()
-          .eq('employerID', employerId)
-          .order('createdAt', ascending: false); // Show the newest jobs first
+          .eq('employerID', employerId);
+
+      if (!includeDeleted) {
+        query = query.neq('status', 'deleted');
+      }
+
+      final response = await query.order('createdAt', ascending: false);
 
       return (response as List).map((json) => JobModel.fromJson(json)).toList();
     } catch (e) {
@@ -218,16 +225,20 @@ class EmployerService {
     }
   }
 
-  /// Fetches all jobs for a specific company
-  Future<List<JobModel>> getJobsByCompanyId(String companyId) async {
+  Future<List<JobModel>> getJobsByCompanyId(
+    String companyId, {
+    bool includeDeleted = false,
+  }) async {
     try {
-      final response = await _supabase
-          .from('Job') // Use TableConstants.job if you have it
-          .select()
-          .eq('companyID', companyId);
-      // Optional: .order('created_at', ascending: false) to show newest first
+      var query = _supabase.from('Job').select().eq('companyID', companyId);
 
-      return response.map((json) => JobModel.fromJson(json)).toList();
+      if (!includeDeleted) {
+        query = query.neq('status', 'deleted');
+      }
+
+      final response = await query.order('createdAt', ascending: false);
+
+      return (response as List).map((json) => JobModel.fromJson(json)).toList();
     } catch (e) {
       print('Fetch jobs by company error: $e');
       return [];
@@ -537,11 +548,16 @@ class EmployerService {
       // 1. If they picked a new image, upload it first
       if (newLogoFile != null) {
         final fileExt = newLogoFile.path.split('.').last;
-        final fileName = 'company_$companyId\_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+        final fileName =
+            'company_$companyId\_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
 
         // Ensure you have a 'company_logos' bucket created in your Supabase Storage!
-        await _supabase.storage.from('company_logos').upload(fileName, newLogoFile);
-        finalLogoUrl = _supabase.storage.from('company_logos').getPublicUrl(fileName);
+        await _supabase.storage
+            .from('company_logos')
+            .upload(fileName, newLogoFile);
+        finalLogoUrl = _supabase.storage
+            .from('company_logos')
+            .getPublicUrl(fileName);
       }
 
       // 2. Prepare the update payload
@@ -552,7 +568,8 @@ class EmployerService {
 
       // Only update the logo URL if a new one was actually uploaded
       if (finalLogoUrl != null) {
-        updateData['companyLogoURL'] = finalLogoUrl; // Make sure your DB has a 'logoURL' column!
+        updateData['companyLogoURL'] =
+            finalLogoUrl; // Make sure your DB has a 'logoURL' column!
       }
 
       // 3. Update the database
@@ -586,7 +603,9 @@ class EmployerService {
   }
 
   // 2. Fetch the pre-screening answers for a specific applicant
-  Future<List<Map<String, dynamic>>> getApplicantAnswers(String applicantId) async {
+  Future<List<Map<String, dynamic>>> getApplicantAnswers(
+    String applicantId,
+  ) async {
     try {
       // We JOIN with the PreScreeningQuestion table so we know what question they are answering!
       final response = await _supabase
@@ -602,7 +621,10 @@ class EmployerService {
   }
 
   // 3. Update the candidate's application status
-  Future<bool> updateApplicationStatus(String applicantId, String newStatus) async {
+  Future<bool> updateApplicationStatus(
+    String applicantId,
+    String newStatus,
+  ) async {
     try {
       await _supabase
           .from('JobApplicant')
@@ -631,19 +653,25 @@ class EmployerService {
       if (currentUser == null) return false;
 
       // Format TimeOfDay into standard SQL time format (HH:MM:SS)
-      final startStr = '${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}:00';
-      final endStr = '${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}:00';
+      final startStr =
+          '${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}:00';
+      final endStr =
+          '${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}:00';
 
       // 1. Insert into the InterviewSchedule table AND return the new row
       // We need .select().single() so we can grab the auto-generated scheduleID!
-      final scheduleResponse = await _supabase.from('InterviewSchedule').insert({
-        'applicantID': applicantId,
-        'date': date.toIso8601String().split('T')[0], // YYYY-MM-DD
-        'startTime': startStr,
-        'endTime': endStr,
-        'meetingMethod': meetingMethod,
-        'meetingLink': meetingLink,
-      }).select('scheduleID').single();
+      final scheduleResponse = await _supabase
+          .from('InterviewSchedule')
+          .insert({
+            'applicantID': applicantId,
+            'date': date.toIso8601String().split('T')[0], // YYYY-MM-DD
+            'startTime': startStr,
+            'endTime': endStr,
+            'meetingMethod': meetingMethod,
+            'meetingLink': meetingLink,
+          })
+          .select('scheduleID')
+          .single();
 
       final generatedScheduleId = scheduleResponse['scheduleID'];
 
@@ -682,20 +710,31 @@ class EmployerService {
               applicantID,
               applicationStatus,
               JobSeeker (fullName, email),
-              Job (title)
+              Job (title, status)
             )
           ''')
           .order('date', ascending: true)
           .order('startTime', ascending: true);
 
-      return List<Map<String, dynamic>>.from(response);
+      final rows = List<Map<String, dynamic>>.from(response);
+
+      return rows.where((item) {
+        final applicant = item['JobApplicant'] ?? {};
+        final job = applicant['Job'] ?? {};
+        final jobStatus = (job['status'] ?? '').toString().toLowerCase();
+
+        return jobStatus != 'deleted';
+      }).toList();
     } catch (e) {
       print('Error fetching schedule: $e');
       return [];
     }
   }
 
-  Future<bool> markInterviewAsCompleted(String applicantId, String? scheduleId) async {
+  Future<bool> markInterviewAsCompleted(
+    String applicantId,
+    String? scheduleId,
+  ) async {
     try {
       // 1. Update the candidate's ATS status to 'interviewed'
       await _supabase
@@ -705,12 +744,15 @@ class EmployerService {
 
       // 2. Permanently close the room to prevent anyone from rejoining
       if (scheduleId != null) {
-        await _supabase.from('InterviewRoom').update({
-          'status': 'completed',
-          'employerHasLeft': true,
-          'seekerHasLeft': true,
-          'endedAt': DateTime.now().toIso8601String(),
-        }).eq('scheduleID', scheduleId);
+        await _supabase
+            .from('InterviewRoom')
+            .update({
+              'status': 'completed',
+              'employerHasLeft': true,
+              'seekerHasLeft': true,
+              'endedAt': DateTime.now().toIso8601String(),
+            })
+            .eq('scheduleID', scheduleId);
       }
 
       return true;
@@ -734,5 +776,4 @@ class EmployerService {
       return null;
     }
   }
-
 }

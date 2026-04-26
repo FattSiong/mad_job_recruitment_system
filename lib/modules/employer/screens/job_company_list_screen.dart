@@ -52,7 +52,10 @@ class _ManageJobsCompanyListScreenState
       final companyId = company.companyID;
       if (companyId == null) continue;
 
-      final companyJobs = await _employerService.getJobsByCompanyId(companyId);
+      final companyJobs = await _employerService.getJobsByCompanyId(
+        companyId,
+        includeDeleted: true,
+      );
       for (final job in companyJobs) {
         jobs.add(
           JobModel(
@@ -82,7 +85,7 @@ class _ManageJobsCompanyListScreenState
       _isLoading = false;
       if (_selectedCompanyId != 'all' &&
           !_companies.any(
-            (company) => company.companyID == _selectedCompanyId,
+                (company) => company.companyID == _selectedCompanyId,
           )) {
         _selectedCompanyId = 'all';
       }
@@ -192,7 +195,7 @@ class _ManageJobsCompanyListScreenState
                   ),
                   const SizedBox(height: 18),
                   ..._companies.map(
-                    (company) => Padding(
+                        (company) => Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: Material(
                         color: const Color(0xFFF7F9FC),
@@ -218,7 +221,7 @@ class _ManageJobsCompanyListScreenState
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                    CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         company.name,
@@ -538,13 +541,13 @@ class _ManageJobsCompanyListScreenState
                 onTap: () => setState(() => _selectedCompanyId = 'all'),
               ),
               ..._companies.map(
-                (company) => Padding(
+                    (company) => Padding(
                   padding: const EdgeInsets.only(left: 10),
                   child: _buildCompanyChip(
                     label: company.name,
                     isSelected: _selectedCompanyId == company.companyID,
                     onTap: () => setState(
-                      () => _selectedCompanyId = company.companyID ?? 'all',
+                          () => _selectedCompanyId = company.companyID ?? 'all',
                     ),
                   ),
                 ),
@@ -690,6 +693,7 @@ class _ManageJobsCompanyListScreenState
     if (jobs.isEmpty) {
       return _buildEmptyJobsState(tab);
     }
+
     return ListView.separated(
       padding: EdgeInsets.zero,
       shrinkWrap: true,
@@ -715,7 +719,7 @@ class _ManageJobsCompanyListScreenState
       case _JobsTab.mine:
         title = 'No jobs posted by you yet';
         description =
-            'Create a new role to start building your own job portfolio.';
+        'Create a new role to start building your own job portfolio.';
         break;
       case _JobsTab.team:
         title = 'No teammate jobs found';
@@ -761,13 +765,29 @@ class _ManageJobsCompanyListScreenState
   }
 
   Widget _buildJobCard(JobModel job) {
-    final isActive = job.status.toLowerCase() == 'active';
+    final normalizedStatus = job.status.toLowerCase();
+    final isActive = normalizedStatus == 'active';
+    final isDeleted = normalizedStatus == 'deleted';
     final isMine =
         _currentEmployerId != null && job.employerID == _currentEmployerId;
     final companyName = _resolveCompanyName(job);
 
+    final Color statusBg;
+    final Color statusText;
+
+    if (isActive) {
+      statusBg = const Color(0xFFE5F6ED);
+      statusText = const Color(0xFF2D8A5D);
+    } else if (isDeleted) {
+      statusBg = const Color(0xFFFCE9E9);
+      statusText = const Color(0xFFC24E4E);
+    } else {
+      statusBg = const Color(0xFFEFF3F8);
+      statusText = const Color(0xFF687588);
+    }
+
     return Material(
-      color: Colors.white,
+      color: isDeleted ? const Color(0xFFFFF7F7) : Colors.white,
       borderRadius: BorderRadius.circular(24),
       child: InkWell(
         onTap: () => _openJob(job),
@@ -784,12 +804,18 @@ class _ManageJobsCompanyListScreenState
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFDCEBFB),
+                      color: isDeleted
+                          ? const Color(0xFFFDE1E1)
+                          : const Color(0xFFDCEBFB),
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: const Icon(
-                      Icons.work_outline_rounded,
-                      color: Color(0xFF163B65),
+                    child: Icon(
+                      isDeleted
+                          ? Icons.delete_outline_rounded
+                          : Icons.work_outline_rounded,
+                      color: isDeleted
+                          ? const Color(0xFFC24E4E)
+                          : const Color(0xFF163B65),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -817,10 +843,12 @@ class _ManageJobsCompanyListScreenState
                     ),
                   ),
                   const SizedBox(width: 8),
-                  const Icon(
+                  Icon(
                     Icons.arrow_forward_ios_rounded,
                     size: 16,
-                    color: Color(0xFF9AA5B5),
+                    color: isDeleted
+                        ? const Color(0xFFB98D8D)
+                        : const Color(0xFF9AA5B5),
                   ),
                 ],
               ),
@@ -836,12 +864,8 @@ class _ManageJobsCompanyListScreenState
                   ),
                   _buildPill(
                     label: job.status.toUpperCase(),
-                    backgroundColor: isActive
-                        ? const Color(0xFFE5F6ED)
-                        : const Color(0xFFEFF3F8),
-                    textColor: isActive
-                        ? const Color(0xFF2D8A5D)
-                        : const Color(0xFF687588),
+                    backgroundColor: statusBg,
+                    textColor: statusText,
                   ),
                   _buildPill(
                     label: isMine ? 'POSTED BY ME' : 'TEAM POST',
@@ -861,12 +885,25 @@ class _ManageJobsCompanyListScreenState
                     : job.description,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   height: 1.4,
-                  color: Color(0xFF4F5C6C),
+                  color: isDeleted
+                      ? const Color(0xFF8C5A5A)
+                      : const Color(0xFF4F5C6C),
                 ),
               ),
+              if (isDeleted) ...[
+                const SizedBox(height: 12),
+                const Text(
+                  'Deleted by admin. This job is now available for history only.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFFC24E4E),
+                  ),
+                ),
+              ],
             ],
           ),
         ),

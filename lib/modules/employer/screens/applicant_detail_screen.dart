@@ -1,22 +1,26 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:open_filex/open_filex.dart';
 import 'package:http/http.dart' as http;
-import '../../../services/employer_service.dart';
-import 'interview_scheduling_screen.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../../services/community_service.dart';
+import '../../../services/employer_service.dart';
 import '../../community/screens/active_chat_screen.dart';
+import 'interview_scheduling_screen.dart';
 
 class ApplicantDetailScreen extends StatefulWidget {
   final Map<String, dynamic> applicantData;
   final String jobTitle;
+  final String jobStatus;
 
   const ApplicantDetailScreen({
     super.key,
     required this.applicantData,
     required this.jobTitle,
+    required this.jobStatus,
   });
 
   @override
@@ -24,7 +28,8 @@ class ApplicantDetailScreen extends StatefulWidget {
 }
 
 class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
-  final _employerService = EmployerService();
+  final EmployerService _employerService = EmployerService();
+
   List<Map<String, dynamic>> _answers = [];
   bool _isLoadingAnswers = true;
   bool _isUpdating = false;
@@ -33,16 +38,16 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
   late String _currentStatus;
   bool _hasBeenScheduled = false;
 
+  bool get _isJobDeleted => widget.jobStatus.toLowerCase() == 'deleted';
+
   @override
   void initState() {
     super.initState();
     _currentStatus = widget.applicantData['applicationStatus'] ?? 'pending';
-
     _loadAnswers();
-    _checkIfScheduled(); // 👉 NEW: Verify past history
+    _checkIfScheduled();
   }
 
-  // 👉 NEW: Checks if an interview row exists so the app remembers the state after a reload
   Future<void> _checkIfScheduled() async {
     try {
       final response = await Supabase.instance.client
@@ -65,6 +70,7 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
     final answers = await _employerService.getApplicantAnswers(
       widget.applicantData['applicantID'],
     );
+
     if (mounted) {
       setState(() {
         _answers = answers;
@@ -156,12 +162,14 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
         '.php',
         '.sql',
       ];
+
       final isTextFile = textExtensions.any(
-        (ext) => fileName.toLowerCase().endsWith(ext),
+            (ext) => fileName.toLowerCase().endsWith(ext),
       );
 
       if (isTextFile) {
         final fileContent = await file.readAsString();
+
         if (mounted) {
           showDialog(
             context: context,
@@ -174,7 +182,7 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
                 width: double.maxFinite,
                 child: SingleChildScrollView(
                   child: Container(
-                    padding: const EdgeInsets.all(8.0),
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: Colors.grey.shade100,
                       borderRadius: BorderRadius.circular(4),
@@ -213,7 +221,7 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
         }
       }
     } catch (e) {
-      print("Download/Open error: $e");
+      print('Download/Open error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -223,12 +231,17 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _isDownloadingFile = false);
+      if (mounted) {
+        setState(() => _isDownloadingFile = false);
+      }
     }
   }
 
   Future<void> _updateStatus(String newStatus) async {
+    if (_isJobDeleted) return;
+
     setState(() => _isUpdating = true);
+
     final success = await _employerService.updateApplicationStatus(
       widget.applicantData['applicantID'],
       newStatus,
@@ -239,6 +252,7 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
         _isUpdating = false;
         if (success) _currentStatus = newStatus;
       });
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -254,6 +268,8 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
 
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
+      case 'directrejected':
+        return Colors.red;
       case 'scheduled':
         return Colors.blue;
       case 'interviewed':
@@ -267,29 +283,122 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
     }
   }
 
-  // 👉 NEW: Reschedule Confirmation Dialog
   Future<void> _showRescheduleConfirmation(Map<String, dynamic> seeker) async {
+    if (_isJobDeleted) return;
+
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Reschedule Interview?'),
-        content: const Text(
-          'This will prompt you to pick a new date and time. It will create a new meeting room for the candidate.',
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDCEBFB),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Icon(
+                  Icons.calendar_today_rounded,
+                  color: Color(0xFF163B65),
+                  size: 28,
+                ),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'Reschedule Interview?',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1B2433),
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'You will choose a new date and time for this candidate. A new interview setup will be prepared for the updated session.',
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.5,
+                  color: Color(0xFF687588),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF7F9FC),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.info_outline_rounded,
+                      size: 18,
+                      color: Color(0xFF163B65),
+                    ),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Use this when the current interview time is no longer suitable.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          height: 1.4,
+                          color: Color(0xFF4F5C6C),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF687588),
+                        side: const BorderSide(color: Color(0xFFD6DEE8)),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF163B65),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: const Text('Continue'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-            child: const Text(
-              'Continue',
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        ],
       ),
     );
 
@@ -321,483 +430,864 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
     final aiScore = widget.applicantData['aiRankingScore'];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Applicant Profile')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      backgroundColor: const Color(0xFFF4F7FB),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
           children: [
-            // --- 1. BASIC INFO ---
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 35,
-                  backgroundColor: Colors.blue.shade100,
-                  child: const Icon(Icons.person, size: 40, color: Colors.blue),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            _buildTopBar(context),
+            const SizedBox(height: 16),
+            _buildHeroCard(seeker, aiScore),
+            if (_isJobDeleted) ...[
+              const SizedBox(height: 18),
+              _buildWarningCard(),
+            ],
+            const SizedBox(height: 18),
+            _buildSectionCard(
+              title: 'Profile Overview',
+              subtitle:
+                  'Review the candidate details, resume access, and communication actions.',
+              child: Column(
+                children: [
+                  _buildProfileRow(
+                    Icons.mail_outline_rounded,
+                    'Email',
+                    seeker['email'] ?? 'No email provided',
+                  ),
+                  const SizedBox(height: 14),
+                  _buildProfileRow(
+                    Icons.work_outline_rounded,
+                    'Applied Role',
+                    widget.jobTitle,
+                  ),
+                  const SizedBox(height: 14),
+                  _buildProfileRow(
+                    Icons.description_outlined,
+                    'Resume',
+                    resumeUrl == null ? 'No resume submitted' : 'Resume available',
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
                     children: [
-                      Text(
-                        seeker['fullName'] ?? 'Unknown',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: (_isDownloadingFile || resumeUrl == null)
+                              ? null
+                              : () => _downloadAndOpenFile(
+                                    resumeUrl,
+                                    'resume.pdf',
+                                  ),
+                          icon: _isDownloadingFile
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.download_rounded),
+                          label: Text(
+                            _isDownloadingFile
+                                ? 'Downloading...'
+                                : 'Download Resume',
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF163B65),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
                         ),
                       ),
-                      Text(
-                        seeker['email'] ?? 'No email',
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 16,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _openChat(
+                            widget.applicantData['seekerID'],
+                            seeker['fullName'] ?? 'Applicant',
+                          ),
+                          icon: const Icon(Icons.chat_bubble_outline_rounded),
+                          label: const Text('Message'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF163B65),
+                            side: const BorderSide(color: Color(0xFF163B65)),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
                         ),
                       ),
                     ],
                   ),
-                ),
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: IconButton(
-                    tooltip: 'Message Candidate',
-                    icon: const Icon(Icons.chat_bubble, color: Colors.blue),
-                    onPressed: () => _openChat(
-                      widget.applicantData['seekerID'],
-                      seeker['fullName'] ?? 'Applicant',
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            // --- 2. RESUME & AI SCORE ---
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: (_isDownloadingFile || resumeUrl == null)
-                        ? null
-                        : () => _downloadAndOpenFile(resumeUrl, 'resume.pdf'),
-                    icon: _isDownloadingFile
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.download),
-                    label: Text(
-                      _isDownloadingFile ? 'Downloading...' : 'Download Resume',
-                    ),
-                  ),
-                ),
-                if (aiScore != null) ...[
-                  const SizedBox(width: 16),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.auto_awesome, color: Colors.amber),
-                        const SizedBox(width: 8),
-                        Text(
-                          'AI Match: $aiScore%',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.amber.shade800,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 ],
-              ],
-            ),
-            const Divider(height: 48),
-
-            // --- 3. STATUS CONTROLLER ---
-            const Text(
-              'Application Status',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: _getStatusColor(_currentStatus).withOpacity(0.1),
-                border: Border.all(color: _getStatusColor(_currentStatus)),
-                borderRadius: BorderRadius.circular(8),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            ),
+            const SizedBox(height: 18),
+            _buildSectionCard(
+              title: 'Application Status',
+              subtitle:
+                  'Track the applicant workflow and manage the next ATS action.',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Current Status:',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey.shade700,
-                    ),
-                  ),
-                  Text(
-                    _currentStatus.toUpperCase(),
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: _getStatusColor(_currentStatus),
-                      fontSize: 16,
-                    ),
-                  ),
+                  _buildCurrentStatusBanner(),
+                  const SizedBox(height: 16),
+                  _buildStatusActions(seeker),
                 ],
               ),
             ),
-            const SizedBox(height: 16),
-
-            if (_isUpdating)
-              const Center(child: CircularProgressIndicator())
-            else
-              Column(
-                children: [
-                  // 👉 STAGE 1: PENDING
-                  if (_currentStatus == 'pending')
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () async {
-                              final didSchedule = await Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      InterviewSchedulingScreen(
-                                        applicantId:
-                                            widget.applicantData['applicantID'],
-                                        applicantName:
-                                            seeker['fullName'] ?? 'Applicant',
-                                        seekerId:
-                                            widget.applicantData['seekerID'],
-                                      ),
-                                ),
-                              );
-
-                              if (didSchedule == true) {
-                                setState(() {
-                                  _currentStatus = 'scheduled';
-                                  _hasBeenScheduled = true;
-                                });
-                              }
-                            },
-                            icon: const Icon(Icons.calendar_month),
-                            label: const Text('Schedule'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () => _updateStatus('rejected'),
-                            icon: const Icon(Icons.cancel),
-                            label: const Text('Reject'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.red,
-                              side: const BorderSide(color: Colors.red),
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                          ),
-                        ),
-                      ],
-                    )
-                  // 👉 STAGE 2: SCHEDULED (Nothing to do here, managed in other tab)
-                  else if (_currentStatus == 'scheduled')
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Column(
-                        children: [
-                          Icon(
-                            Icons.event_available,
-                            color: Colors.blue.shade700,
-                            size: 32,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Interview Scheduled',
-                            style: TextStyle(
-                              color: Colors.blue.shade800,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Please manage this interview from your "Scheduled Interviews" tab.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.blue.shade700,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  // 👉 STAGE 3: INTERVIEWED (Needs final decision or reschedule)
-                  else if (_currentStatus == 'interviewed')
-                    Column(
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: () => _updateStatus('accepted'),
-                                icon: const Icon(Icons.thumb_up),
-                                label: const Text('Accept'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 16,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () => _updateStatus('rejected'),
-                                icon: const Icon(Icons.thumb_down),
-                                label: const Text('Reject'),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: Colors.red,
-                                  side: const BorderSide(color: Colors.red),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 16,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          child: TextButton.icon(
-                            onPressed: () =>
-                                _showRescheduleConfirmation(seeker),
-                            icon: const Icon(Icons.calendar_today),
-                            label: const Text('Reschedule Interview'),
-                            style: TextButton.styleFrom(
-                              foregroundColor: Colors.blue.shade700,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                          ),
-                        ),
-                      ],
-                    )
-                  // 👉 STAGE 4: ACCEPTED (Can be changed to Rejected or Rescheduled)
-                  else if (_currentStatus == 'accepted')
-                    Column(
-                      children: [
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(16),
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: Colors.green.shade50,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Text(
-                            'Candidate ACCEPTED',
-                            style: TextStyle(
-                              color: Colors.green,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: () => _updateStatus('rejected'),
-                            icon: const Icon(Icons.thumb_down),
-                            label: const Text('Change Decision to Reject'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.red,
-                              side: const BorderSide(color: Colors.red),
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                          ),
-                        ),
-                        // 👉 NEW: Reschedule option added to Accepted stage
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          child: TextButton.icon(
-                            onPressed: () =>
-                                _showRescheduleConfirmation(seeker),
-                            icon: const Icon(Icons.calendar_today),
-                            label: const Text('Schedule Follow-up Interview'),
-                            style: TextButton.styleFrom(
-                              foregroundColor: Colors.blue.shade700,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                          ),
-                        ),
-                      ],
-                    )
-                  // 👉 STAGE 5: REJECTED POST-INTERVIEW (Can be changed to Accepted or Rescheduled)
-                  else if (_currentStatus == 'rejected' && _hasBeenScheduled)
-                    Column(
-                      children: [
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(16),
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: Colors.red.shade50,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Text(
-                            'Candidate REJECTED',
-                            style: TextStyle(
-                              color: Colors.red,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: () => _updateStatus('accepted'),
-                            icon: const Icon(Icons.thumb_up),
-                            label: const Text('Change Decision to Accept'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.green,
-                              side: const BorderSide(color: Colors.green),
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                          ),
-                        ),
-                        // 👉 NEW: Reschedule option added to Rejected stage
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          child: TextButton.icon(
-                            onPressed: () =>
-                                _showRescheduleConfirmation(seeker),
-                            icon: const Icon(Icons.calendar_today),
-                            label: const Text('Reschedule Interview'),
-                            style: TextButton.styleFrom(
-                              foregroundColor: Colors.blue.shade700,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                  // 👉 UNDO BUTTON (Only shows if they were rejected straight from Pending)
-                  if (_currentStatus == 'rejected' && !_hasBeenScheduled) ...[
-                    const SizedBox(height: 12),
-                    TextButton.icon(
-                      onPressed: () => _updateStatus('pending'),
-                      icon: const Icon(Icons.refresh, size: 18),
-                      label: const Text('Undo & Reset to Pending'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.grey.shade600,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-
-            const Divider(height: 48),
-
-            // --- 4. PRE-SCREENING ANSWERS ---
-            const Text(
-              'Pre-Screening Answers',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            const SizedBox(height: 18),
+            _buildSectionCard(
+              title: 'Pre-Screening Answers',
+              subtitle:
+                  'Read the candidate responses submitted during the application process.',
+              child: _buildAnswersSection(),
             ),
-            const SizedBox(height: 16),
-
-            _isLoadingAnswers
-                ? const Center(child: CircularProgressIndicator())
-                : _answers.isEmpty
-                ? const Text(
-                    'No pre-screening questions were required for this job.',
-                    style: TextStyle(color: Colors.grey),
-                  )
-                : ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: _answers.length,
-                    itemBuilder: (context, index) {
-                      final ans = _answers[index];
-                      final question = ans['PreScreeningQuestion'] ?? {};
-                      final qText =
-                          question['questionText'] ?? 'Unknown Question';
-                      final isFile = question['questionType'] == 'File';
-                      final answerFileUrl = ans['answerFileURL'];
-
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Q: $qText',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            if (isFile && answerFileUrl != null)
-                              OutlinedButton.icon(
-                                onPressed: _isDownloadingFile
-                                    ? null
-                                    : () => _downloadAndOpenFile(
-                                        answerFileUrl,
-                                        'applicant_answer_${index + 1}.pdf',
-                                      ),
-                                icon: const Icon(Icons.download),
-                                label: const Text('Download Uploaded File'),
-                              )
-                            else
-                              Text(
-                                ans['answerText'] ?? 'No answer provided.',
-                                style: TextStyle(color: Colors.grey.shade800),
-                              ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildTopBar(BuildContext context) {
+    return Row(
+      children: [
+        Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            onTap: () => Navigator.of(context).maybePop(),
+            borderRadius: BorderRadius.circular(16),
+            child: const Padding(
+              padding: EdgeInsets.all(12),
+              child: Icon(
+                Icons.arrow_back_rounded,
+                color: Color(0xFF163B65),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        const Expanded(
+          child: Text(
+            'Applicant Profile',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1B2433),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHeroCard(Map<String, dynamic> seeker, dynamic aiScore) {
+    final name = seeker['fullName'] ?? 'Unknown Applicant';
+    final email = seeker['email'] ?? 'No email';
+    final hasResume = widget.applicantData['submittedResumeURL'] != null;
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF163B65), Color(0xFF335D8A)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _buildHeroChip(
+                icon: Icons.person_search_rounded,
+                text: 'Candidate Review',
+              ),
+              const Spacer(),
+              _buildStatusChip(_currentStatus),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 32,
+                backgroundColor: Colors.white.withOpacity(0.16),
+                child: Text(
+                  name.isNotEmpty ? name[0].toUpperCase() : 'A',
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                        height: 1.1,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      email,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _buildHeroMetric(
+                Icons.work_outline_rounded,
+                widget.jobTitle,
+              ),
+              if (aiScore != null)
+                _buildHeroMetric(
+                  Icons.auto_awesome_rounded,
+                  'AI Match $aiScore%',
+                ),
+              _buildHeroMetric(
+                Icons.description_outlined,
+                hasResume ? 'Resume Ready' : 'No Resume',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWarningCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFCE9E9),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.info_outline_rounded,
+            color: Color(0xFFC24E4E),
+          ),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'This job was deleted by admin. Applicant records remain visible for history, but employer actions are now view-only.',
+              style: TextStyle(
+                color: Color(0xFFC24E4E),
+                fontWeight: FontWeight.w700,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCurrentStatusBanner() {
+    final color = _getStatusColor(_currentStatus);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withOpacity(0.4)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.14),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              _getStatusIcon(_currentStatus),
+              color: color,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Current Status',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF687588),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _currentStatus.toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusActions(Map<String, dynamic> seeker) {
+    final normalizedStatus = _currentStatus.toLowerCase();
+
+    if (_isJobDeleted) {
+      return const SizedBox.shrink();
+    }
+
+    if (_isUpdating) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (normalizedStatus == 'pending' || normalizedStatus == 'reviewed') {
+      return Row(
+        children: [
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: () async {
+                final didSchedule = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => InterviewSchedulingScreen(
+                      applicantId: widget.applicantData['applicantID'],
+                      applicantName: seeker['fullName'] ?? 'Applicant',
+                      seekerId: widget.applicantData['seekerID'],
+                    ),
+                  ),
+                );
+
+                if (didSchedule == true) {
+                  setState(() {
+                    _currentStatus = 'scheduled';
+                    _hasBeenScheduled = true;
+                  });
+                }
+              },
+              icon: const Icon(Icons.calendar_month_rounded),
+              label: const Text('Schedule'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF163B65),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () => _updateStatus('rejected'),
+              icon: const Icon(Icons.cancel_outlined),
+              label: const Text('Reject'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFC24E4E),
+                side: const BorderSide(color: Color(0xFFC24E4E)),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (normalizedStatus == 'rejected' && !_hasBeenScheduled) {
+      return _buildStateMessageCard(
+        color: const Color(0xFFC24E4E),
+        icon: Icons.lock_outline_rounded,
+        title: 'Candidate Rejected',
+        description:
+        'This application was rejected before interview scheduling and can no longer be changed.',
+      );
+    }
+
+    if (normalizedStatus == 'scheduled') {
+      return _buildStateMessageCard(
+        color: const Color(0xFF4A7BB7),
+        icon: Icons.event_available_rounded,
+        title: 'Interview Scheduled',
+        description:
+            'Please manage this interview from your Scheduled Interviews workspace.',
+      );
+    }
+
+    final isPostInterviewStage =
+        normalizedStatus == 'interviewed' ||
+        normalizedStatus == 'accepted' ||
+        (normalizedStatus == 'rejected' && _hasBeenScheduled);
+
+    if (isPostInterviewStage) {
+      final isAccepted = normalizedStatus == 'accepted';
+      final isRejected = normalizedStatus == 'rejected';
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            isAccepted
+                ? 'Current decision is accepted. You can still change it or reschedule.'
+                : isRejected
+                ? 'Current decision is rejected. You can still change it or reschedule.'
+                : 'Choose the next decision for this interviewed candidate.',
+            style: const TextStyle(
+              fontSize: 13,
+              color: Color(0xFF687588),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _updateStatus('accepted'),
+                  icon: const Icon(Icons.thumb_up_alt_rounded),
+                  label: const Text('Accept'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isAccepted
+                        ? const Color(0xFF2D8A5D)
+                        : Colors.white,
+                    foregroundColor: isAccepted
+                        ? Colors.white
+                        : const Color(0xFF2D8A5D),
+                    elevation: 0,
+                    side: BorderSide(
+                      color: const Color(0xFF2D8A5D).withOpacity(
+                        isAccepted ? 0 : 0.35,
+                      ),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _updateStatus('rejected'),
+                  icon: const Icon(Icons.thumb_down_alt_rounded),
+                  label: const Text('Reject'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isRejected
+                        ? const Color(0xFFC24E4E)
+                        : Colors.white,
+                    foregroundColor: isRejected
+                        ? Colors.white
+                        : const Color(0xFFC24E4E),
+                    elevation: 0,
+                    side: BorderSide(
+                      color: const Color(0xFFC24E4E).withOpacity(
+                        isRejected ? 0 : 0.35,
+                      ),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton.icon(
+              onPressed: () => _showRescheduleConfirmation(seeker),
+              icon: const Icon(Icons.calendar_today_rounded),
+              label: const Text('Reschedule Interview'),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF163B65),
+                backgroundColor: const Color(0xFFDCEBFB),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      children: [
+        _buildStateMessageCard(
+          color: const Color(0xFFC24E4E),
+          icon: Icons.person_off_rounded,
+          title: 'Candidate Rejected',
+          description:
+              'This application was rejected before interview scheduling.',
+        ),
+        const SizedBox(height: 12),
+        TextButton.icon(
+          onPressed: () => _updateStatus('pending'),
+          icon: const Icon(Icons.refresh_rounded, size: 18),
+          label: const Text('Undo and Reset to Pending'),
+          style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFF687588),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAnswersSection() {
+    if (_isLoadingAnswers) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_answers.isEmpty) {
+      return const Text(
+        'No pre-screening questions were required for this job.',
+        style: TextStyle(
+          fontSize: 14,
+          color: Color(0xFF687588),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      padding: EdgeInsets.zero,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _answers.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final ans = _answers[index];
+        final question = ans['PreScreeningQuestion'] ?? {};
+        final qText = question['questionText'] ?? 'Unknown Question';
+        final isFile = question['questionType'] == 'File';
+        final answerFileUrl = ans['answerFileURL'];
+
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF7F9FC),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFDCEBFB),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.quiz_outlined,
+                      size: 18,
+                      color: Color(0xFF163B65),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      qText,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1B2433),
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              if (isFile && answerFileUrl != null)
+                OutlinedButton.icon(
+                  onPressed: _isDownloadingFile
+                      ? null
+                      : () => _downloadAndOpenFile(
+                            answerFileUrl,
+                            'applicant_answer_${index + 1}.pdf',
+                          ),
+                  icon: const Icon(Icons.download_rounded),
+                  label: const Text('Download Uploaded File'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF163B65),
+                    side: const BorderSide(color: Color(0xFF163B65)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                )
+              else
+                Text(
+                  ans['answerText'] ?? 'No answer provided.',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    height: 1.5,
+                    color: Color(0xFF4F5C6C),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSectionCard({
+    required String title,
+    required String subtitle,
+    required Widget child,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1B2433),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              fontSize: 13,
+              height: 1.4,
+              color: Color(0xFF687588),
+            ),
+          ),
+          const SizedBox(height: 18),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileRow(IconData icon, String title, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1F5FA),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(icon, color: const Color(0xFF163B65)),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF687588),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 15,
+                  height: 1.45,
+                  color: Color(0xFF1B2433),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStateMessageCard({
+    required Color color,
+    required IconData icon,
+    required String title,
+    required String description,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 30),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            description,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: color.withOpacity(0.9),
+              fontSize: 13,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeroChip({
+    required IconData icon,
+    required String text,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white, size: 16),
+          const SizedBox(width: 8),
+          Text(
+            text,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeroMetric(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white, size: 16),
+          const SizedBox(width: 8),
+          Text(
+            text,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusChip(String status) {
+    final color = _getStatusColor(status);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        status.toUpperCase(),
+        style: TextStyle(
+          color: color == Colors.grey ? Colors.white : color.withOpacity(0.95),
+          fontWeight: FontWeight.w800,
+          fontSize: 11,
+        ),
+      ),
+    );
+  }
+
+  IconData _getStatusIcon(String status) {
+    switch (status.toLowerCase()) {
+      case 'directrejected':
+        return Icons.lock_outline_rounded;
+      case 'scheduled':
+        return Icons.event_available_rounded;
+      case 'interviewed':
+        return Icons.record_voice_over_rounded;
+      case 'accepted':
+        return Icons.verified_rounded;
+      case 'rejected':
+        return Icons.cancel_rounded;
+      default:
+        return Icons.hourglass_top_rounded;
+    }
   }
 }

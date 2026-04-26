@@ -36,6 +36,7 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
 
   double? _selectedLat;
   double? _selectedLng;
+  String? _formError;
 
   @override
   void initState() {
@@ -46,32 +47,28 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
   // 👉 PRE-SCREENING QUESTION VARIABLES
   bool _requirePreScreening = false;
   final List<TextEditingController> _questionControllers = [];
-  final List<String> _questionTypes = []; // 👉 NEW: Tracks 'Text' or 'File' for each question
-
-  // 👉 NEW: AI Tracking Arrays
+  final List<String> _questionTypes = [];
   final List<bool> _isGeneratingQuestion = [];
   final List<bool> _isAIGeneratedList = [];
 
-  // Pre-Screening Helper: Add a question
   void _addQuestion() {
     if (_questionControllers.length < 5) {
       setState(() {
         _questionControllers.add(TextEditingController());
         _questionTypes.add('Text');
-        _isGeneratingQuestion.add(false); // 👉 NEW
-        _isAIGeneratedList.add(false);    // 👉 NEW
+        _isGeneratingQuestion.add(false);
+        _isAIGeneratedList.add(false);
       });
     }
   }
 
-  // Pre-Screening Helper: Remove a question
   void _removeQuestion(int index) {
     setState(() {
       _questionControllers[index].dispose();
       _questionControllers.removeAt(index);
       _questionTypes.removeAt(index);
-      _isGeneratingQuestion.removeAt(index); // 👉 NEW
-      _isAIGeneratedList.removeAt(index);    // 👉 NEW
+      _isGeneratingQuestion.removeAt(index);
+      _isAIGeneratedList.removeAt(index);
 
       if (_questionControllers.isEmpty) {
         _requirePreScreening = false;
@@ -143,7 +140,6 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
   }
 
   Future<void> _openLocationPicker() async {
-    // 1. Navigate to the map and WAIT for a result
     final LatLng? pickedLocation = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -154,11 +150,11 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
       ),
     );
 
-    // 2. If they clicked 'Confirm' (and didn't just hit the back button)
     if (pickedLocation != null) {
       setState(() {
         _selectedLat = pickedLocation.latitude;
         _selectedLng = pickedLocation.longitude;
+        _formError = null;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -175,7 +171,6 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
   }
 
   Future<void> _generateQuestionWithAi(int index) async {
-    // 1. Premium Check (Optional: You can remove this if you want it free)
     if (!_hasActiveSubscription) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('⭐️ Upgrade to Premium to use AI Generation!'), backgroundColor: Colors.amber),
@@ -183,7 +178,6 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
       return;
     }
 
-    // 2. Validate Job Title exists
     final title = _titleController.text.trim();
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -192,21 +186,18 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
       return;
     }
 
-    // 3. Start Loading
     setState(() => _isGeneratingQuestion[index] = true);
 
-    // 4. Fetch from AI
     final type = _questionTypes[index];
     final desc = _descriptionController.text.trim();
 
     final aiQuestion = await _employerService.generateAiQuestion(title, desc, type);
 
-    // 5. Apply Result
     if (mounted) {
       setState(() {
         if (aiQuestion.isNotEmpty) {
           _questionControllers[index].text = aiQuestion;
-          _isAIGeneratedList[index] = true; // Mark as AI generated for the database!
+          _isAIGeneratedList[index] = true;
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Failed to generate question. Try again.')),
@@ -218,31 +209,27 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
   }
 
   Future<void> _submitJob() async {
+    setState(() => _formError = null);
     final currentUser = Supabase.instance.client.auth.currentUser;
 
     if (_selectedCompanyID == null ||
         _titleController.text.trim().isEmpty ||
         _descriptionController.text.trim().isEmpty ||
         _selectedLat == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill all required fields and set a location.')),
-      );
+      setState(() {
+        _formError = 'Please fill all required fields and set a location.';
+      });
       return;
     }
 
-    // 👉 PRE-SCREENING VALIDATION
     List<Map<String, dynamic>> finalQuestions = [];
     if (_requirePreScreening) {
       for (int i = 0; i < _questionControllers.length; i++) {
         final text = _questionControllers[i].text.trim();
         if (text.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please fill out all questions, or remove empty ones.'), backgroundColor: Colors.red),
-          );
+          setState(() => _formError = 'Please fill out all pre-screening questions, or remove empty ones.');
           return;
         }
-
-        // Add both the text and the selected type to our list
         finalQuestions.add({
           'text': text,
           'type': _questionTypes[i],
@@ -258,9 +245,7 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
     final int parsedExperience = int.tryParse(_experienceController.text.trim()) ?? 0;
 
     if (minSalary != null && maxSalary != null && minSalary > maxSalary) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Minimum salary cannot be greater than maximum salary.'), backgroundColor: Colors.red),
-      );
+      setState(() => _formError = 'Minimum salary cannot be greater than maximum salary.');
       return;
     }
 
@@ -279,7 +264,6 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
       }
     }
 
-    // 1. Build the base Job Model
     final newJob = JobModel(
       companyID: _selectedCompanyID!,
       employerID: currentUser!.id,
@@ -292,10 +276,8 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
       jobType: _selectedJobType,
     );
 
-    // 2. Step One: Save the Job to the database
     final createdJob = await _employerService.createJobPosting(newJob);
 
-    // 3. Step Two: If job saved successfully AND we have questions, save questions
     if (createdJob != null && createdJob.jobID != null) {
       if (_requirePreScreening && finalQuestions.isNotEmpty) {
         await _employerService.addPreScreeningQuestions(createdJob.jobID!, finalQuestions);
@@ -310,12 +292,10 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
         Navigator.pop(context);
       }
     } else {
-      setState(() => _isSubmitting = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to post job. Please try again.')),
-        );
-      }
+      setState(() {
+        _isSubmitting = false;
+        _formError = 'Failed to post job. Please try again.';
+      });
     }
   }
 
@@ -326,325 +306,592 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
     _minSalaryController.dispose();
     _maxSalaryController.dispose();
     _experienceController.dispose();
-    // 👉 PRE-SCREENING: Dispose dynamically generated controllers
     for (var controller in _questionControllers) {
       controller.dispose();
     }
     super.dispose();
   }
 
+  // =========================================================================
+  // UI BUILDER METHODS (Morandi / Modern Card Style)
+  // =========================================================================
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Post New Job')),
-      body: _isLoadingCompanies
-          ? const Center(child: CircularProgressIndicator())
-          : _myCompanies.isEmpty
-          ? const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24.0),
-          child: Text(
-            'You need an approved company before you can post a job. Please register a company and wait for admin verification.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 16, color: Colors.grey),
+      backgroundColor: const Color(0xFFF4F7FB),
+      body: SafeArea(
+        child: _isLoadingCompanies
+            ? const Center(child: CircularProgressIndicator())
+            : _myCompanies.isEmpty
+            ? _buildEmptyState()
+            : ListView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+          children: [
+            _buildTopBar(context),
+            const SizedBox(height: 16),
+            _buildHeroCard(),
+            const SizedBox(height: 24),
+
+            _buildCompanySelection(),
+            const SizedBox(height: 18),
+
+            _buildJobDetailsSection(),
+            const SizedBox(height: 18),
+
+            _buildSalarySection(),
+            const SizedBox(height: 18),
+
+            _buildSectionCard(
+              title: 'Work Location',
+              subtitle: 'Pinpoint where the employee will be working.',
+              child: _buildLocationPanel(),
+            ),
+            const SizedBox(height: 18),
+
+            _buildSectionCard(
+              title: 'Job Description',
+              subtitle: 'Detail the responsibilities and requirements.',
+              child: _buildStyledField(
+                controller: _descriptionController,
+                label: 'Full Description',
+                icon: Icons.notes_rounded,
+                maxLines: 6,
+              ),
+            ),
+            const SizedBox(height: 18),
+
+            _buildSectionCard(
+              title: 'Pre-Screening (Optional)',
+              subtitle: 'Filter candidates before they apply.',
+              child: _buildPreScreeningPanel(),
+            ),
+            const SizedBox(height: 24),
+
+            _buildSubmitPanel(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopBar(BuildContext context) {
+    return Row(
+      children: [
+        Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            onTap: () => Navigator.of(context).maybePop(),
+            borderRadius: BorderRadius.circular(16),
+            child: const Padding(
+              padding: EdgeInsets.all(12),
+              child: Icon(Icons.arrow_back_rounded, color: Color(0xFF163B65)),
+            ),
           ),
         ),
-      )
-          : ListView(
-        padding: const EdgeInsets.all(24.0),
-        children: [
-          if (widget.preselectedCompany != null)
-            InputDecorator(
-              decoration: const InputDecoration(
-                labelText: 'Posting for Company',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.business),
-              ),
-              child: Text(widget.preselectedCompany!.name, style: const TextStyle(fontSize: 16)),
-            )
-          else
-            DropdownButtonFormField<String>(
-              initialValue: _selectedCompanyID,
-              decoration: const InputDecoration(
-                labelText: 'Select Company',
-                border: OutlineInputBorder(),
-              ),
-              items: _myCompanies.map((company) {
-                return DropdownMenuItem(value: company.companyID, child: Text(company.name));
-              }).toList(),
-              onChanged: (value) => setState(() => _selectedCompanyID = value),
-            ),
-          const SizedBox(height: 16),
+        const SizedBox(width: 12),
+        const Expanded(
+          child: Text(
+            'Post New Job',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF1B2433)),
+          ),
+        ),
+      ],
+    );
+  }
 
-          TextField(
+  Widget _buildHeroCard() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF163B65), Color(0xFF335D8A)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.14),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.work_rounded, color: Colors.white, size: 16),
+                SizedBox(width: 8),
+                Text('Recruitment Setup', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'Find the perfect candidate',
+            style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w800, height: 1.1),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Create an attractive job posting with AI salary suggestions and custom pre-screening questions.',
+            style: TextStyle(color: Colors.white70, fontSize: 15, height: 1.4),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionCard({required String title, required String subtitle, required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1B2433))),
+          const SizedBox(height: 6),
+          Text(subtitle, style: const TextStyle(fontSize: 13, color: Color(0xFF687588), height: 1.4)),
+          const SizedBox(height: 18),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompanySelection() {
+    return _buildSectionCard(
+      title: 'Hiring Company',
+      subtitle: 'Select which verified company this job belongs to.',
+      child: widget.preselectedCompany != null
+          ? Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF7F9FC),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.business_rounded, color: Color(0xFF163B65)),
+            const SizedBox(width: 12),
+            Text(widget.preselectedCompany!.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      )
+          : _buildStyledDropdown(
+        value: _selectedCompanyID,
+        label: 'Select Company',
+        icon: Icons.business_rounded,
+        items: _myCompanies.map((c) => DropdownMenuItem(value: c.companyID, child: Text(c.name))).toList(),
+        onChanged: (val) => setState(() => _selectedCompanyID = val),
+      ),
+    );
+  }
+
+  Widget _buildJobDetailsSection() {
+    return _buildSectionCard(
+      title: 'Job Details',
+      subtitle: 'The core information for your posting.',
+      child: Column(
+        children: [
+          _buildStyledField(
             controller: _titleController,
-            decoration: const InputDecoration(labelText: 'Job Title', border: OutlineInputBorder()),
+            label: 'Job Title',
+            icon: Icons.title_rounded,
           ),
           const SizedBox(height: 16),
-
-          DropdownButtonFormField<String>(
-            initialValue: _selectedJobType,
-            decoration: const InputDecoration(labelText: 'Job Type', border: OutlineInputBorder()),
+          _buildStyledDropdown(
+            value: _selectedJobType,
+            label: 'Job Type',
+            icon: Icons.schedule_rounded,
             items: const [
               DropdownMenuItem(value: 'Full-time', child: Text('Full-time')),
               DropdownMenuItem(value: 'Part-time', child: Text('Part-time')),
             ],
-            onChanged: (value) {
-              if (value != null) setState(() => _selectedJobType = value);
+            onChanged: (val) {
+              if (val != null) setState(() => _selectedJobType = val);
             },
           ),
           const SizedBox(height: 16),
-
-          TextField(
+          _buildStyledField(
             controller: _experienceController,
+            label: 'Minimum Experience (Years)',
+            icon: Icons.history_edu_rounded,
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: const InputDecoration(
-              labelText: 'Minimum Working Experience (Years)',
-              hintText: 'e.g., 0 for fresh grad, 2 for intermediate',
-              border: OutlineInputBorder(),
-            ),
           ),
-          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
 
+  Widget _buildSalarySection() {
+    return _buildSectionCard(
+      title: 'Compensation',
+      subtitle: 'Set a salary range or ask AI for market rates.',
+      child: Column(
+        children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                flex: 1,
-                child: TextField(
+                child: _buildStyledField(
                   controller: _minSalaryController,
+                  label: _selectedJobType == 'Part-time' ? 'Hourly Rate' : 'Min Salary',
+                  icon: Icons.payments_rounded,
                   keyboardType: TextInputType.number,
+                  prefixText: 'RM ',
+                  suffixText: _selectedJobType == 'Part-time' ? ' / hr' : null,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: InputDecoration(
-                    labelText: _selectedJobType == 'Part-time' ? 'Hourly Rate' : 'Min Salary',
-                    prefixText: 'RM ',
-                    suffixText: _selectedJobType == 'Part-time' ? ' / hr' : null,
-                    border: const OutlineInputBorder(),
-                  ),
                 ),
               ),
               if (_selectedJobType == 'Full-time') ...[
-                const SizedBox(width: 8),
+                const SizedBox(width: 12),
                 Expanded(
-                  flex: 1,
-                  child: TextField(
+                  child: _buildStyledField(
                     controller: _maxSalaryController,
+                    label: 'Max Salary',
+                    icon: Icons.trending_up_rounded,
                     keyboardType: TextInputType.number,
+                    prefixText: 'RM ',
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: const InputDecoration(labelText: 'Max (Optional)', prefixText: 'RM ', border: OutlineInputBorder()),
                   ),
                 ),
               ],
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 1,
-                child: SizedBox(
-                  height: 56,
-                  child: ElevatedButton.icon(
-                    onPressed: _isFetchingAi ? null : _suggestSalary,
-                    icon: _isFetchingAi
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                        : Icon(_hasActiveSubscription ? Icons.auto_awesome : Icons.lock, color: Colors.amber),
-                    label: const Text('AI Suggest'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.amber.withValues(alpha: 0.1),
-                      foregroundColor: Colors.amber.shade900,
-                      elevation: 0,
-                      padding: EdgeInsets.zero,
-                    ),
-                  ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _isFetchingAi ? null : _suggestSalary,
+              icon: _isFetchingAi
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : Icon(_hasActiveSubscription ? Icons.auto_awesome : Icons.lock, color: Colors.amber.shade700),
+              label: Text(
+                _hasActiveSubscription ? 'Suggest Market Salary via AI' : 'AI Salary Suggestion (Premium)',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.amber.shade50,
+                foregroundColor: Colors.amber.shade900,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLocationPanel() {
+    final bool hasLocation = _selectedLat != null;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F9FC),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDCEBFB),
+                  borderRadius: BorderRadius.circular(14),
                 ),
+                child: const Icon(Icons.location_on_rounded, color: Color(0xFF163B65)),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text('Map Coordinates', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1B2433))),
               ),
             ],
           ),
           const SizedBox(height: 16),
-
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(border: Border.all(color: Colors.grey), borderRadius: BorderRadius.circular(8)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text('Job Location', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
-                const SizedBox(height: 8),
-                Text(
-                  _selectedLat == null ? 'Location required for Job Seekers to find this.' : 'Coordinates Set: $_selectedLat, $_selectedLng',
-                  style: TextStyle(color: _selectedLat == null ? Colors.red : Colors.black),
-                ),
-                const SizedBox(height: 12),
-                ElevatedButton.icon(
-                  onPressed: _openLocationPicker,
-                  icon: const Icon(Icons.pin_drop),
-                  label: Text(_selectedLat == null ? 'Set Location on Map' : 'Change Location'),
-                ),
-              ],
+          Text(
+            hasLocation ? 'Latitude: ${_selectedLat!.toStringAsFixed(4)}\nLongitude: ${_selectedLng!.toStringAsFixed(4)}' : 'No location selected yet.',
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.4,
+              color: hasLocation ? const Color(0xFF1B2433) : const Color(0xFF687588),
             ),
           ),
           const SizedBox(height: 16),
-
-          TextField(
-            controller: _descriptionController,
-            maxLines: 8,
-            decoration: const InputDecoration(
-              labelText: 'Full Job Description & Requirements',
-              border: OutlineInputBorder(),
-              alignLabelWithHint: true,
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _openLocationPicker,
+              icon: const Icon(Icons.map_rounded),
+              label: Text(hasLocation ? 'Change Location' : 'Search or Pick on Map'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF163B65),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
             ),
           ),
-          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
 
-          // 👉 PRE-SCREENING UI WIDGET
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.05),
-              border: Border.all(color: Colors.blue.shade200),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SwitchListTile(
-                  title: const Text('Add Pre-screening Questions', style: TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: const Text('Ask candidates up to 5 short questions before they can apply.'),
-                  value: _requirePreScreening,
-                  activeColor: Colors.blue,
-                  contentPadding: EdgeInsets.zero,
-                  onChanged: (bool value) {
-                    setState(() {
-                      _requirePreScreening = value;
-                      if (_requirePreScreening && _questionControllers.isEmpty) {
-                        _addQuestion();
-                      }
-                    });
-                  },
-                ),
-
-                if (_requirePreScreening) ...[
-                  const Divider(),
-                  const SizedBox(height: 8),
-
+  Widget _buildPreScreeningPanel() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F9FC),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        children: [
+          SwitchListTile(
+            title: const Text('Enable Pre-screening', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+            subtitle: const Text('Ask up to 5 questions.', style: TextStyle(fontSize: 12)),
+            value: _requirePreScreening,
+            activeColor: const Color(0xFF163B65),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            onChanged: (bool value) {
+              setState(() {
+                _requirePreScreening = value;
+                if (_requirePreScreening && _questionControllers.isEmpty) _addQuestion();
+              });
+            },
+          ),
+          if (_requirePreScreening) ...[
+            const Divider(height: 1, color: Color(0xFFE2E8F0)),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
                   ...List.generate(_questionControllers.length, (index) {
                     return Container(
-                      margin: const EdgeInsets.only(bottom: 16.0),
-                      padding: const EdgeInsets.all(12.0),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        border: Border.all(color: Colors.grey.shade300),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
-                      child: Row(
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Column(
-                              children: [
-                                // 1. The Question Text Input
-                                TextField(
-                                  controller: _questionControllers[index],
-                                  decoration: InputDecoration(
-                                    labelText: 'Question ${index + 1}',
-                                    hintText: 'e.g., Please upload your portfolio.',
-                                    border: const OutlineInputBorder(),
-                                    isDense: true,
-
-                                    // 👉 THE MAGIC AI BUTTON
-                                    suffixIcon: _isGeneratingQuestion[index]
-                                        ? const Padding(
-                                      padding: EdgeInsets.all(12.0),
-                                      child: SizedBox(
-                                          width: 16, height: 16,
-                                          child: CircularProgressIndicator(strokeWidth: 2)
-                                      ),
-                                    )
-                                        : IconButton(
-                                      icon: const Icon(Icons.auto_awesome, color: Colors.amber),
-                                      tooltip: 'Generate with AI',
-                                      onPressed: () => _generateQuestionWithAi(index),
-                                    ),
-                                  ),
-                                  onChanged: (val) {
-                                    // If the user manually edits the AI text, it's no longer purely AI generated!
-                                    if (_isAIGeneratedList[index]) {
-                                      setState(() => _isAIGeneratedList[index] = false);
-                                    }
-                                  },
-                                ),
-                                const SizedBox(height: 12),
-
-                                // 2. The Question Type Dropdown
-                                DropdownButtonFormField<String>(
-                                  initialValue: _questionTypes[index],
-
-                                  isExpanded: true, // 👉 THE MAGIC FIX: Forces it to fit the screen!
-
-                                  decoration: const InputDecoration(
-                                    labelText: 'Required Answer Format',
-                                    border: OutlineInputBorder(),
-                                    isDense: true,
-                                    prefixIcon: Icon(Icons.rule),
-                                  ),
-                                  items: const [
-                                    DropdownMenuItem(
-                                      value: 'Text',
-                                      child: Text(
-                                        'Text Answer (Typing)',
-                                        overflow: TextOverflow.ellipsis, // 👉 Keeps text tidy
-                                      ),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 'File',
-                                      child: Text(
-                                        'File Upload (PDF, Image, Code)',
-                                        overflow: TextOverflow.ellipsis, // 👉 Keeps text tidy
-                                      ),
-                                    ),
-                                  ],
-                                  onChanged: (String? newValue) {
-                                    if (newValue != null) {
-                                      setState(() {
-                                        _questionTypes[index] = newValue;
-                                      });
-                                    }
-                                  },
-                                ),
-                              ],
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('Question ${index + 1}', style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF163B65))),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, color: Color(0xFFC24E4E), size: 20),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                onPressed: () => _removeQuestion(index),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          _buildStyledField(
+                            controller: _questionControllers[index],
+                            label: 'Question Text',
+                            icon: Icons.help_outline_rounded,
+                            onChanged: (val) {
+                              if (_isAIGeneratedList[index]) setState(() => _isAIGeneratedList[index] = false);
+                            },
+                            suffixIcon: _isGeneratingQuestion[index]
+                                ? const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                            )
+                                : IconButton(
+                              icon: const Icon(Icons.auto_awesome, color: Colors.amber),
+                              tooltip: 'Generate with AI',
+                              onPressed: () => _generateQuestionWithAi(index),
                             ),
                           ),
-                          const SizedBox(width: 8),
-
-                          // 3. The Remove Button
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline, color: Colors.red),
-                            tooltip: 'Remove Question',
-                            onPressed: () => _removeQuestion(index),
+                          const SizedBox(height: 12),
+                          _buildStyledDropdown(
+                            value: _questionTypes[index],
+                            label: 'Format',
+                            icon: Icons.rule_rounded,
+                            items: const [
+                              DropdownMenuItem(value: 'Text', child: Text('Text Answer')),
+                              DropdownMenuItem(value: 'File', child: Text('File Upload')),
+                            ],
+                            onChanged: (val) {
+                              if (val != null) setState(() => _questionTypes[index] = val);
+                            },
                           ),
                         ],
                       ),
                     );
                   }),
-
                   if (_questionControllers.length < 5)
-                    TextButton.icon(
+                    OutlinedButton.icon(
                       onPressed: _addQuestion,
-                      icon: const Icon(Icons.add),
-                      label: Text('Add Another Question (${_questionControllers.length}/5)'),
+                      icon: const Icon(Icons.add_rounded),
+                      label: Text('Add Question (${_questionControllers.length}/5)'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF163B65),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+                      ),
                     ),
                 ],
-              ],
+              ),
+            ),
+          ]
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSubmitPanel() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Ready to publish?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1B2433))),
+          const SizedBox(height: 8),
+          const Text(
+            'Your job will be instantly visible to job seekers matching the criteria.',
+            style: TextStyle(fontSize: 14, height: 1.4, color: Color(0xFF687588)),
+          ),
+          const SizedBox(height: 18),
+          if (_formError != null) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: const Color(0xFFFCE9E9), borderRadius: BorderRadius.circular(14)),
+              child: Text(_formError!, style: const TextStyle(color: Color(0xFFC24E4E), fontSize: 13, fontWeight: FontWeight.w600)),
+            ),
+            const SizedBox(height: 16),
+          ],
+          SizedBox(
+            width: double.infinity,
+            child: _isSubmitting
+                ? const Center(child: CircularProgressIndicator())
+                : ElevatedButton(
+              onPressed: _submitJob,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF163B65),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 17),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              ),
+              child: const Text('Publish Job Posting', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
             ),
           ),
-          const SizedBox(height: 32),
-
-          _isSubmitting
-              ? const Center(child: CircularProgressIndicator())
-              : ElevatedButton(
-            onPressed: _submitJob,
-            style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-            child: const Text('Publish Job Posting', style: TextStyle(fontSize: 18)),
-          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), shape: BoxShape.circle),
+              child: const Icon(Icons.domain_disabled_rounded, size: 64, color: Color(0xFF163B65)),
+            ),
+            const SizedBox(height: 24),
+            const Text('No Approved Companies', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF1B2433))),
+            const SizedBox(height: 12),
+            const Text(
+              'You need an approved company before you can post a job. Please register a company and wait for admin verification.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 15, color: Color(0xFF687588), height: 1.4),
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF163B65),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              child: const Text('Go Back'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- REUSABLE INPUT STYLES ---
+
+  Widget _buildStyledField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    int maxLines = 1,
+    List<TextInputFormatter>? inputFormatters,
+    TextInputType? keyboardType,
+    String? prefixText,
+    String? suffixText,
+    Widget? suffixIcon,
+    void Function(String)? onChanged,
+  }) {
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      inputFormatters: inputFormatters,
+      keyboardType: keyboardType,
+      onChanged: onChanged,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: const Color(0xFF687588)),
+        prefixText: prefixText,
+        suffixText: suffixText,
+        suffixIcon: suffixIcon,
+        filled: true,
+        fillColor: const Color(0xFFF7F9FC),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: const BorderSide(color: Color(0xFF163B65), width: 1.4)),
+      ),
+    );
+  }
+
+  Widget _buildStyledDropdown({
+    required String? value,
+    required String label,
+    required IconData icon,
+    required List<DropdownMenuItem<String>> items,
+    required void Function(String?) onChanged,
+  }) {
+    return DropdownButtonFormField<String>(
+      value: value,
+      items: items,
+      onChanged: onChanged,
+      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF687588)),
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: const Color(0xFF687588)),
+        filled: true,
+        fillColor: const Color(0xFFF7F9FC),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: const BorderSide(color: Color(0xFF163B65), width: 1.4)),
       ),
     );
   }
