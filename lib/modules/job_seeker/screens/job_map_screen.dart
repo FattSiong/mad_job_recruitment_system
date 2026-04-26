@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
-import '../../../core/theme/app_colors.dart';
+
 import '../../../core/constants/ui_constants.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../models/job_model.dart';
 import '../controllers/location_controller.dart';
 import 'job_details_screen.dart';
@@ -15,18 +16,20 @@ class JobMapScreen extends StatefulWidget {
 }
 
 class _JobMapScreenState extends State<JobMapScreen> {
+  static const Color _primary = Color(0xFF163B65);
+  static const Color _primarySoft = Color(0xFFDCEBFB);
+  static const Color _textPrimary = Color(0xFF1B2433);
+  static const Color _textMuted = Color(0xFF687588);
+  static const Color _surfaceAlt = Color(0xFFF7F9FC);
+  static const Color _border = Color(0xFFE1E8F0);
+
   final LocationController _locationController = LocationController();
   final TextEditingController _keywordController = TextEditingController();
-
-  // 👉 Added controller for custom salary input matching Seeker Dashboard
   final TextEditingController _salaryInputController = TextEditingController();
 
-  bool _isMapLoaded = false;
   GoogleMapController? _mapController;
-
   LatLng _mapCenter = const LatLng(3.140853, 101.693207);
 
-  // Filter States
   String _selectedJobType = 'All';
   String _selectedDatePosted = 'All time';
   String _selectedSalary = 'Any';
@@ -38,10 +41,41 @@ class _JobMapScreenState extends State<JobMapScreen> {
   JobModel? _selectedJob;
 
   @override
+  void initState() {
+    super.initState();
+    _getUserLocation();
+  }
+
+  @override
   void dispose() {
     _keywordController.dispose();
     _salaryInputController.dispose();
     super.dispose();
+  }
+
+  ButtonStyle _primaryButtonStyle() {
+    return ElevatedButton.styleFrom(
+      backgroundColor: _primary,
+      foregroundColor: Colors.white,
+      elevation: 0,
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 18),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+      ),
+    );
+  }
+
+  ButtonStyle _secondaryButtonStyle() {
+    return OutlinedButton.styleFrom(
+      foregroundColor: _textPrimary,
+      backgroundColor: Colors.white,
+      elevation: 0,
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
+      side: const BorderSide(color: _border),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+    );
   }
 
   Future<void> _getUserLocation() async {
@@ -60,15 +94,21 @@ class _JobMapScreenState extends State<JobMapScreen> {
 
       if (permission == LocationPermission.deniedForever) return;
 
-      Position position = await Geolocator.getCurrentPosition();
+      final position = await Geolocator.getCurrentPosition();
+
+      if (!mounted) return;
+
       setState(() {
         _mapCenter = LatLng(position.latitude, position.longitude);
-        if (_mapController != null) {
-          _mapController!.animateCamera(CameraUpdate.newLatLng(_mapCenter));
-        }
       });
+
+      _mapController?.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(target: _mapCenter, zoom: 12.5),
+        ),
+      );
     } catch (e) {
-      debugPrint("Error getting location: $e");
+      debugPrint('Error getting location: $e');
     }
   }
 
@@ -79,16 +119,15 @@ class _JobMapScreenState extends State<JobMapScreen> {
       _isLoading = true;
       _selectedJob = null;
       _jobMarkers = {};
-
       _circles = {
         Circle(
           circleId: const CircleId('search_radius'),
           center: _mapCenter,
           radius: _currentRadiusKm * 1000,
-          fillColor: const Color(0xFF0A66C2).withValues(alpha: 0.1),
-          strokeColor: const Color(0xFF0A66C2),
+          fillColor: _primary.withValues(alpha: 0.10),
+          strokeColor: _primary,
           strokeWidth: 2,
-        )
+        ),
       };
     });
 
@@ -103,7 +142,11 @@ class _JobMapScreenState extends State<JobMapScreen> {
         datePosted: _selectedDatePosted,
       );
 
-      final Set<Marker> newMarkers = jobs.map((job) {
+      final safeJobs = jobs
+          .where((job) => job.jobID != null && job.latitude != null && job.longitude != null)
+          .toList();
+
+      final newMarkers = safeJobs.map((job) {
         return Marker(
           markerId: MarkerId(job.jobID!),
           position: LatLng(job.latitude!, job.longitude!),
@@ -113,33 +156,50 @@ class _JobMapScreenState extends State<JobMapScreen> {
               _selectedJob = job;
             });
           },
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueBlue,
+          ),
         );
       }).toSet();
 
-      if (mounted) {
-        setState(() {
-          _jobMarkers = newMarkers;
-          _isLoading = false;
-        });
-      }
+      if (!mounted) return;
+
+      setState(() {
+        _jobMarkers = newMarkers;
+        _isLoading = false;
+      });
     } catch (e) {
-      debugPrint("Error searching jobs: $e");
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      debugPrint('Error searching jobs: $e');
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+      });
     }
+  }
+
+  void _resetFilters() {
+    setState(() {
+      _currentRadiusKm = 25.0;
+      _selectedJobType = 'All';
+      _selectedDatePosted = 'All time';
+      _selectedSalary = 'Any';
+      _keywordController.clear();
+      _salaryInputController.clear();
+    });
   }
 
   void _showFilterOptions(String filterType) {
     List<String> options = [];
     String currentValue = '';
 
-    // Standard options setup remains the same
     if (filterType == 'Date posted') {
-      options = ['All time', 'Last 24 hours', 'Last 3 days', 'Last 7 days', 'Last 14 days'];
+      options = [
+        'All time',
+        'Last 24 hours',
+        'Last 3 days',
+        'Last 7 days',
+        'Last 14 days',
+      ];
       currentValue = _selectedDatePosted;
     } else if (filterType == 'Job type') {
       options = ['All', 'Full-time', 'Part-time'];
@@ -147,140 +207,276 @@ class _JobMapScreenState extends State<JobMapScreen> {
     } else if (filterType == 'Salary') {
       options = ['Any', 'RM1000', 'RM2000', 'RM3000', 'RM4000', 'RM5000'];
       currentValue = _selectedSalary;
-      String currentVal = _selectedSalary.replaceAll(RegExp(r'[^0-9]'), '');
-      _salaryInputController.text = currentVal;
+      _salaryInputController.text =
+          _selectedSalary.replaceAll(RegExp(r'[^0-9]'), '');
     }
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (context) {
-        // 👉 Move the temp variable declaration here so it's only scoped to this builder
         double tempRadius = _currentRadiusKm;
 
         return StatefulBuilder(
           builder: (context, setModalState) {
             return Padding(
-              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Filter by $filterType', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 16),
-
-                      // 👉 Radius Slider uses tempRadius
-                      if (filterType == 'Radius') ...[
-                        const Text('Discovery nearby job', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
-                        const SizedBox(height: 8),
-                        Text('Set search radius up to ${tempRadius.toInt()}km', style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
-                        const SizedBox(height: 28),
-                        SliderTheme(
-                          data: SliderThemeData(
-                            activeTrackColor: const Color(0xFF0A66C2),
-                            inactiveTrackColor: Colors.grey.shade300,
-                            thumbColor: const Color(0xFF0A66C2),
-                            overlayColor: const Color(0xFF0A66C2).withValues(alpha: 0.12),
-                            valueIndicatorColor: const Color(0xFF0A66C2),
-                            valueIndicatorTextStyle: const TextStyle(color: Colors.white),
-                            trackHeight: 8,
-                            thumbShape: const CustomSliderThumb(icon: Icons.directions_car),
-                          ),
-                          child: Slider(
-                            value: tempRadius,
-                            min: 5.0,
-                            max: 100.0,
-                            divisions: 19,
-                            label: '${tempRadius.toInt()} km',
-                            onChanged: (double value) {
-                              setModalState(() {
-                                tempRadius = value;
-                              });
-                            },
-                          ),
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 16,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(999),
                         ),
-                        const SizedBox(height: 24),
-                        Row(
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      filterType == 'Radius'
+                          ? 'Search Radius'
+                          : 'Filter by $filterType',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: _textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      filterType == 'Radius'
+                          ? 'Choose how far from the map center you want to search.'
+                          : 'Refine nearby jobs with cleaner filters.',
+                      style: const TextStyle(
+                        color: _textMuted,
+                        fontSize: 14,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    if (filterType == 'Radius') ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: _surfaceAlt,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Column(
                           children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () {
-                                  setState(() => _currentRadiusKm = 25.0);
-                                  Navigator.pop(context);
-                                },
-                                child: const Text('Reset', style: TextStyle(color: Colors.black87)),
+                            Text(
+                              '${tempRadius.toInt()} km',
+                              style: const TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                                color: _primary,
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: () {
-                                  setState(() => _currentRadiusKm = tempRadius);
-                                  Navigator.pop(context);
+                            const SizedBox(height: 6),
+                            const Text(
+                              'Current search radius',
+                              style: TextStyle(
+                                color: _textMuted,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            SliderTheme(
+                              data: SliderThemeData(
+                                activeTrackColor: _primary,
+                                inactiveTrackColor: Colors.grey.shade300,
+                                thumbColor: _primary,
+                                overlayColor: _primary.withValues(alpha: 0.12),
+                                valueIndicatorColor: _primary,
+                                valueIndicatorTextStyle:
+                                const TextStyle(color: Colors.white),
+                                trackHeight: 8,
+                                thumbShape: const CustomSliderThumb(
+                                  icon: Icons.directions_car,
+                                ),
+                              ),
+                              child: Slider(
+                                value: tempRadius,
+                                min: 5.0,
+                                max: 100.0,
+                                divisions: 19,
+                                label: '${tempRadius.toInt()} km',
+                                onChanged: (value) {
+                                  setModalState(() {
+                                    tempRadius = value;
+                                  });
                                 },
-                                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0A66C2)),
-                                child: const Text('Apply', style: TextStyle(color: Colors.white)),
                               ),
                             ),
                           ],
-                        )
-                      ]
-                      // 👉 Salary Filter uses RadioGroup (No tempRadius needed)
-                      else if (filterType == 'Salary') ...[
-                        // Custom Input Logic...
-                        const Text('Or Select Predefined Range', style: TextStyle(fontSize: 14, color: Colors.black54, fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 8),
-                        RadioGroup<String>(
-                          groupValue: currentValue,
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() => _selectedSalary = value);
-                              Navigator.pop(context);
-                            }
-                          },
-                          child: Column(
-                            children: options.map((option) => RadioListTile<String>(
-                              title: Text(option),
-                              value: option,
-                              activeColor: const Color(0xFF0A66C2),
-                              contentPadding: EdgeInsets.zero,
-                            )).toList(),
-                          ),
                         ),
-                      ]
-                      // 👉 Other filters use RadioGroup (No tempRadius needed)
-                      else ...[
-                          RadioGroup<String>(
-                            groupValue: currentValue,
-                            onChanged: (value) {
-                              if (value != null) {
-                                setState(() {
-                                  if (filterType == 'Date posted') {
-                                    _selectedDatePosted = value;
-                                  } else if (filterType == 'Job type') {
-                                    _selectedJobType = value;
-                                  }
-                                });
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () {
+                                setState(() => _currentRadiusKm = 25.0);
                                 Navigator.pop(context);
-                              }
-                            },
-                            child: Column(
-                              children: options.map((option) => RadioListTile<String>(
-                                title: Text(option),
-                                value: option,
-                                activeColor: const Color(0xFF0A66C2),
-                                contentPadding: EdgeInsets.zero,
-                              )).toList(),
+                              },
+                              style: _secondaryButtonStyle(),
+                              child: const Text('Reset'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () {
+                                setState(() => _currentRadiusKm = tempRadius);
+                                Navigator.pop(context);
+                              },
+                              style: _primaryButtonStyle(),
+                              child: const Text('Apply'),
                             ),
                           ),
                         ],
+                      ),
+                    ] else if (filterType == 'Salary') ...[
+                      TextField(
+                        controller: _salaryInputController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          hintText: 'e.g. 3500',
+                          prefixIcon: const Padding(
+                            padding: EdgeInsetsDirectional.only(start: 16, end: 8),
+                            child: Align(
+                              widthFactor: 1,
+                              heightFactor: 1,
+                              child: Text(
+                                'RM',
+                                style: TextStyle(color: Color(0xFF687588)),
+                              ),
+                            ),
+                          ),
+                          filled: true,
+                          fillColor: _surfaceAlt,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: const BorderSide(
+                              color: _primary,
+                              width: 1.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () {
+                                _salaryInputController.clear();
+                                setState(() => _selectedSalary = 'Any');
+                                Navigator.pop(context);
+                              },
+                              style: _secondaryButtonStyle(),
+                              child: const Text('Clear'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () {
+                                final typed = _salaryInputController.text.trim();
+                                setState(() {
+                                  _selectedSalary =
+                                  typed.isNotEmpty ? 'RM $typed' : 'Any';
+                                });
+                                Navigator.pop(context);
+                              },
+                              style: _primaryButtonStyle(),
+                              child: const Text('Apply'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      const Divider(),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Or Select Predefined Range',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: _textMuted,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      RadioGroup<String>(
+                        groupValue: currentValue,
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() => _selectedSalary = value);
+                            Navigator.pop(context);
+                          }
+                        },
+                        child: Column(
+                          children: options.map((option) {
+                            return RadioListTile<String>(
+                              title: Text(option),
+                              value: option,
+                              activeColor: _primary,
+                              contentPadding: EdgeInsets.zero,
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ] else ...[
+                      RadioGroup<String>(
+                        groupValue: currentValue,
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() {
+                              if (filterType == 'Date posted') {
+                                _selectedDatePosted = value;
+                              } else if (filterType == 'Job type') {
+                                _selectedJobType = value;
+                              }
+                            });
+                            Navigator.pop(context);
+                          }
+                        },
+                        child: Column(
+                          children: options.map((option) {
+                            return RadioListTile<String>(
+                              title: Text(option),
+                              value: option,
+                              activeColor: _primary,
+                              contentPadding: EdgeInsets.zero,
+                            );
+                          }).toList(),
+                        ),
+                      ),
                     ],
-                  ),
+                  ],
                 ),
               ),
             );
@@ -299,15 +495,24 @@ class _JobMapScreenState extends State<JobMapScreen> {
         label: Text(isActive ? value : label),
         selected: isActive,
         onSelected: (_) => _showFilterOptions(label),
-        selectedColor: const Color(0xFF0A66C2).withValues(alpha: 0.1),
-        labelStyle: TextStyle(
-          color: isActive ? const Color(0xFF0A66C2) : Colors.black87,
-          fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-        ),
+        selectedColor: _primarySoft,
         backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        showCheckmark: false,
+        labelStyle: TextStyle(
+          color: isActive ? _primary : _textPrimary,
+          fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+          fontSize: 13.5,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: isActive ? const Color(0xFF0A66C2) : Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(
+            color: isActive ? const Color(0xFFB8D1EE) : _border,
+          ),
+        ),
+        side: BorderSide(
+          color: isActive ? const Color(0xFFB8D1EE) : _border,
         ),
       ),
     );
@@ -316,38 +521,22 @@ class _JobMapScreenState extends State<JobMapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF4F7FB),
       appBar: AppBar(
-        title: const Text('Discover Nearby Jobs', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
-      ),
-      body: !_isMapLoaded
-          ? Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.map, size: 80, color: Colors.grey.shade400),
-            const SizedBox(height: UiConstants.defaultPadding),
-            const Text('Map loading is paused to save API quota.', style: TextStyle(color: Colors.grey)),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () {
-                setState(() => _isMapLoaded = true);
-                _getUserLocation();
-              },
-              icon: const Icon(Icons.cloud_download),
-              label: const Text('Load Google Map'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0A66C2),
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ],
+        title: const Text(
+          'Discover Nearby Jobs',
+          style: TextStyle(
+            color: _textPrimary,
+            fontWeight: FontWeight.bold,
+            fontSize: 22,
+          ),
         ),
-      )
-          : Stack(
+        backgroundColor: const Color(0xFFF4F7FB),
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        iconTheme: const IconThemeData(color: _textPrimary),
+      ),
+      body: Stack(
         children: [
           GoogleMap(
             initialCameraPosition: CameraPosition(
@@ -373,11 +562,14 @@ class _JobMapScreenState extends State<JobMapScreen> {
             alignment: Alignment.center,
             child: Padding(
               padding: EdgeInsets.only(bottom: 36.0),
-              child: Icon(Icons.location_on, size: 40, color: AppColors.errorRed),
+              child: Icon(
+                Icons.location_on,
+                size: 40,
+                color: AppColors.errorRed,
+              ),
             ),
           ),
 
-          // 👉 Top Controls Panel
           Positioned(
             top: 16,
             left: 16,
@@ -385,51 +577,64 @@ class _JobMapScreenState extends State<JobMapScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 👉 Search Box and Radius Filter joined in ONE container
                 Container(
-                  height: 52,
+                  height: 54,
                   decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade300),
-                      boxShadow: [
-                        BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 4))
-                      ]
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: _border),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 16,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
                   ),
                   child: Row(
                     children: [
-                      // Text Field (Left Side)
                       Expanded(
                         child: TextField(
                           controller: _keywordController,
-                          textInputAction: TextInputAction.done,
+                          textInputAction: TextInputAction.search,
+                          onSubmitted: (_) => _searchNearbyJobs(),
                           decoration: const InputDecoration(
                             hintText: 'Job title, keywords...',
-                            prefixIcon: Icon(Icons.search, color: Colors.grey),
+                            hintStyle: TextStyle(color: _textMuted),
+                            prefixIcon: Icon(Icons.search, color: _textMuted),
                             border: InputBorder.none,
                             contentPadding: EdgeInsets.symmetric(vertical: 15),
                           ),
                         ),
                       ),
-
-                      // Subtle Divider between input and radius button
-                      Container(width: 1, height: 30, color: Colors.grey.shade300),
-
-                      // Radius Button (Right Side with Black Icon)
+                      Container(
+                        width: 1,
+                        height: 30,
+                        color: Colors.grey.shade300,
+                      ),
                       InkWell(
                         onTap: () => _showFilterOptions('Radius'),
-                        borderRadius: const BorderRadius.horizontal(right: Radius.circular(12)),
+                        borderRadius: const BorderRadius.horizontal(
+                          right: Radius.circular(18),
+                        ),
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14),
                           alignment: Alignment.center,
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.directions_car, color: Colors.black87),
+                              const Icon(
+                                Icons.directions_car,
+                                color: _primary,
+                              ),
                               const SizedBox(width: 6),
                               Text(
                                 '${_currentRadiusKm.toInt()} km',
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  color: _primary,
+                                ),
                               ),
                             ],
                           ),
@@ -439,8 +644,6 @@ class _JobMapScreenState extends State<JobMapScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-
-                // Filter Chips
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
@@ -450,26 +653,39 @@ class _JobMapScreenState extends State<JobMapScreen> {
                         decoration: BoxDecoration(
                           color: Colors.white,
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.grey.shade300),
-                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2))],
+                          border: Border.all(color: _border),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
                         child: IconButton(
-                          icon: const Icon(Icons.tune, size: 20),
-                          onPressed: () {
-                            setState(() {
-                              _currentRadiusKm = 25.0;
-                              _selectedJobType = 'All';
-                              _selectedDatePosted = 'All time';
-                              _selectedSalary = 'Any';
-                              _keywordController.clear();
-                              _salaryInputController.clear();
-                            });
-                          },
+                          icon: const Icon(
+                            Icons.tune,
+                            size: 20,
+                            color: _primary,
+                          ),
+                          onPressed: _resetFilters,
                         ),
                       ),
-                      _buildFilterChip('Date posted', _selectedDatePosted, 'All time'),
-                      _buildFilterChip('Job type', _selectedJobType, 'All'),
-                      _buildFilterChip('Salary', _selectedSalary, 'Any'),
+                      _buildFilterChip(
+                        'Date posted',
+                        _selectedDatePosted,
+                        'All time',
+                      ),
+                      _buildFilterChip(
+                        'Job type',
+                        _selectedJobType,
+                        'All',
+                      ),
+                      _buildFilterChip(
+                        'Salary',
+                        _selectedSalary,
+                        'Any',
+                      ),
                     ],
                   ),
                 ),
@@ -478,22 +694,47 @@ class _JobMapScreenState extends State<JobMapScreen> {
           ),
 
           if (_isLoading)
-            const Positioned(
+            Positioned(
               top: 140,
               left: 0,
               right: 0,
               child: Center(
-                child: Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(12.0),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0A66C2))),
-                        SizedBox(width: 12),
-                        Text('Searching...', style: TextStyle(fontWeight: FontWeight.bold)),
-                      ],
-                    ),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(999),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: _primary,
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Text(
+                        'Searching...',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: _textPrimary,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -508,55 +749,81 @@ class _JobMapScreenState extends State<JobMapScreen> {
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => JobDetailsScreen(job: _selectedJob!)),
+                    MaterialPageRoute(
+                      builder: (context) => JobDetailsScreen(job: _selectedJob!),
+                    ),
                   );
                 },
-                child: Card(
-                  elevation: 8,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(UiConstants.cornerRadius)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(UiConstants.defaultPadding),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 50,
-                          height: 50,
-                          decoration: BoxDecoration(
-                            color: AppColors.backgroundLight,
-                            borderRadius: BorderRadius.circular(UiConstants.cornerRadius),
-                          ),
-                          child: const Icon(Icons.business, color: Color(0xFF0A66C2)),
+                child: Container(
+                  padding: const EdgeInsets.all(UiConstants.defaultPadding),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.10),
+                        blurRadius: 18,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: _primarySoft,
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                        const SizedBox(width: UiConstants.defaultPadding),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                _selectedJob!.title,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _selectedJob!.companyName ?? 'Unknown Company',
-                                style: TextStyle(color: Colors.grey.shade700),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _selectedJob!.salaryRange,
-                                style: const TextStyle(color: AppColors.successGreen, fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
+                        child: const Icon(
+                          Icons.business_rounded,
+                          color: _primary,
                         ),
-                        const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: UiConstants.defaultPadding),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _selectedJob!.title,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: _textPrimary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _selectedJob!.companyName ?? 'Unknown Company',
+                              style: const TextStyle(
+                                color: _textMuted,
+                                fontSize: 13,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _selectedJob!.salaryRange,
+                              style: const TextStyle(
+                                color: Color(0xFF1E8F8B),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(
+                        Icons.arrow_forward_ios,
+                        size: 16,
+                        color: Colors.grey,
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -567,9 +834,13 @@ class _JobMapScreenState extends State<JobMapScreen> {
             right: 16,
             child: FloatingActionButton(
               mini: true,
+              elevation: 4,
               backgroundColor: Colors.white,
               onPressed: _getUserLocation,
-              child: const Icon(Icons.my_location, color: Colors.black87),
+              child: const Icon(
+                Icons.my_location_rounded,
+                color: _primary,
+              ),
             ),
           ),
 
@@ -577,21 +848,17 @@ class _JobMapScreenState extends State<JobMapScreen> {
             bottom: 24,
             left: 40,
             right: 40,
-            child: ElevatedButton(
+            child: ElevatedButton.icon(
               onPressed: _isLoading ? null : _searchNearbyJobs,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.successGreen,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                elevation: 6,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
+              icon: const Icon(Icons.travel_explore_rounded),
+              label: const Text(
+                'Search Jobs Here',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-              child: const Text(
-                'Search Jobs Here',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
+              style: _primaryButtonStyle(),
             ),
           ),
         ],
@@ -628,7 +895,7 @@ class CustomSliderThumb extends SliderComponentShape {
     final Canvas canvas = context.canvas;
 
     final Paint paintCircle = Paint()
-      ..color = sliderTheme.thumbColor ?? const Color(0xFF0A66C2)
+      ..color = sliderTheme.thumbColor ?? const Color(0xFF163B65)
       ..style = PaintingStyle.fill;
     canvas.drawCircle(center, 18, paintCircle);
 

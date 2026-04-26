@@ -46,25 +46,25 @@ class JobDiscoveryController {
     String? salary,
   }) async {
     try {
+      // ==========================================
       // 1. Supabase Database Filtering
+      // ==========================================
       var queryBuilder = _supabase
           .from('Job')
           .select('*, Company(name)')
           .eq('status', 'active');
 
-      if (query.isNotEmpty) {
-        queryBuilder = queryBuilder.or('title.ilike.%$query%,description.ilike.%$query%');
-      }
-
-      // 👉 Supabase directly filters the locationName column here!
+      // 👉 Location Filter
       if (location.isNotEmpty) {
         queryBuilder = queryBuilder.ilike('locationName', '%$location%');
       }
 
+      // 👉 Job Type Filter
       if (jobType != null && jobType != 'All') {
         queryBuilder = queryBuilder.eq('jobType', jobType);
       }
 
+      // 👉 Date Posted Filter
       if (datePosted != null && datePosted != 'All time') {
         DateTime filterDate = DateTime.now();
         if (datePosted == 'Last 24 hours') {
@@ -82,9 +82,26 @@ class JobDiscoveryController {
       final response = await queryBuilder.order('createdAt', ascending: false);
       List<JobModel> jobs = (response as List).map((j) => JobModel.fromJson(j)).toList();
 
-      // 2. Client-Side Filtering (NOW ONLY FOR SALARY)
+      // ==========================================
+      // 2. Client-Side Filtering
+      // ==========================================
+
+      // 👉 Keyword Search (Title, Description, & Company Name)
+      if (query.isNotEmpty) {
+        final String q = query.toLowerCase();
+        jobs = jobs.where((job) {
+          // 👉 Added ( ?? '') to safely handle null values before calling toLowerCase()
+          final titleMatch = (job.title).toLowerCase().contains(q);
+          final descMatch = (job.description).toLowerCase().contains(q);
+          final companyMatch = (job.companyName ?? '').toLowerCase().contains(q);
+
+          return titleMatch || descMatch || companyMatch;
+        }).toList();
+      }
+
+      // 👉 Salary Filter
       if (salary != null && salary != 'Any') {
-        return jobs.where((job) {
+        jobs = jobs.where((job) {
           double targetSalary = _extractMaxSalary(salary); // The filter number
           double jobMaxSalary = _extractMaxSalary(job.salaryRange); // The job's number
           return jobMaxSalary >= targetSalary;

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import '../../../core/theme/app_colors.dart';
 import 'public_profile_screen.dart';
 
 class QRScannerScreen extends StatefulWidget {
@@ -56,7 +55,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
               builder: (context) => PublicProfileScreen(seekerId: scannedSeekerId!),
             ),
           ).then((_) {
-            // When they hit back/close from the profile, restart the scanner
+            if (!mounted) return;
             setState(() => _isNavigating = false);
             _scannerController.start();
           });
@@ -109,20 +108,24 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
           ),
 
           // 2. The Scanner Overlay (creates the darkened edges and clear center box)
-          QRScannerOverlay(overlayColour: Colors.black.withOpacity(0.6)),
+          QRScannerOverlay(overlayColour: Colors.black.withValues(alpha: 0.6)),
 
           // 3. Instructions at the bottom
-          Positioned(
+          const Positioned(
             bottom: 40,
             left: 0,
             right: 0,
             child: Column(
               children: [
-                const Icon(Icons.qr_code_scanner, color: Colors.white, size: 40),
-                const SizedBox(height: 16),
-                const Text(
+                Icon(Icons.qr_code_scanner, color: Colors.white, size: 40),
+                SizedBox(height: 16),
+                Text(
                   'Align the QR code within the frame to view profile',
-                  style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ],

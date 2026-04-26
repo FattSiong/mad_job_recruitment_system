@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
-import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/snackbar_helper.dart';
 
 class LocationSearchScreen extends StatefulWidget {
   final String initialKeyword;
@@ -18,6 +18,13 @@ class LocationSearchScreen extends StatefulWidget {
 }
 
 class _LocationSearchScreenState extends State<LocationSearchScreen> {
+  // Theme Colors matching Seeker Dashboard
+  static const Color _primary = Color(0xFF163B65);
+  static const Color _textPrimary = Color(0xFF1B2433);
+  static const Color _textMuted = Color(0xFF687588);
+  static const Color _surfaceAlt = Color(0xFFF7F9FC);
+  static const Color _border = Color(0xFFE1E8F0);
+
   late TextEditingController _keywordController;
   late TextEditingController _locationController;
   bool _isLocating = false;
@@ -55,7 +62,6 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
     });
   }
 
-  // Get Current Location directly using Geocoding
   Future<void> _getCurrentLocation() async {
     setState(() => _isLocating = true);
     try {
@@ -72,10 +78,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
         throw Exception('Location permissions are permanently denied.');
       }
 
-      // 1. Get Coordinates
       Position position = await Geolocator.getCurrentPosition();
-
-      // 2. Translate to City locally
       List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
 
       if (placemarks.isNotEmpty) {
@@ -89,187 +92,305 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
         }
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      if (mounted) {
+        SnackBarHelper.showStyled(
+          context,
+          message: e.toString().replaceAll('Exception: ', ''),
+          icon: Icons.location_off_rounded,
+          accentColor: const Color(0xFFE27D60),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLocating = false);
     }
   }
 
+  Widget _buildHeroActionButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.white.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: SizedBox(
+            width: 42,
+            height: 42,
+            child: Icon(icon, color: Colors.white, size: 20),
+          ),
+        ),
+      ),
+    );
+  }
+
+  InputDecoration _searchInputDecoration({
+    required String hint,
+    required IconData icon,
+    Widget? suffix,
+  }) {
+    return InputDecoration(
+      hintText: hint,
+      prefixIcon: Icon(icon, color: _textMuted),
+      suffixIcon: suffix,
+      filled: true,
+      fillColor: _surfaceAlt,
+      contentPadding: const EdgeInsets.symmetric(vertical: 16),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide(color: Colors.grey.shade300),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide(color: Colors.grey.shade300),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: _primary, width: 1.5),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.textPrimary,
-        elevation: 0,
-        title: const Text('Search', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        centerTitle: true,
-      ),
-      body: Column(
-        children: [
-          // Styled Search Header Segment
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Column(
-              children: [
-                // Keyword Field
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: TextField(
-                    controller: _keywordController,
-                    decoration: const InputDecoration(
-                      hintText: 'Search Job Title, Company or Skills',
-                      hintStyle: TextStyle(fontSize: 14, color: Colors.grey),
-                      prefixIcon: Icon(Icons.search, color: Colors.grey, size: 20),
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(vertical: 14),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                // Location Field
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: TextField(
-                    controller: _locationController,
-                    autofocus: true,
-                    textInputAction: TextInputAction.search,
-                    onSubmitted: (value) => _selectLocation(value.trim()),
-                    onChanged: (value) => setState(() {}),
-                    decoration: InputDecoration(
-                      hintText: 'Search a country, city or state',
-                      hintStyle: const TextStyle(fontSize: 14, color: Colors.grey),
-                      prefixIcon: const Icon(Icons.location_on_outlined, color: Colors.grey, size: 20),
-                      suffixIcon: _locationController.text.isNotEmpty
-                          ? IconButton(
-                        icon: const Icon(Icons.close, color: Colors.grey, size: 18),
-                        onPressed: () {
-                          _locationController.clear();
-                          setState(() {});
-                        },
-                      )
-                          : null,
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Divider shadow effect
-          Container(height: 1, color: Colors.grey.shade200),
-
-          // Search Suggestions Area
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Near Me Button
-                  OutlinedButton.icon(
-                    onPressed: _isLocating ? null : _getCurrentLocation,
-                    icon: _isLocating
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.my_location, color: AppColors.primaryBlue),
-                    label: const Text('Near Me', style: TextStyle(color: AppColors.primaryBlue, fontWeight: FontWeight.bold)),
-                    style: OutlinedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      side: const BorderSide(color: AppColors.primaryBlue),
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-
-                  // Popular Location
-                  const Text('Popular Locations', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary)),
-                  const SizedBox(height: 14),
-                  Wrap(
-                    spacing: 10.0,
-                    runSpacing: 10.0,
-                    children: _popularLocations.map((location) {
-                      return InkWell(
-                        onTap: () => _selectLocation(location),
-                        borderRadius: BorderRadius.circular(20),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            border: Border.all(color: Colors.grey.shade300),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(location, style: TextStyle(color: Colors.grey.shade800)),
+      backgroundColor: const Color(0xFFF4F7FB),
+      body: SafeArea(
+        // Wrap the entire Column in a SingleChildScrollView so everything scrolls together
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                child: Column(
+                  children: [
+                    // 👉 Hero Header
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF163B65), Color(0xFF335D8A)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 32),
-
-                  // Location By State
-                  const Text('Location By State', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary)),
-                  const SizedBox(height: 14),
-                  GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      childAspectRatio: 3,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                    ),
-                    itemCount: _states.length,
-                    itemBuilder: (context, index) {
-                      final state = _states[index]; // Now just a String
-                      return InkWell(
-                        onTap: () => _selectLocation(state),
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          alignment: Alignment.centerLeft, // Aligns text nicely to the left
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            border: Border.all(color: Colors.grey.shade200),
-                            borderRadius: BorderRadius.circular(8),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.02),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
-                              )
+                        borderRadius: BorderRadius.circular(28),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              _buildHeroActionButton(
+                                icon: Icons.arrow_back_rounded,
+                                tooltip: 'Back',
+                                onTap: () => Navigator.pop(context),
+                              ),
+                              const Spacer(),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.14),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.location_on_outlined, size: 16, color: Colors.white),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Location Search',
+                                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ],
                           ),
-                          child: Text(
-                            state,
+                          const SizedBox(height: 24),
+                          const Text(
+                            'Find roles nearby',
                             style: TextStyle(
-                              color: Colors.grey.shade800,
-                              fontWeight: FontWeight.w500, // Slightly bolder for readability
+                              color: Colors.white,
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              height: 1.1,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 40),
-                ],
+                          const SizedBox(height: 10),
+                          const Text(
+                            'Search by city, state, or use your current location.',
+                            style: TextStyle(color: Colors.white70, fontSize: 15, height: 1.4),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // 👉 Search Inputs Card
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.02),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          TextField(
+                            controller: _keywordController,
+                            textInputAction: TextInputAction.next,
+                            decoration: _searchInputDecoration(
+                              hint: 'Job title, keywords, or company',
+                              icon: Icons.search,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _locationController,
+                            autofocus: true,
+                            textInputAction: TextInputAction.search,
+                            onSubmitted: (value) => _selectLocation(value.trim()),
+                            onChanged: (value) => setState(() {}),
+                            decoration: _searchInputDecoration(
+                              hint: 'Country, city or state',
+                              icon: Icons.location_on_outlined,
+                              suffix: _locationController.text.isNotEmpty
+                                  ? IconButton(
+                                icon: const Icon(Icons.close, color: _textMuted, size: 18),
+                                onPressed: () {
+                                  _locationController.clear();
+                                  setState(() {});
+                                },
+                              )
+                                  : null,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: _isLocating ? null : _getCurrentLocation,
+                              icon: _isLocating
+                                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                  : const Icon(Icons.my_location_rounded),
+                              label: Text(_isLocating ? 'Locating...' : 'Use Current Location'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _primary,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
+
+              // 👉 Suggestions Area (Removed Expanded and SingleChildScrollView from here)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Popular Locations',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: _textPrimary),
+                    ),
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 10.0,
+                      runSpacing: 10.0,
+                      children: _popularLocations.map((location) {
+                        return InkWell(
+                          onTap: () => _selectLocation(location),
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              border: Border.all(color: _border),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                                location,
+                                style: const TextStyle(color: _textMuted, fontWeight: FontWeight.w500)
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 32),
+
+                    const Text(
+                      'Location By State',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: _textPrimary),
+                    ),
+                    const SizedBox(height: 14),
+                    GridView.builder(
+                      shrinkWrap: true, // Important when inside SingleChildScrollView
+                      physics: const NeverScrollableScrollPhysics(), // Disables GridView's internal scroll
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        childAspectRatio: 2.8,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                      ),
+                      itemCount: _states.length,
+                      itemBuilder: (context, index) {
+                        final state = _states[index];
+                        return InkWell(
+                          onTap: () => _selectLocation(state),
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            alignment: Alignment.centerLeft,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              border: Border.all(color: _border),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.map_outlined, size: 16, color: _textMuted),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    state,
+                                    style: const TextStyle(
+                                      color: _textPrimary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

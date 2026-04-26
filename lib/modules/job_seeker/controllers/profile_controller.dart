@@ -1,14 +1,15 @@
-// lib/modules/job_seeker/controllers/profile_controller.dart
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'dart:io';
+
+import '../../../models/education_model.dart';
 import '../../../models/job_seeker_model.dart';
 import '../../../models/work_experience_model.dart';
-import '../../../models/education_model.dart';
 
 class ProfileController {
   final _supabase = Supabase.instance.client;
+  static const String _profilePicturesBucket = 'profile_pictures';
   bool isLoading = false;
 
   Future<JobSeekerModel?> fetchProfile() async {
@@ -68,7 +69,26 @@ class ProfileController {
     }
   }
 
-  Future<void> updateProfileBasics({
+  Future<String?> uploadProfilePicture(File file) async {
+    try {
+      final userId = _supabase.auth.currentUser!.id;
+      final fileExt = file.path.split('.').last.toLowerCase();
+      final fileName =
+          'profile_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+      final filePath = '$userId/$fileName';
+
+      await _supabase.storage.from(_profilePicturesBucket).upload(filePath, file);
+
+      return _supabase.storage
+          .from(_profilePicturesBucket)
+          .getPublicUrl(filePath);
+    } catch (e) {
+      debugPrint('Error uploading profile picture: $e');
+      return null;
+    }
+  }
+
+  Future<bool> updateProfileBasics({
     required BuildContext context,
     required JobSeekerModel updatedModel,
     required VoidCallback onSucess,
@@ -85,6 +105,7 @@ class ProfileController {
         );
       }
       onSucess();
+      return true;
     } catch (e) {
       debugPrint('Error updating profile: $e');
       if (context.mounted) {
@@ -92,6 +113,7 @@ class ProfileController {
           const SnackBar(content: Text('Failed to update profile.')),
         );
       }
+      return false;
     }
   }
 

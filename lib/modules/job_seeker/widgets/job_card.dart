@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/job_model.dart';
 import '../../../core/theme/app_colors.dart';
 import '../controllers/bookmarked_controller.dart';
@@ -72,13 +73,17 @@ class _JobCardState extends State<JobCard> {
         _isLoading = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_isBookmarked ? 'Job bookmarked!' : 'Bookmark removed.'),
-          backgroundColor: _isBookmarked ? Colors.green : Colors.grey.shade800,
-          duration: const Duration(seconds: 1),
-        ),
+      SnackBarHelper.showStyled(
+        context,
+        message: _isBookmarked ? 'Job bookmarked!' : 'Bookmark removed.',
+        icon: _isBookmarked
+            ? Icons.bookmark_added_rounded
+            : Icons.bookmark_remove_rounded,
+        accentColor: _isBookmarked
+            ? const Color(0xFF1E8F8B)
+            : const Color(0xFF687588),
       );
+
     }
   }
 

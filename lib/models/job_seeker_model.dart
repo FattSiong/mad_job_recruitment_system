@@ -6,6 +6,7 @@ class JobSeekerModel {
   final String fullName;
   final String? resumeURL;
   final String? email;
+  final String? profilePictureURL;
 
   // Profile Fields
   final String? phoneNumber;
@@ -23,6 +24,7 @@ class JobSeekerModel {
     required this.fullName,
     this.resumeURL,
     this.email,
+    this.profilePictureURL,
     this.phoneNumber,
     this.location,
     this.bio,
@@ -42,6 +44,7 @@ class JobSeekerModel {
       fullName: json['fullName'] as String,
       resumeURL: json['resumeURL'] as String?,
       email: json['email'] as String?,
+      profilePictureURL: json['profilePictureURL'] as String?,
       phoneNumber: json['phoneNumber'] as String?,
       location: json['location'] as String?,
       bio: json['bio'] as String?,
@@ -62,6 +65,7 @@ class JobSeekerModel {
       'fullName': fullName,
       'resumeURL': resumeURL,
       'email': email,
+      'profilePictureURL': profilePictureURL,
       'phoneNumber': phoneNumber,
       'location': location,
       'bio': bio,
