@@ -85,7 +85,9 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
           'roomID': widget.roomID,
           ...?additionalData,
         },
-        'android_channel_id': isCall ? 'incoming_calls' : 'chat_messages',
+        'android_channel_id': isCall
+            ? '3e4bd85b-81e9-4907-b42b-34dea3a5de8f'
+            : 'a0d1ce94-07ac-4bbf-95ab-dc7482dce5ee',
         'ttl': isCall ? 60 : 2419200,
         if (isCall && additionalData?['callID'] != null) 'collapse_id': 'call_${additionalData?['callID']}',
         'priority': 10,
@@ -96,7 +98,7 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
 
       debugPrint('OneSignal request body: \n' + jsonEncode(requestBody));
 
-      var response = await http.post(
+      final response = await http.post(
         Uri.parse('https://api.onesignal.com/notifications'),
         headers: {
           'Content-Type': 'application/json; charset=utf-8',
@@ -105,20 +107,8 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
         body: jsonEncode(requestBody),
       );
 
-      if (response.statusCode == 400 && response.body.contains('Could not find android_channel_id')) {
-        debugPrint('OneSignal channel id not found in dashboard. Retrying without android_channel_id...');
-
-        final fallbackBody = Map<String, dynamic>.from(requestBody)
-          ..remove('android_channel_id');
-
-        response = await http.post(
-          Uri.parse('https://api.onesignal.com/notifications'),
-          headers: {
-            'Content-Type': 'application/json; charset=utf-8',
-            'Authorization': 'Key $oneSignalRestApiKey',
-          },
-          body: jsonEncode(fallbackBody),
-        );
+      if (response.statusCode != 200) {
+        debugPrint('OneSignal push failed. Check the channel exists in OneSignal Dashboard and is set to High/Urgent.');
       }
 
       debugPrint('OneSignal response status: \n${response.statusCode}');
