@@ -59,6 +59,61 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
   // ------------------------------------------------------------------------
   // The Push Notification Trigger Engine
   // ------------------------------------------------------------------------
+  Future<void> _sendPushNotification(
+    String content, {
+    bool isCall = false,
+    Map<String, dynamic>? additionalData,
+  }) async {
+    try {
+      debugPrint('--- Push debug start ---');
+      debugPrint('Push type: ${isCall ? 'call' : 'message'}');
+      debugPrint('Receiver userID: ${widget.otherUserID}');
+
+      const String oneSignalAppId = '16f92d86-ad69-4841-8a4f-b6c0cbb8f9f6';
+      const String oneSignalRestApiKey = 'os_v2_app_c34s3bvnnfeedcspw3amxohz62pdusnidibetufmo2b5zeh25cmys643hvxviodmkoa3i4rljlt67paibzgnuq57gdipg4eztmebpqq';
+
+      final requestBody = {
+        'app_id': oneSignalAppId,
+        'target_channel': 'push',
+        'include_aliases': {
+          'external_id': [widget.otherUserID],
+        },
+        'headings': {'en': isCall ? 'Incoming Call' : 'New Message'},
+        'contents': {'en': content},
+        'data': {
+          'type': isCall ? 'call' : 'chat',
+          'roomID': widget.roomID,
+          ...?additionalData,
+        },
+        'android_channel_id': isCall
+            ? '3e4bd85b-81e9-4907-b42b-34dea3a5de8f'
+            : 'a0d1ce94-07ac-4bbf-95ab-dc7482dce5ee',
+        'ttl': isCall ? 60 : 2419200,
+        if (isCall && additionalData?['callID'] != null) 'collapse_id': 'call_${additionalData?['callID']}',
+        'priority': 10,
+        'ios_sound': 'default',
+        'android_sound': 'default',
+        'android_visibility': 1,
+      };
+
+      debugPrint('OneSignal request body: \n' + jsonEncode(requestBody));
+
+      final response = await http.post(
+        Uri.parse('https://api.onesignal.com/notifications'),
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Authorization': 'Key $oneSignalRestApiKey',
+        },
+        body: jsonEncode(requestBody),
+      );
+
+      if (response.statusCode != 200) {
+        debugPrint('OneSignal push failed. Check the channel exists in OneSignal Dashboard and is set to High/Urgent.');
+      }
+
+      debugPrint('OneSignal response status: \n${response.statusCode}');
+      debugPrint('OneSignal response body: \n${response.body}');
+      debugPrint('--- Push debug end ---');
     } catch (e) {
       debugPrint('Error sending push notification: $e');
     }
@@ -191,6 +246,31 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
           widget.otherUserID
       );
 
+      String callerName = 'Incoming Caller';
+      try {
+        final me = await Supabase.instance.client
+            .from('User')
+            .select('username')
+            .eq('userID', widget.currentUserID)
+            .maybeSingle();
+        if (me != null && me['username'] != null) {
+          callerName = me['username'].toString();
+        }
+      } catch (_) {
+        // Fallback name is fine for notifications.
+      }
+
+      // Trigger Call Push Notification
+      _sendPushNotification(
+        '📞 Incoming Voice Call...',
+        isCall: true,
+        additionalData: {
+          'callID': callData.callID,
+          'roomCode': callData.roomCode,
+          'callerID': widget.currentUserID,
+          'callerName': callerName,
+        },
+      );
 
       if (context.mounted) {
         final result = await Navigator.push(
@@ -821,3 +901,4 @@ class FullScreenImageViewer extends StatelessWidget {
     );
   }
 }
+
