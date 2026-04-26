@@ -127,15 +127,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       color: Color(0xFF1B2433),
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Search conversations, catch unread updates, and jump back into active chats quickly.',
-                    style: TextStyle(
-                      fontSize: 14,
-                      height: 1.4,
-                      color: Color(0xFF687588),
-                    ),
-                  ),
                   const SizedBox(height: 18),
                   _buildSearchField(),
                 ],
@@ -258,9 +249,12 @@ class _ChatListScreenState extends State<ChatListScreen> {
                         final isMessageRead = messageList.isNotEmpty
                             ? (messageList[0]['isRead'] as bool)
                             : true;
+                        final unreadCount =
+                            (room['unreadCount'] as num?)?.toInt() ?? 0;
 
                         final isUnread =
-                            !isMessageRead && senderID != widget.currentUserID;
+                            unreadCount > 0 ||
+                            (!isMessageRead && senderID != widget.currentUserID);
 
                         return _buildChatCard(
                           roomID: room['roomID'],
@@ -271,6 +265,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                           latestMessage: latestMessage.toString(),
                           sentAt: sentAt?.toString(),
                           isUnread: isUnread,
+                          unreadCount: unreadCount,
                         );
                       },
                     );
@@ -399,15 +394,17 @@ class _ChatListScreenState extends State<ChatListScreen> {
     required String latestMessage,
     required String? sentAt,
     required bool isUnread,
+    required int unreadCount,
   }) {
     final avatarLetter = otherUserName.trim().isEmpty
         ? 'U'
         : otherUserName.trim().substring(0, 1).toUpperCase();
     final hasProfilePicture =
         profilePictureUrl != null && profilePictureUrl.trim().isNotEmpty;
+    final unreadLabel = unreadCount > 99 ? '99+' : unreadCount.toString();
 
     return Material(
-      color: Colors.white,
+      color: isUnread ? const Color(0xFFF9FCFF) : Colors.white,
       borderRadius: BorderRadius.circular(26),
       child: InkWell(
         onTap: () {
@@ -419,6 +416,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 currentUserID: widget.currentUserID,
                 otherUserName: otherUserName,
                 otherUserID: otherUserID,
+                otherUserProfilePictureUrl: profilePictureUrl,
               ),
             ),
           ).then((_) => _refreshChats());
@@ -498,21 +496,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
                         _buildRoleBadge(otherUserRole),
                         if (isUnread)
                           Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFDCEBFB),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: const Text(
-                              'Unread',
-                              style: TextStyle(
-                                color: Color(0xFF163B65),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                              ),
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF1BAA5D),
+                              shape: BoxShape.circle,
                             ),
                           ),
                       ],
@@ -520,7 +508,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     const SizedBox(height: 12),
                     Text(
                       latestMessage,
-                      maxLines: 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 14,
@@ -536,12 +524,40 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 ),
               ),
               const SizedBox(width: 10),
-              Icon(
-                Icons.arrow_forward_ios_rounded,
-                size: 16,
-                color: isUnread
-                    ? const Color(0xFF163B65)
-                    : const Color(0xFF9AA5B5),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (unreadCount > 0)
+                    Container(
+                      constraints: const BoxConstraints(minWidth: 28),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 7,
+                      ),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF1BAA5D),
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        unreadLabel,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    )
+                  else
+                    Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      size: 16,
+                      color: isUnread
+                          ? const Color(0xFF163B65)
+                          : const Color(0xFF9AA5B5),
+                    ),
+                ],
               ),
             ],
           ),

@@ -28,9 +28,15 @@ class CommunityService {
     if (rooms.isEmpty) return rooms;
 
     final userIds = <String>{};
+    final roomIds = <String>[];
     for (final room in rooms) {
+      final roomId = room['roomID']?.toString();
       final user1Id = room['user1_ID']?.toString();
       final user2Id = room['user2_ID']?.toString();
+
+      if (roomId != null && roomId.isNotEmpty) {
+        roomIds.add(roomId);
+      }
 
       if (user1Id != null && user1Id.isNotEmpty) {
         userIds.add(user1Id);
@@ -79,6 +85,37 @@ class CommunityService {
       print('Error merging employer profile pictures into chat rooms: $e');
     }
 
+    if (roomIds.isNotEmpty) {
+      try {
+        final unreadRows = await _supabase
+            .from('Message')
+            .select('roomID')
+            .filter('roomID', 'in', roomIds)
+            .eq('isRead', false)
+            .neq('senderID', currentUserId)
+            .or('isDeleted.is.null,isDeleted.eq.false');
+
+        final unreadCountByRoom = <String, int>{};
+        for (final row in unreadRows) {
+          final roomId = row['roomID']?.toString();
+          if (roomId == null || roomId.isEmpty) continue;
+
+          unreadCountByRoom[roomId] = (unreadCountByRoom[roomId] ?? 0) + 1;
+        }
+
+        for (final room in rooms) {
+          final roomId = room['roomID']?.toString();
+          room['unreadCount'] =
+              roomId == null ? 0 : (unreadCountByRoom[roomId] ?? 0);
+        }
+      } catch (e) {
+        print('Error fetching unread message counts: $e');
+        for (final room in rooms) {
+          room['unreadCount'] = 0;
+        }
+      }
+    }
+
     return rooms;
   }
 
@@ -94,6 +131,15 @@ class CommunityService {
 
   // 3. Send a New Message
   Future<void> sendMessage(MessageModel message) async {
+    if (message.messageID.isNotEmpty) {
+      await _supabase.from('Message').upsert(
+        message.toJson(),
+        onConflict: 'messageID',
+        ignoreDuplicates: true,
+      );
+      return;
+    }
+
     await _supabase.from('Message').insert(message.toJson());
   }
 
@@ -355,6 +401,26 @@ class CommunityService {
     }
   }
 
+  Future<String?> getUserProfilePictureUrl(String userID) async {
+    try {
+      final employerResponse = await _supabase
+          .from('Employer')
+          .select('profilePictureURL')
+          .eq('employerID', userID)
+          .maybeSingle();
+
+      final employerProfilePicture =
+          employerResponse?['profilePictureURL']?.toString().trim();
+      if (employerProfilePicture != null && employerProfilePicture.isNotEmpty) {
+        return employerProfilePicture;
+      }
+    } catch (e) {
+      print('Error fetching employer profile picture: $e');
+    }
+
+    return null;
+  }
+
 
 
   // Add this inside your CommunityService class
@@ -365,6 +431,7 @@ class CommunityService {
           .from('Message')
           .select()
           .eq('roomID', roomID)
+          .or('isDeleted.is.null,isDeleted.eq.false')
           .not('mediaURL', 'is', null) // Only grab messages that have an attachment
           .order('sentAt', ascending: false);
 
@@ -379,12 +446,15 @@ class CommunityService {
 
 
   // --- Add this inside your CommunityService class ---
-// --- Updated to perform a HARD DELETE ---
   Future<void> softDeleteMessage(String messageID) async {
     try {
       await _supabase
           .from('Message')
-          .delete() // Changed from .update({'isDeleted': true})
+          .update({
+            'isDeleted': true,
+            'content': 'This message was deleted',
+            'mediaURL': null,
+          })
           .eq('messageID', messageID);
     } catch (e) {
       print('Error deleting message: $e');
