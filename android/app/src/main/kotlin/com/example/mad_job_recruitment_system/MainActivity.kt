@@ -27,6 +27,17 @@ class MainActivity: FlutterFragmentActivity() {
 			setShowBadge(true)
 		}
 
+		val chatMessagesChannel = NotificationChannel(
+			"chat_messages",
+			"Chat Messages",
+			NotificationManager.IMPORTANCE_HIGH
+		).apply {
+			description = "High priority notifications for chat messages"
+			enableVibration(true)
+			setShowBadge(true)
+		}
+
 		manager.createNotificationChannel(incomingCallsChannel)
+		manager.createNotificationChannel(chatMessagesChannel)
 	}
 }

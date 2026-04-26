@@ -95,7 +95,7 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
           },
           'priority': 10,
           'android_priority': 'high',
-          if (isCall) 'android_channel_id': 'incoming_calls',
+          'android_channel_id': isCall ? 'incoming_calls' : 'chat_messages',
           'ttl': isCall ? 60 : 2419200,
           if (isCall && additionalData?['callID'] != null) 'collapse_id': 'call_${additionalData?['callID']}',
         };
