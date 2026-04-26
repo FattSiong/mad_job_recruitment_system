@@ -54,3 +54,7 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    implementation("com.onesignal:OneSignal:5.6.1")
+}

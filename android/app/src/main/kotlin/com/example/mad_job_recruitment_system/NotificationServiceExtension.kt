@@ -2,16 +2,18 @@ package com.example.mad_job_recruitment_system
 
 import android.app.PendingIntent
 import android.content.Intent
-import android.os.Build
+import androidx.annotation.Keep
 import androidx.core.app.NotificationCompat
+import com.onesignal.notifications.IDisplayableMutableNotification
 import com.onesignal.notifications.INotificationReceivedEvent
 import com.onesignal.notifications.INotificationServiceExtension
 
+@Keep
 class NotificationServiceExtension : INotificationServiceExtension {
     override fun onNotificationReceived(event: INotificationReceivedEvent) {
-        val additionalData = event.notification.additionalData ?: return
-        val type = additionalData.optString("type", "")
-        if (type != "call") return
+        val notification: IDisplayableMutableNotification = event.notification
+        val additionalData = notification.additionalData ?: return
+        if (additionalData.optString("type", "") != "call") return
 
         val context = event.context
         val callIntent = Intent(context, MainActivity::class.java).apply {
@@ -25,29 +27,23 @@ class NotificationServiceExtension : INotificationServiceExtension {
             putExtra("callerProfilePic", additionalData.optString("callerProfilePic", ""))
         }
 
-        val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        } else {
-            PendingIntent.FLAG_UPDATE_CURRENT
-        }
-
-        val requestCode = additionalData.optString("callID", "incoming_call").hashCode()
         val pendingIntent = PendingIntent.getActivity(
             context,
-            requestCode,
+            additionalData.optString("callID", "incoming_call").hashCode(),
             callIntent,
-            pendingIntentFlags
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        event.notification.setExtender { builder ->
-            builder.setCategory(NotificationCompat.CATEGORY_CALL)
-            builder.setPriority(NotificationCompat.PRIORITY_MAX)
-            builder.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            builder.setFullScreenIntent(pendingIntent, true)
-            builder.setContentIntent(pendingIntent)
-            builder.setAutoCancel(true)
-            builder.setOngoing(true)
-            builder.setOnlyAlertOnce(false)
+        notification.setExtender { builder ->
+            builder
+                .setCategory(NotificationCompat.CATEGORY_CALL)
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setFullScreenIntent(pendingIntent, true)
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+                .setOngoing(true)
+                .setOnlyAlertOnce(false)
         }
     }
 }
