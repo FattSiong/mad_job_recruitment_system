@@ -1,29 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/constants/supabase_constants.dart';
 import 'shared_widgets/auth_gate.dart';
 
 Future<void> main() async {
-  // 1. Mandatory line for plugin initialization
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 2. Load environment variables
   await dotenv.load(fileName: ".env");
 
-  // 3. Initialize Supabase
+  Stripe.publishableKey =
+  'pk_test_51TPT4D8sWAvwhsmDNXUbF8LCTGtSuW7jRjuiAKqtMz0EYa0dNcG1cLXRzDP7LHAPKqtYfx0PuxLt3gl2erO0ttb000Wt76CdRo';
+  Stripe.urlScheme = 'myapp';
+  await Stripe.instance.applySettings();
+
   await Supabase.initialize(
     url: SupabaseConstants.supabaseUrl,
     anonKey: SupabaseConstants.supabaseAnonKey,
   );
 
-  // 4. Initialize OneSignal
   OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
   OneSignal.initialize("595705d0-3319-4ced-90ab-22185bb761dc");
 
-  // 5. THE OBSERVER: This listens for changes (like first-time permission)
   OneSignal.User.pushSubscription.addObserver((state) {
     if (state.current.id != null) {
       print("====================================================");
@@ -33,8 +34,6 @@ Future<void> main() async {
     }
   });
 
-  // 6. THE DIRECT CHECK: This prints the ID immediately if already registered
-  // We use a small delay to ensure the SDK is fully ready
   Future.delayed(const Duration(seconds: 2), () {
     String? existingId = OneSignal.User.pushSubscription.id;
     if (existingId != null && existingId.isNotEmpty) {
@@ -48,11 +47,11 @@ Future<void> main() async {
     }
   });
 
-  // 7. Trigger the permission popup (only shows if not already allowed)
   OneSignal.Notifications.requestPermission(true);
 
   runApp(const RecruitmentApp());
 }
+
 
 class RecruitmentApp extends StatelessWidget {
   const RecruitmentApp({super.key});

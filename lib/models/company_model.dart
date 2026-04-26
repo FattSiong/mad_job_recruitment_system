@@ -46,7 +46,7 @@ class CompanyModel {
       companyAddress: json['companyAddress'] as String?,
       currentPlanType: json['currentPlanType'] as String? ?? 'FREE',
       subscriptionEndsAt: json['subscriptionEndsAt'] != null
-          ? DateTime.tryParse(json['subscriptionEndAt'])
+          ? DateTime.tryParse(json['subscriptionEndsAt'])
           : null,
       companyLogoURL: json['companyLogoURL'] as String?,
     );

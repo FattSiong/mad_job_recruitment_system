@@ -23,7 +23,7 @@ class _AdminSubscriptionListScreenState extends State<AdminSubscriptionListScree
         // 👉 关键：这里监听 PaymentSubscription 表
         stream: supabase
             .from('PaymentSubscription')
-            .stream(primaryKey: ['subscriptionID'])
+            .stream(primaryKey: ['paymentID'])
             .order('paymentDate', ascending: false),
         builder: (context, snapshot) {
           if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));

@@ -45,6 +45,8 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
   String? _descriptionError;
   String? _locationError;
   String? _salaryError;
+  String? _minSalaryError;
+  String? _maxSalaryError;
   String? _preScreeningError;
   String? _experienceError;
 
@@ -81,9 +83,14 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
   }
 
   void _clearSalaryError() {
-    if (_salaryError != null || _formError != null) {
+    if (_salaryError != null ||
+        _minSalaryError != null ||
+        _maxSalaryError != null ||
+        _formError != null) {
       setState(() {
         _salaryError = null;
+        _minSalaryError = null;
+        _maxSalaryError = null;
         _formError = null;
       });
     }
@@ -145,7 +152,12 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
 
     if (mounted) {
       setState(() {
-        _myCompanies = allCompanies.where((c) => c.isVerified).toList();
+        _myCompanies = allCompanies.where((company) {
+          final status = company.verificationStatus.toLowerCase();
+          return company.isVerified ||
+              status == 'verified' ||
+              status == 'approved';
+        }).toList();
         if (_myCompanies.length == 1) {
           _selectedCompanyID = _myCompanies.first.companyID;
         }
@@ -317,6 +329,8 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
       _descriptionError = null;
       _locationError = null;
       _salaryError = null;
+      _minSalaryError = null;
+      _maxSalaryError = null;
       _preScreeningError = null;
       _experienceError = null;
     });
@@ -337,11 +351,6 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
 
     if (title.isEmpty) {
       _titleError = 'Please enter the job title.';
-      hasError = true;
-    }
-
-    if (description.isEmpty) {
-      _descriptionError = 'Please enter the job description.';
       hasError = true;
     }
 
@@ -380,13 +389,18 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
     final int? maxSalary = int.tryParse(maxStr);
     final int parsedExperience = int.tryParse(experienceText) ?? 0;
 
-    if (minStr.isNotEmpty && minSalary == null) {
-      _salaryError = 'Please enter a valid minimum salary.';
+    if (minStr.isEmpty) {
+      _minSalaryError = _selectedJobType == 'Part-time'
+          ? 'Please enter the hourly rate.'
+          : 'Please enter the minimum salary.';
+      hasError = true;
+    } else if (minSalary == null) {
+      _minSalaryError = 'Please enter a valid minimum salary.';
       hasError = true;
     }
 
     if (_selectedJobType == 'Full-time' && maxStr.isNotEmpty && maxSalary == null) {
-      _salaryError = 'Please enter a valid maximum salary.';
+      _maxSalaryError = 'Please enter a valid maximum salary.';
       hasError = true;
     }
 
@@ -394,8 +408,8 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
         minSalary != null &&
         maxSalary != null &&
         minSalary > maxSalary) {
-      _salaryError =
-      'Minimum salary cannot be greater than maximum salary.';
+      _maxSalaryError =
+      'Maximum salary must be greater than minimum salary.';
       hasError = true;
     }
 
@@ -512,7 +526,7 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
               'Detail the responsibilities and requirements.',
               child: _buildStyledField(
                 controller: _descriptionController,
-                label: 'Full Description',
+                label: 'Full Description (Optional)',
                 icon: Icons.notes_rounded,
                 maxLines: 6,
                 errorText: _descriptionError,
@@ -788,6 +802,7 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
                   prefixText: 'RM ',
                   suffixText: _selectedJobType == 'Part-time' ? ' / hr' : null,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  errorText: _minSalaryError,
                   onChanged: (_) => _clearSalaryError(),
                 ),
               ),
@@ -801,6 +816,7 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
                     keyboardType: TextInputType.number,
                     prefixText: 'RM ',
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    errorText: _maxSalaryError,
                     onChanged: (_) => _clearSalaryError(),
                   ),
                 ),
