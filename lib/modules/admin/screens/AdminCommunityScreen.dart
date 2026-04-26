@@ -1,6 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../models/community_post_model.dart'; // 请确保路径正确
+import '../../../models/community_post_model.dart';
+
+// --- SHARED ADMIN STYLING ---
+const Color _backgroundColor = Color(0xFFF4F7FB);
+const Color _surfaceColor = Colors.white;
+const Color _heroStart = Color(0xFF12343B); // Forest Green
+const Color _heroEnd = Color(0xFF2A6B66);   // Teal Green
+const Color _textPrimary = Color(0xFF1B2433);
+const Color _textSecondary = Color(0xFF687588);
+const Color _alertRed = Color(0xFFE15A4F);
+const Color _selectedBg = Color(0xFFD9ECE8); // Teal highlight
 
 class AdminCommunityScreen extends StatefulWidget {
   const AdminCommunityScreen({super.key});
@@ -11,320 +21,40 @@ class AdminCommunityScreen extends StatefulWidget {
 
 class _AdminCommunityScreenState extends State<AdminCommunityScreen> {
   final supabase = Supabase.instance.client;
+  String _activeTab = "Posts";
 
-  // 👉 软删除逻辑
+  // 🔥 REFRESH KEY: Incrementing this forces FutureBuilders to reload data
+  int _refreshKey = 0;
+
+  // 👉 Soft Delete Logic
   Future<void> _softDelete(String table, String idField, String id) async {
     try {
-      await supabase
-          .from(table)
-          .update({'status': 'deleted'})
-          .match({idField: id});
+      // 1. Update the content status
+      await supabase.from(table).update({'status': 'deleted'}).match({idField: id});
+
+      // 2. Update the corresponding report status to 'deleted' as well
+      String reportTable = (table == 'CommunityPost') ? 'ReportedPost' : 'ReportedComment';
+      await supabase.from(reportTable).update({'status': 'deleted'}).match({idField: id});
 
       if (mounted) {
+        setState(() {
+          _refreshKey++; // 🔥 This is the "magic" that triggers the UI update
+        });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("$table removed (Soft Delete)")),
+          const SnackBar(content: Text("Content removed successfully")),
         );
-
-        // 👉 ADD THIS: Trigger a rebuild so the FutureBuilder fetches the updated list
-        setState(() {});
       }
     } catch (e) {
       debugPrint("Delete error: $e");
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: const TabBar(
-          labelColor: Colors.blue,
-          unselectedLabelColor: Colors.grey,
-          indicatorColor: Colors.blue,
-          tabs: [
-            Tab(text: "Manage Posts", icon: Icon(Icons.article)),
-            Tab(text: "Manage Comments", icon: Icon(Icons.comment)),
-          ],
-        ),
-        body: TabBarView(
-          children: [
-            _buildPostModeration(),
-            _buildCommentModeration(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // 1️⃣ Post 管理：带举报匹配逻辑 (Updated to FutureBuilder for SQL Joins)
-  Widget _buildPostModeration() {
-    return FutureBuilder<List<dynamic>>(
-      // Run both queries simultaneously
-      future: Future.wait([
-        // Query 1: Fetch Posts WITH joined User and Interaction tables
-        supabase
-            .from('CommunityPost')
-            .select('*, User!CommunityPost_authorID_fkey(*), PostLike(*), PostComment(*), PostSaved(*)')            .neq('status', 'deleted'), // Filter out deleted directly in DB
-
-        // Query 2: Fetch Reports
-        supabase
-            .from('ReportedPost')
-            .select('postID') // We only need the postID to check if it's flagged
-            .eq('status', 'pending')
-      ]),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(child: Text("Error fetching data: ${snapshot.error}"));
-        }
-
-        // Extract the results from the Future.wait array
-        final activePosts = snapshot.data![0] as List<dynamic>;
-        final reportData = snapshot.data![1] as List<dynamic>;
-
-        // 🛡️ 核心修复：清理举报表中的 ID
-        final flaggedPostIDs = reportData
-            .map((r) => r['postID']?.toString().trim().toLowerCase())
-            .where((id) => id != null && id != 'null') // Extra safety check
-            .toSet();
-
-        // Wrap in RefreshIndicator so admins can pull-to-refresh
-        return RefreshIndicator(
-          onRefresh: () async => setState(() {}),
-          child: ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: activePosts.length,
-            itemBuilder: (context, index) {
-              final data = activePosts[index] as Map<String, dynamic>;
-              final String pid = data['postID']?.toString() ?? "";
-              final bool isFlagged = flaggedPostIDs.contains(pid.trim().toLowerCase());
-
-              try {
-                final post = CommunityPostModel.fromJson(data);
-
-                // 👉 BRANCH THE UI HERE
-                if (isFlagged) {
-                  return _buildFlaggedCard(
-                    title: "Author: ${post.username}",
-                    content: post.content,
-                    onDelete: () => _showConfirm(pid, post.content, 'CommunityPost', 'postID'),
-                  );
-                } else {
-                  return _buildNormalCard(
-                    title: "Author: ${post.username}",
-                    content: post.content,
-                    onDelete: () => _showConfirm(pid, post.content, 'CommunityPost', 'postID'),
-                  );
-                }
-              } catch (e) {
-                debugPrint("Parse Error: $e");
-                // Fallback for errors
-                return _buildNormalCard(
-                  title: "Error Parsing Post",
-                  content: data['content']?.toString() ?? "",
-                  onDelete: () => _showConfirm(pid, "Error Post", 'CommunityPost', 'postID'),
-                );
-              }
-            },
-          ),
-        );
-      },
-    );
-  }
-
-  // 2️⃣ Comment 管理：带举报匹配逻辑
-  // 2️⃣ Comment 管理：带举报匹配逻辑 (Updated to FutureBuilder & Distinct UI)
-  Widget _buildCommentModeration() {
-    return FutureBuilder<List<dynamic>>(
-      future: Future.wait([
-        // Query 1: Fetch active comments WITH the joined User table
-        supabase
-            .from('PostComment')
-        // PostComment only has one foreign key to User, so User(*) is perfectly safe here!
-            .select('*, User(*)')
-            .neq('status', 'deleted'),
-
-        // Query 2: Fetch ONLY pending comment reports
-        supabase
-            .from('ReportedComment')
-            .select('commentID')
-            .eq('status', 'pending')
-      ]),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(child: Text("Error fetching data: ${snapshot.error}"));
-        }
-
-        final activeComments = snapshot.data![0] as List<dynamic>;
-        final reportData = snapshot.data![1] as List<dynamic>;
-
-        // 🛡️ Map the flagged IDs safely, stripping whitespace and matching casing
-        final flaggedCommentIDs = reportData
-            .map((r) => r['commentID']?.toString().trim().toLowerCase())
-            .where((id) => id != null && id != 'null')
-            .toSet();
-
-        return RefreshIndicator(
-          onRefresh: () async => setState(() {}),
-          child: ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: activeComments.length,
-            itemBuilder: (context, index) {
-              final data = activeComments[index] as Map<String, dynamic>;
-              final String cid = data['commentID']?.toString() ?? "";
-
-              final String cleanCid = cid.trim().toLowerCase();
-              final bool isFlagged = flaggedCommentIDs.contains(cleanCid);
-
-              // Extract the username from the joined User JSON object
-              final String username = data['User']?['username'] ?? "Unknown User";
-              final String content = data['content'] ?? "";
-
-              // 👉 Branch the UI to use your new distinct cards
-              if (isFlagged) {
-                return _buildFlaggedCard(
-                  title: "Comment by: $username",
-                  content: content,
-                  onDelete: () => _showConfirm(cid, content, 'PostComment', 'commentID'),
-                );
-              } else {
-                return _buildNormalCard(
-                  title: "Comment by: $username",
-                  content: content,
-                  onDelete: () => _showConfirm(cid, content, 'PostComment', 'commentID'),
-                );
-              }
-            },
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildNormalCard({
-    required String title,
-    required String content,
-    required VoidCallback onDelete
-  }) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 0,
-      color: Colors.white, // Standard background
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade200, width: 1),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black87),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(content, style: const TextStyle(fontSize: 14, color: Colors.black54)),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-              onPressed: onDelete,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // 🔴 Flagged Post UI (Distinct banner and tinted background)
-  Widget _buildFlaggedCard({
-    required String title,
-    required String content,
-    required VoidCallback onDelete
-  }) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 0,
-      clipBehavior: Clip.antiAlias, // Ensures the banner stays inside the rounded corners
-      color: Colors.red.shade50, // Soft red tint for the whole card
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.red.shade200, width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ⚠️ Warning Banner Header
-          Container(
-            width: double.infinity,
-            color: Colors.red.shade400,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            child: const Row(
-              children: [
-                Icon(Icons.warning_amber_rounded, color: Colors.white, size: 16),
-                SizedBox(width: 6),
-                Text(
-                  "USER REPORTED POST",
-                  style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                ),
-              ],
-            ),
-          ),
-
-          // Content Area
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black87),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(content, style: const TextStyle(fontSize: 14, color: Colors.black87)),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  // Slightly stronger delete button for flagged items
-                  icon: const Icon(Icons.delete_forever, color: Colors.red),
-                  onPressed: onDelete,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // 👉 软删除弹窗
   void _showConfirm(String id, String preview, String table, String idField) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Soft Delete"),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: const Text("Soft Delete", style: TextStyle(fontWeight: FontWeight.bold)),
         content: Text("Confirm removal of this item?\n\nPreview: \"$preview\""),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
@@ -333,9 +63,201 @@ class _AdminCommunityScreenState extends State<AdminCommunityScreen> {
               _softDelete(table, idField, id);
               Navigator.pop(context);
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text("Delete"),
+            style: ElevatedButton.styleFrom(backgroundColor: _alertRed, elevation: 0),
+            child: const Text("Delete", style: TextStyle(color: Colors.white)),
           ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _backgroundColor,
+      body: CustomScrollView(
+        slivers: [
+          // --- HERO HEADER ---
+          SliverToBoxAdapter(
+            child: Container(
+              margin: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [_heroStart, _heroEnd]),
+                borderRadius: BorderRadius.circular(28),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeaderChip(Icons.forum_outlined, "Community Moderation"),
+                  const SizedBox(height: 20),
+                  const Text("Manage Interaction", style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
+                  const Text("Review reported community posts and comments for safety.", style: TextStyle(color: Colors.white70, fontSize: 14)),
+                ],
+              ),
+            ),
+          ),
+
+          // --- PILL TAB FILTERS ---
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  _buildTabPill("Posts"),
+                  const SizedBox(width: 12),
+                  _buildTabPill("Comments"),
+                ],
+              ),
+            ),
+          ),
+
+          // --- CONTENT LIST ---
+          SliverPadding(
+            padding: const EdgeInsets.all(16),
+            sliver: _activeTab == "Posts" ? _buildPostList() : _buildCommentList(),
+          ),
+
+          const SliverToBoxAdapter(child: SizedBox(height: 100)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabPill(String label) {
+    bool isSelected = _activeTab == label;
+    return GestureDetector(
+      onTap: () => setState(() => _activeTab = label),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? _selectedBg : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: isSelected ? _heroEnd.withOpacity(0.2) : Colors.transparent),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(color: isSelected ? _heroStart : _textSecondary, fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderChip(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(color: Colors.white.withOpacity(0.14), borderRadius: BorderRadius.circular(20)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, color: Colors.white, size: 16), const SizedBox(width: 8), Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600))]),
+    );
+  }
+
+  // --- CONTENT BUILDERS ---
+
+  Widget _buildPostList() {
+    return FutureBuilder<List<dynamic>>(
+      key: ValueKey(_refreshKey), // 🔥 Listens to the refresh key to restart the Future
+      future: Future.wait([
+        supabase.from('CommunityPost').select('*, User!CommunityPost_authorID_fkey(*), PostLike(*), PostComment(*), PostSaved(*)').neq('status', 'deleted'),
+        supabase.from('ReportedPost').select('postID').eq('status', 'pending')
+      ]),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SliverToBoxAdapter(child: Center(child: CircularProgressIndicator()));
+
+        final posts = snapshot.data![0] as List<dynamic>;
+        final flaggedIDs = (snapshot.data![1] as List<dynamic>).map((r) => r['postID'].toString()).toSet();
+
+        return SliverList(
+          delegate: SliverChildBuilderDelegate(
+                (context, i) {
+              final post = CommunityPostModel.fromJson(posts[i]);
+              final bool isFlagged = flaggedIDs.contains(post.postID);
+              return _buildModerationCard(
+                title: "Author: ${post.username}",
+                content: post.content,
+                isFlagged: isFlagged,
+                onDelete: () => _showConfirm(post.postID, post.content, 'CommunityPost', 'postID'),
+              );
+            },
+            childCount: posts.length,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCommentList() {
+    return FutureBuilder<List<dynamic>>(
+      key: ValueKey(_refreshKey), // 🔥 Listens to the refresh key to restart the Future
+      future: Future.wait([
+        supabase.from('PostComment').select('*, User(*)').neq('status', 'deleted'),
+        supabase.from('ReportedComment').select('commentID').eq('status', 'pending')
+      ]),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SliverToBoxAdapter(child: Center(child: CircularProgressIndicator()));
+
+        final comments = snapshot.data![0] as List<dynamic>;
+        final flaggedIDs = (snapshot.data![1] as List<dynamic>).map((r) => r['commentID'].toString()).toSet();
+
+        return SliverList(
+          delegate: SliverChildBuilderDelegate(
+                (context, i) {
+              final data = comments[i];
+              final String cid = data['commentID'].toString();
+              final String username = data['User']?['username'] ?? "Unknown";
+              final String content = data['content'] ?? "";
+              final bool isFlagged = flaggedIDs.contains(cid);
+
+              return _buildModerationCard(
+                title: "Comment by: $username",
+                content: content,
+                isFlagged: isFlagged,
+                onDelete: () => _showConfirm(cid, content, 'PostComment', 'commentID'),
+              );
+            },
+            childCount: comments.length,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildModerationCard({required String title, required String content, required bool isFlagged, required VoidCallback onDelete}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: isFlagged ? Border.all(color: _alertRed.withOpacity(0.3), width: 1.5) : Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: isFlagged ? _alertRed.withOpacity(0.1) : _heroEnd.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(isFlagged ? Icons.report_gmailerrorred : Icons.person_outline, color: isFlagged ? _alertRed : _heroEnd, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: _textPrimary)),
+                    if (isFlagged) const Text("USER REPORTED", style: TextStyle(color: _alertRed, fontSize: 10, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+              IconButton(onPressed: onDelete, icon: const Icon(Icons.delete_outline_rounded, color: _alertRed)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(content, style: const TextStyle(fontSize: 15, color: _textPrimary, height: 1.4)),
         ],
       ),
     );

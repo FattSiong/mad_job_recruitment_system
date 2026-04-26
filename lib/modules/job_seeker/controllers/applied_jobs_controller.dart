@@ -11,18 +11,27 @@ class AppliedJobsController {
     try {
       final response = await _supabase
           .from('JobApplicant')
-          .select('*, Job (*, Company(name))') // Added wildcard '*' to get all Applicant fields
+          .select('*, Job (*, Company(name))')
           .eq('seekerID', _currentSeekerID)
           .order('appliedAt', ascending: false);
 
-      // 👉 Converts the raw JSON into secure Dart Models
       return (response as List<dynamic>).map((json) {
+        final row = json as Map<String, dynamic>;
+        final jobJson = row['Job'] as Map<String, dynamic>?;
+        final job = jobJson != null ? JobModel.fromJson(jobJson) : null;
+
+        final jobStatus = job?.status.trim().toLowerCase() ?? 'deleted';
+        final isJobDeleted = job == null || jobStatus == 'deleted';
+        final isJobInactive = jobStatus == 'inactive';
+
         return {
-          'application': JobApplicantModel.fromJson(json as Map<String, dynamic>),
-          'job': JobModel.fromJson(json['Job'] as Map<String, dynamic>),
+          'application': JobApplicantModel.fromJson(row),
+          'job': job,
+          'jobStatus': jobStatus,
+          'isJobDeleted': isJobDeleted,
+          'isJobInactive': isJobInactive,
         };
       }).toList();
-
     } catch (e) {
       print('Error fetching applied jobs: $e');
       return [];

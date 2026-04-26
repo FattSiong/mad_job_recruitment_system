@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/job_model.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/utils/location_helper.dart';
 import '../controllers/bookmarked_controller.dart';
 
 class JobCard extends StatefulWidget {
@@ -73,21 +73,25 @@ class _JobCardState extends State<JobCard> {
         _isLoading = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_isBookmarked ? 'Job bookmarked!' : 'Bookmark removed.'),
-          backgroundColor: _isBookmarked ? Colors.green : Colors.grey.shade800,
-          duration: const Duration(seconds: 1),
-        ),
+      SnackBarHelper.showStyled(
+        context,
+        message: _isBookmarked ? 'Job bookmarked!' : 'Bookmark removed.',
+        icon: _isBookmarked
+            ? Icons.bookmark_added_rounded
+            : Icons.bookmark_remove_rounded,
+        accentColor: _isBookmarked
+            ? const Color(0xFF1E8F8B)
+            : const Color(0xFF687588),
       );
+
     }
   }
 
   String _formatSalary(String range, String? type) {
     if (type == 'Part-time') {
-      return '$range / hr';
+      return '$range / hour';
     } else {
-      return '$range / mo';
+      return '$range / month';
     }
   }
 
@@ -134,16 +138,12 @@ class _JobCardState extends State<JobCard> {
                   Icon(Icons.location_on, size: 14, color: Colors.grey.shade600),
                   const SizedBox(width: 4),
                   Expanded(
-                    child: FutureBuilder<String>(
-                      future: LocationHelper.getCityFromCoordinates(widget.job.latitude, widget.job.longitude),
-                      builder: (context, snapshot) {
-                        return Text(
-                          snapshot.data ?? 'Loading location...',
-                          style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        );
-                      },
+                    // Replaced FutureBuilder with instant text
+                    child: Text(
+                      widget.job.locationName ?? 'Location unavailable',
+                      style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -153,8 +153,7 @@ class _JobCardState extends State<JobCard> {
                 spacing: 8,
                 runSpacing: 4,
                 children: [
-                  if (widget.job.jobType != null)
-                    _buildChip(widget.job.jobType, Icons.work_outline),
+                  _buildChip(widget.job.jobType, Icons.work_outline),
                   _buildChip(_formatSalary(widget.job.salaryRange, widget.job.jobType), Icons.attach_money),
                 ],
               ),
@@ -169,7 +168,7 @@ class _JobCardState extends State<JobCard> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.primaryBlue.withOpacity(0.1),
+        color: AppColors.primaryBlue.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
