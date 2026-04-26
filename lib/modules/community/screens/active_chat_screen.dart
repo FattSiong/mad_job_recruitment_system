@@ -83,9 +83,9 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
         debugPrint('OneSignal token found: $token');
 
         // Use the correct app_id (update as needed)
-        const String oneSignalAppId = '595705d0-3319-4ced-90ab-22185bb761dc';
+        const String oneSignalAppId = '16f92d86-ad69-4841-8a4f-b6c0cbb8f9f6';
         // Use the correct REST API Key (update as needed)
-        const String oneSignalRestApiKey = 'os_v2_app_c34s3bvnnfeedcspw3amxohz62jhsjzxra4upr54r45mep7kmid5zhkliargm5bgje2q3n5qcscr6xg4pgde7ntjngl3fbuacu4yu7i';
+        const String oneSignalRestApiKey = 'os_v2_app_c34s3bvnnfeedcspw3amxohz62pdusnidibetufmo2b5zeh25cmys643hvxviodmkoa3i4rljlt67paibzgnuq57gdipg4eztmebpqq';
 
        final requestBody = {
           'app_id': oneSignalAppId,
@@ -118,7 +118,7 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
           headers: {
             'Content-Type': 'application/json; charset=utf-8',
             // 👇 Requires "Key " prefix
-            'Authorization': 'Key os_v2_app_c34s3bvnnfeedcspw3amxohz62jhsjzxra4upr54r45mep7kmid5zhkliargm5bgje2q3n5qcscr6xg4pgde7ntjngl3fbuacu4yu7i', 
+            'Authorization': 'key os_v2_app_c34s3bvnnfeedcspw3amxohz62pdusnidibetufmo2b5zeh25cmys643hvxviodmkoa3i4rljlt67paibzgnuq57gdipg4eztmebpqq',
           },
           body: jsonEncode({
             'app_id': oneSignalAppId,
@@ -151,8 +151,8 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
           response = await http.post(
             Uri.parse('https://api.onesignal.com/notifications'),
             headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Basic $oneSignalRestApiKey',
+              'Content-Type': 'application/json; charset=utf-8',
+              'Authorization': 'key $oneSignalRestApiKey',
             },
             body: jsonEncode(fallbackBody),
           );
