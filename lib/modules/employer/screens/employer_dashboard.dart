@@ -53,11 +53,22 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
 
   void _onTabTapped(int index) {
     setState(() => _currentIndex = index);
+
+    if (index == 0) {
+      _loadDashboardStats();
+    }
   }
 
-  void _openScreen(Widget screen) {
-    Navigator.push(context, MaterialPageRoute(builder: (context) => screen));
+  Future<void> _openScreen(Widget screen) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => screen),
+    );
+
+    if (!mounted) return;
+    await _loadDashboardStats();
   }
+
 
   Future<void> _logout() async {
     await AuthService().signOut();
@@ -146,7 +157,14 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
         _totalJobs = jobs.length;
         _activeJobs = activeJobs;
         _pendingInviteCount = pendingInvites.length;
-        _scheduledInterviewCount = interviews.length;
+
+        final scheduledOnly = interviews.where((item) {
+          final applicant = item['JobApplicant'] ?? {};
+          return applicant['applicationStatus'] == 'scheduled';
+        }).length;
+
+        _scheduledInterviewCount = scheduledOnly;
+
         _isLoadingStats = false;
       });
     } catch (e) {
@@ -285,7 +303,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                             vertical: 8,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.15),
+                            color: Colors.white.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(30),
                           ),
                           child: Row(
@@ -487,7 +505,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
+              color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: color),
@@ -545,7 +563,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                     width: 46,
                     height: 46,
                     decoration: BoxDecoration(
-                      color: color.withOpacity(0.12),
+                      color: color.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Icon(icon, color: color),
@@ -557,7 +575,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: color.withOpacity(0.10),
+                      color: color.withValues(alpha: 0.10),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -820,7 +838,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.14),
+        color: Colors.white.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(30),
       ),
       child: Row(
@@ -861,7 +879,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                 width: 46,
                 height: 46,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.12),
+                  color: color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(icon, color: color),

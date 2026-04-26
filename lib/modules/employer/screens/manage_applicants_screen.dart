@@ -91,7 +91,7 @@ class _ManageApplicantsScreenState extends State<ManageApplicantsScreen> {
     Color color;
     switch (status.toLowerCase()) {
       case 'reviewed': color = Colors.orange; break;
-      case 'interviewing': color = Colors.purple; break;
+      case 'scheduled': color = Colors.purple; break;
       case 'accepted': color = Colors.green; break;
       case 'rejected': color = Colors.red; break;
       default: color = Colors.grey; // Pending
