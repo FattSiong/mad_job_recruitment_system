@@ -28,6 +28,14 @@ class NotificationService {
     _registerPushSubscriptionObserver();
     _registerNotificationClickListener();
 
+    // 👇 ADD THIS BLOCK to force popouts while the user is actively inside the app
+    OneSignal.Notifications.addForegroundWillDisplayListener((event) {
+      // Prevent the default quiet behavior
+      event.preventDefault(); 
+      // Force the notification banner to display over the UI
+      event.notification.display();
+    });
+
     await OneSignal.Notifications.requestPermission(true);
     await syncPushTokenToCurrentUser();
     unawaited(_syncPushTokenWithRetry());
