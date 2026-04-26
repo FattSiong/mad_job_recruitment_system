@@ -108,7 +108,7 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
           headers: {
             'Content-Type': 'application/json',
             // Your exact REST API Key
-            'Authorization': 'Key os_v2_app_lflqlubtdfgo3efleimfxn3b3r2pcgb4dmvu53ff2dejac4fschvkyxktqwln34ueqxmweuerp3zo6tgz5tyho62fckklslqf3ecm7q',
+            'Authorization': 'Key os_v2_app_c34s3bvnnfeedcspw3amxohz63ex4ggcwq5e2xu2jrjnnozcxahdjqwphbqlu5isjktvakvjsfurbwrzhlxl3p7tesk67o4lnnfyegi',
           },
           body: jsonEncode(requestBody),
         );
@@ -123,7 +123,7 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
             Uri.parse('https://api.onesignal.com/notifications'),
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': 'Key os_v2_app_lflqlubtdfgo3efleimfxn3b3r2pcgb4dmvu53ff2dejac4fschvkyxktqwln34ueqxmweuerp3zo6tgz5tyho62fckklslqf3ecm7q',
+              'Authorization': 'Key os_v2_app_c34s3bvnnfeedcspw3amxohz63ex4ggcwq5e2xu2jrjnnozcxahdjqwphbqlu5isjktvakvjsfurbwrzhlxl3p7tesk67o4lnnfyegi',
             },
             body: jsonEncode(fallbackBody),
           );
