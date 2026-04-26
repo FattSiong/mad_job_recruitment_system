@@ -52,6 +52,16 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
       return;
     }
 
+    if (_selectedCategory == 'Other' && _detailsController.text.trim().isEmpty) {
+      SnackBarHelper.showStyled(
+        context,
+        message: 'Please provide details when selecting Other.',
+        icon: Icons.info_outline_rounded,
+        accentColor: const Color(0xFFE27D60),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     final success = await _reportController.submitJobReport(

@@ -260,7 +260,11 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
                             controller: _locationController,
                             autofocus: true,
                             textInputAction: TextInputAction.search,
-                            onSubmitted: (value) => _selectLocation(value.trim()),
+                            onSubmitted: (value) {
+                              final trimmed = value.trim();
+                              if (trimmed.isEmpty) return;
+                              _selectLocation(trimmed);
+                            },
                             onChanged: (value) => setState(() {}),
                             decoration: _searchInputDecoration(
                               hint: 'Country, city or state',

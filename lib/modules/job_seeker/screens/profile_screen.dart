@@ -33,6 +33,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   final ProfileController _controller = ProfileController();
 
+  final GlobalKey<FormState> _profileFormKey = GlobalKey<FormState>();
+
   JobSeekerModel? _profile;
   bool _isLoading = true;
   bool _isUploading = false;
@@ -496,6 +498,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     int maxLines = 1,
     bool isReadOnly = false,
     bool isLink = false,
+    String? Function(String?)? validator,
   }) {
     if (!_isEditing) {
       final isEmpty = controller.text.trim().isEmpty;
@@ -565,6 +568,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         controller: controller,
         maxLines: maxLines,
         readOnly: isReadOnly,
+        validator: validator,
         style: TextStyle(
           color: isReadOnly ? Colors.grey.shade500 : _textPrimary,
         ),
@@ -899,6 +903,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
+    if (!_profileFormKey.currentState!.validate()) {
+      return;
+    }
+
     setState(() => _isSavingProfile = true);
 
     String? profilePictureUrl = _profile!.profilePictureURL;
@@ -939,6 +947,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       gitHubURL: _githubController.text.trim().isEmpty
           ? null
           : _githubController.text.trim(),
+      education: _profile!.education,
+      workExperience: _profile!.workExperience,
     );
 
     if (!mounted) return;
@@ -946,7 +956,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final didUpdate = await _controller.updateProfileBasics(
       context: context,
       updatedModel: updatedModel,
-      onSucess: _loadProfile,
     );
 
     if (!mounted) return;
@@ -954,8 +963,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() {
       _isSavingProfile = false;
       if (didUpdate) {
+        _profile = updatedModel;
         _isEditing = false;
         _newProfileImage = null;
+        _populateControllers();
       }
     });
   }
@@ -1000,89 +1011,98 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 24),
 
                 _buildSurfaceCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (!_isEditing) ...[
-                        Text(
-                          _profile!.fullName,
-                          style: const TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.bold,
-                            color: _textPrimary,
+                  child: Form(
+                    key: _profileFormKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (!_isEditing) ...[
+                          Text(
+                            _profile!.fullName,
+                            style: const TextStyle(
+                              fontSize: 26,
+                              fontWeight: FontWeight.bold,
+                              color: _textPrimary,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 20),
-                      ],
-                      if (_isEditing)
+                          const SizedBox(height: 20),
+                        ],
+                        if (_isEditing)
+                          _buildEditableField(
+                            label: 'Full Name',
+                            controller: _nameController,
+                            icon: const Icon(
+                              Icons.person_outline_rounded,
+                              color: _textMuted,
+                              size: 20,
+                            ),
+                          ),
                         _buildEditableField(
-                          label: 'Full Name',
-                          controller: _nameController,
+                          label: 'Email',
+                          controller: _emailController,
                           icon: const Icon(
-                            Icons.person_outline_rounded,
+                            Icons.email_outlined,
+                            color: _textMuted,
+                            size: 20,
+                          ),
+                          isReadOnly: true,
+                        ),
+                        _buildEditableField(
+                          label: 'Phone Number',
+                          controller: _phoneController,
+                          icon: const Icon(Icons.phone_outlined, color: _textMuted, size: 20),
+                          validator: (value) {
+                            final text = value?.trim() ?? '';
+                            if (text.isEmpty) return null;
+                            final phoneRegex = RegExp(r'^[0-9+\-\s]{8,20}$');
+                            return phoneRegex.hasMatch(text) ? null : 'Enter a valid phone number';
+                          },
+                        ),
+                        _buildEditableField(
+                          label: 'Location',
+                          controller: _locationController,
+                          icon: const Icon(
+                            Icons.location_on_outlined,
                             color: _textMuted,
                             size: 20,
                           ),
                         ),
-                      _buildEditableField(
-                        label: 'Email',
-                        controller: _emailController,
-                        icon: const Icon(
-                          Icons.email_outlined,
-                          color: _textMuted,
-                          size: 20,
+                        _buildEditableField(
+                          label: 'Bio / About Me',
+                          controller: _bioController,
+                          icon: const Icon(
+                            Icons.menu_book_outlined,
+                            color: _textMuted,
+                            size: 20,
+                          ),
+                          maxLines: 4,
                         ),
-                        isReadOnly: true,
-                      ),
-                      _buildEditableField(
-                        label: 'Phone Number',
-                        controller: _phoneController,
-                        icon: const Icon(
-                          Icons.phone_outlined,
-                          color: _textMuted,
-                          size: 20,
+                        _buildEditableField(
+                          label: 'LinkedIn URL',
+                          controller: _linkedinController,
+                          icon: const FaIcon(FontAwesomeIcons.linkedin, color: _textMuted, size: 18),
+                          isLink: true,
+                          validator: (value) {
+                            final text = value?.trim() ?? '';
+                            if (text.isEmpty) return null;
+                            final uri = Uri.tryParse(text.startsWith('http') ? text : 'https://$text');
+                            return uri != null && uri.hasAuthority ? null : 'Enter a valid URL';
+                          },
                         ),
-                      ),
-                      _buildEditableField(
-                        label: 'Location',
-                        controller: _locationController,
-                        icon: const Icon(
-                          Icons.location_on_outlined,
-                          color: _textMuted,
-                          size: 20,
+                        _buildEditableField(
+                          label: 'GitHub URL',
+                          controller: _githubController,
+                          icon: const FaIcon(FontAwesomeIcons.github, color: _textMuted, size: 18),
+                          isLink: true,
+                          validator: (value) {
+                            final text = value?.trim() ?? '';
+                            if (text.isEmpty) return null;
+                            final uri = Uri.tryParse(text.startsWith('http') ? text : 'https://$text');
+                            return uri != null && uri.hasAuthority ? null : 'Enter a valid URL';
+                          },
                         ),
-                      ),
-                      _buildEditableField(
-                        label: 'Bio / About Me',
-                        controller: _bioController,
-                        icon: const Icon(
-                          Icons.menu_book_outlined,
-                          color: _textMuted,
-                          size: 20,
-                        ),
-                        maxLines: 4,
-                      ),
-                      _buildEditableField(
-                        label: 'LinkedIn URL',
-                        controller: _linkedinController,
-                        icon: const FaIcon(
-                          FontAwesomeIcons.linkedin,
-                          color: _textMuted,
-                          size: 18,
-                        ),
-                        isLink: true,
-                      ),
-                      _buildEditableField(
-                        label: 'GitHub URL',
-                        controller: _githubController,
-                        icon: const FaIcon(
-                          FontAwesomeIcons.github,
-                          color: _textMuted,
-                          size: 18,
-                        ),
-                        isLink: true,
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
 
@@ -1344,13 +1364,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     TextFormField(
                       controller: titleController,
                       decoration: _sheetInputDecoration('Job Title*', Icons.work),
-                      validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                      validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: companyController,
                       decoration: _sheetInputDecoration('Company Name*', Icons.business),
-                      validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                      validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
                     ),
                     const SizedBox(height: 16),
                     Row(
@@ -1618,7 +1638,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         'Institution Name*',
                         Icons.school,
                       ),
-                      validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                      validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
                     ),
                     const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
@@ -1641,7 +1661,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           }
                         });
                       },
-                      validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                      validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
                     ),
                     const SizedBox(height: 16),
                     if (isDiplomaOrAbove(selectedDegree)) ...[
@@ -1651,7 +1671,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           'Field of Study*',
                           Icons.menu_book,
                         ),
-                        validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                        validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
                       ),
                       const SizedBox(height: 16),
                     ],

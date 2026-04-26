@@ -91,7 +91,6 @@ class ProfileController {
   Future<bool> updateProfileBasics({
     required BuildContext context,
     required JobSeekerModel updatedModel,
-    required VoidCallback onSucess,
   }) async {
     try {
       await _supabase
@@ -104,7 +103,6 @@ class ProfileController {
           const SnackBar(content: Text('Profile updated successfully!')),
         );
       }
-      onSucess();
       return true;
     } catch (e) {
       debugPrint('Error updating profile: $e');

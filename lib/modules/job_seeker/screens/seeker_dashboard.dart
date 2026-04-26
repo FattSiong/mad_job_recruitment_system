@@ -320,9 +320,17 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                         child: ElevatedButton(
                           onPressed: () {
                             final typed = _salaryInputController.text.trim();
+                            if (typed.isNotEmpty) {
+                              final salary = int.tryParse(typed);
+                              if (salary == null || salary <= 0) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Please enter a valid salary amount.')),
+                                );
+                                return;
+                              }
+                            }
                             setState(() {
-                              _selectedSalary =
-                              typed.isNotEmpty ? 'RM $typed' : 'Any';
+                              _selectedSalary = typed.isNotEmpty ? 'RM $typed' : 'Any';
                             });
                             Navigator.pop(context);
                             _performSearch();
