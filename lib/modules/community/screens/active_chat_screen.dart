@@ -59,7 +59,11 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
   // ------------------------------------------------------------------------
   // The Push Notification Trigger Engine
   // ------------------------------------------------------------------------
-  Future<void> _sendPushNotification(String content, {bool isCall = false}) async {
+  Future<void> _sendPushNotification(
+    String content, {
+    bool isCall = false,
+    Map<String, dynamic>? additionalData,
+  }) async {
     try {
       // 1. Fetch the receiver's OneSignal Player ID from Supabase
       final userData = await Supabase.instance.client
@@ -84,7 +88,15 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
             'include_subscription_ids': [token],
             'headings': {'en': isCall ? 'Incoming Call 📞' : 'New Message from You 💬'},
             'contents': {'en': content},
-            'data': {'type': isCall ? 'call' : 'chat', 'roomID': widget.roomID}
+            'data': {
+              'type': isCall ? 'call' : 'chat',
+              'roomID': widget.roomID,
+              ...?additionalData,
+            },
+            if (isCall) 'priority': 10,
+            if (isCall) 'android_priority': 'high',
+            if (isCall) 'ttl': 60,
+            if (isCall && additionalData?['callID'] != null) 'collapse_id': 'call_${additionalData?['callID']}',
           }),
         );
         debugPrint("Push notification sent to $token");
@@ -221,8 +233,31 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
           widget.otherUserID
       );
 
+      String callerName = 'Incoming Caller';
+      try {
+        final me = await Supabase.instance.client
+            .from('User')
+            .select('username')
+            .eq('userID', widget.currentUserID)
+            .maybeSingle();
+        if (me != null && me['username'] != null) {
+          callerName = me['username'].toString();
+        }
+      } catch (_) {
+        // Fallback name is fine for notifications.
+      }
+
       // Trigger Call Push Notification
-      _sendPushNotification('📞 Incoming Voice Call...', isCall: true);
+      _sendPushNotification(
+        '📞 Incoming Voice Call...',
+        isCall: true,
+        additionalData: {
+          'callID': callData.callID,
+          'roomCode': callData.roomCode,
+          'callerID': widget.currentUserID,
+          'callerName': callerName,
+        },
+      );
 
       if (context.mounted) {
         final result = await Navigator.push(
