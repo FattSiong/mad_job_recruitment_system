@@ -10,6 +10,8 @@ import 'create_job_screen.dart';
 import 'job_company_list_screen.dart';
 import 'pending_invites_screen.dart';
 import 'scheduled_interviews_screen.dart';
+import 'subscription_screen.dart';
+import 'register_company_screen.dart'; // Added from second file
 import '../../../core/constants/table_constants.dart';
 import '../../../models/company_model.dart';
 import '../../../models/job_model.dart';
@@ -28,6 +30,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
   final EmployerService _employerService = EmployerService();
 
   bool _isLoadingStats = true;
+  bool _isPremium = false; // Added premium state
 
   String _fullName = 'Employer';
   String _email = '';
@@ -45,6 +48,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
   void initState() {
     super.initState();
     _loadDashboardStats();
+    _checkPremiumStatus(); // Check premium status on init
   }
 
   void _onTabTapped(int index) {
@@ -62,8 +66,33 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
 
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (context) => const TempMainScreen()),
-      (route) => false,
+          (route) => false,
     );
+  }
+
+  // Merged: Check Premium Status
+  Future<void> _checkPremiumStatus() async {
+    try {
+      final user = _currentUser;
+      if (user == null) return;
+
+      final subInfo = await Supabase.instance.client
+          .from('PaymentSubscription')
+          .select('planType, status')
+          .eq('paidByEmployerID', user.id)
+          .eq('status', 'active')
+          .eq('planType', 'premium')
+          .limit(1)
+          .maybeSingle();
+
+      if (mounted) {
+        setState(() {
+          _isPremium = (subInfo != null);
+        });
+      }
+    } catch (e) {
+      debugPrint("Error checking premium status: $e");
+    }
   }
 
   Future<void> _loadDashboardStats() async {
@@ -98,9 +127,9 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
       final verifiedCompanies = companies
           .where(
             (company) =>
-                company.isVerified ||
-                company.verificationStatus.toLowerCase() == 'verified',
-          )
+        company.isVerified ||
+            company.verificationStatus.toLowerCase() == 'verified',
+      )
           .length;
 
       setState(() {
@@ -145,7 +174,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
         selectedIndex: _currentIndex,
         onDestinationSelected: _onTabTapped,
         backgroundColor: Colors.white,
-        indicatorColor: const Color(0xFFDCEBFB),
+        indicatorColor: _isPremium ? Colors.purple.shade100 : const Color(0xFFDCEBFB),
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.dashboard_outlined),
@@ -169,14 +198,18 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
           ),
         ],
       ),
+      // Merged: dynamic FAB based on premium status
       floatingActionButton: _currentIndex == 0
           ? FloatingActionButton.extended(
-              onPressed: () => _openScreen(const CreateJobScreen()),
-              backgroundColor: const Color(0xFF163B65),
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.add),
-              label: const Text('Post Job'),
-            )
+        onPressed: () => _openScreen(const CreateJobScreen()),
+        backgroundColor: _isPremium ? Colors.purple : const Color(0xFF163B65),
+        foregroundColor: Colors.white,
+        icon: Icon(_isPremium ? Icons.auto_awesome : Icons.add),
+        label: Text(
+            _isPremium ? 'Post AI Job' : 'Post Job',
+            style: const TextStyle(fontWeight: FontWeight.bold)
+        ),
+      )
           : null,
     );
   }
@@ -218,10 +251,12 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
       },
     ];
 
-
     return SafeArea(
       child: RefreshIndicator(
-        onRefresh: _loadDashboardStats,
+        onRefresh: () async {
+          await _loadDashboardStats();
+          await _checkPremiumStatus();
+        },
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
           child: Column(
@@ -230,8 +265,10 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF163B65), Color(0xFF335D8A)],
+                  gradient: LinearGradient(
+                    colors: _isPremium
+                        ? [Colors.purple.shade800, Colors.purple.shade500]
+                        : const [Color(0xFF163B65), Color(0xFF335D8A)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -251,18 +288,18 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                             color: Colors.white.withOpacity(0.15),
                             borderRadius: BorderRadius.circular(30),
                           ),
-                          child: const Row(
+                          child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
-                                Icons.apartment,
+                                _isPremium ? Icons.workspace_premium : Icons.apartment,
                                 color: Colors.white,
                                 size: 16,
                               ),
-                              SizedBox(width: 8),
+                              const SizedBox(width: 8),
                               Text(
-                                'Employer Workspace',
-                                style: TextStyle(
+                                _isPremium ? 'Premium Workspace 👑' : 'Employer Workspace',
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -281,7 +318,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                     const SizedBox(height: 24),
                     Text(
                       'Welcome back, ${_fullName.split(' ').first}',
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
@@ -293,7 +330,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                       _isLoadingStats
                           ? 'Loading your employer workspace...'
                           : 'You have $_activeJobs active jobs, $_companyCount companies, and $_scheduledInterviewCount scheduled interviews.',
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 15,
                         height: 1.4,
@@ -422,36 +459,6 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                     icon: Icons.calendar_month_rounded,
                   ),
                 ],
-              ),
-              const SizedBox(height: 28),
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Today in your workspace',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1B2433),
-                      ),
-                    ),
-                    SizedBox(height: 10),
-                    Text(
-                      'This design focuses on clarity first: a safe header, responsive cards, real community access, and better tap feedback.',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Color(0xFF687588),
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
-                ),
               ),
             ],
           ),
@@ -664,24 +671,33 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                 children: [
                   CircleAvatar(
                     radius: 34,
-                    backgroundColor: const Color(0xFFDCEBFB),
+                    backgroundColor: _isPremium ? Colors.purple.shade100 : const Color(0xFFDCEBFB),
                     child: Text(
                       firstLetter,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF163B65),
+                        color: _isPremium ? Colors.purple.shade700 : const Color(0xFF163B65),
                       ),
                     ),
                   ),
                   const SizedBox(height: 14),
-                  Text(
-                    displayName,
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1B2433),
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        displayName,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1B2433),
+                        ),
+                      ),
+                      if (_isPremium) ...[
+                        const SizedBox(width: 8),
+                        const Icon(Icons.verified, color: Colors.purple, size: 20),
+                      ]
+                    ],
                   ),
                   const SizedBox(height: 6),
                   Text(
@@ -695,6 +711,56 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
               ),
             ),
             const SizedBox(height: 24),
+
+            // Merged: Subscription UI
+            if (!_isPremium)
+              _buildProfileTile(
+                icon: Icons.workspace_premium_outlined,
+                title: 'Upgrade to Premium',
+                subtitle: 'Unlock all AI features',
+                color: Colors.purple,
+                onTap: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const SubscriptionScreen()),
+                  );
+                  _checkPremiumStatus();
+                },
+              )
+            else
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                decoration: BoxDecoration(
+                  color: Colors.purple.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: Colors.purple.withOpacity(0.2)),
+                ),
+                child: const Column(
+                  children: [
+                    Icon(Icons.workspace_premium, color: Colors.purple, size: 36),
+                    SizedBox(height: 8),
+                    Text(
+                      "Premium Active",
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.purple),
+                    ),
+                    Text(
+                      "Full access to all AI features.",
+                      style: TextStyle(color: Colors.purple, fontSize: 13),
+                    )
+                  ],
+                ),
+              ),
+
+            const SizedBox(height: 12),
+            _buildProfileTile(
+              icon: Icons.app_registration,
+              title: 'Register Company',
+              subtitle: 'Create a new profile',
+              color: const Color(0xFF335D8A),
+              onTap: () => _openScreen(const RegisterCompanyScreen()),
+            ),
+            const SizedBox(height: 12),
             _buildProfileTile(
               icon: Icons.business_rounded,
               title: 'Manage Companies',

@@ -1,58 +1,90 @@
 import 'package:flutter/material.dart';
-
+import 'package:mad_job_recruitment_system/modules/admin/screens/AdminCommunityScreen.dart';
+import 'package:mad_job_recruitment_system/modules/admin/screens/AdminSubscriptionListScreen.dart';
 import '../../../core/screens/temp_main_screen.dart';
 import '../../../services/auth_service.dart';
+import 'company_verification_screen.dart';
+import 'admin_job_details.dart';
 
-class AdminDashboard extends StatelessWidget {
+class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
+
+  @override
+  State<AdminDashboard> createState() => _AdminDashboardState();
+}
+
+class _AdminDashboardState extends State<AdminDashboard> {
+  int _currentIndex = 0;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // appBar: AppBar(title: const Text('Admin / Moderation Module')),
-//       body: Center(
-//         child: Column(
-//           mainAxisAlignment: MainAxisAlignment.center,
-//           children: [
-//             IconButton(
-//               icon: const Icon(Icons.logout),
-//               onPressed: () async {
-//                 // 1. Tell Supabase to destroy the saved session
-//                 await AuthService().signOut();
+      backgroundColor: const Color(0xFFF9F9F7),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0.5,
+        title: const Text("Admin Dashboard",
+            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18)),
+        centerTitle: true,
+        // 👇 Move the button into the 'actions' array
+        actions: [
+          IconButton(
+            // 👇 Change the color to black so it's visible on the white app bar
+            icon: const Icon(Icons.logout, color: Colors.black, size: 20),
+            tooltip: 'Logout',
+            onPressed: () async {
+              await AuthService().signOut();
+              if (context.mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(
+                    builder: (context) => const TempMainScreen(),
+                  ),
+                      (Route<dynamic> route) => false,
+                );
+              }
+            },
+          ),
+        ],
+      ),
 
-//                 // 2. Kick them back to the login screen and clear the route history
-//                 if (context.mounted) {
-//                   Navigator.of(context).pushAndRemoveUntil(
-//                     // MaterialPageRoute(builder: (context) => const LoginScreen()),
-//                     MaterialPageRoute(builder: (context) => const TempMainScreen()),
-//                         (Route<dynamic> route) => false,
-//                   );
-//                 }
-//               },
-//             )
-//           ],
-//         ),
-//      backgroundColor: const Color(0xFFFBFBF9),
-//      appBar: AppBar(title: const Text("Admin Moderation"), backgroundColor: Colors.white, elevation: 0.5),
-//      body: ListView(
-//        padding: const EdgeInsets.all(20),
-//        children: [
-//          _buildAdminTile(Icons.business, "Company Verification", "3 Pending", const Color(0xFFA7BED3)),
-//          _buildAdminTile(Icons.policy_rounded, "Job Moderation", "12 New", const Color(0xFFC6DEF1)),
-//          _buildAdminTile(Icons.forum_outlined, "Community Control", "5 Reported", const Color(0xFFDBCDF0)),
-//        ],
-//      ),
-    );
-  }
+      body: IndexedStack(
+        index: _currentIndex,
+        children: const [
+          CompanyVerificationScreen(),
+          AdminJobModerationScreen(),
+          AdminCommunityScreen(),
+          AdminSubscriptionListScreen(),
+        ],
+      ),
 
-  Widget _buildAdminTile(IconData icon, String title, String count, Color color) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 15),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: ListTile(
-        leading: CircleAvatar(backgroundColor: color.withValues(alpha: 0.1), child: Icon(icon, color: color)),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        trailing: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)), child: Text(count, style: TextStyle(color: color, fontWeight: FontWeight.bold))),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        selectedItemColor: Colors.blueAccent,
+        unselectedItemColor: Colors.grey,
+        type: BottomNavigationBarType.fixed,
+        onTap: (index) => setState(() => _currentIndex = index),
+        items: const [
+          BottomNavigationBarItem(
+              icon: Icon(Icons.business_outlined),
+              activeIcon: Icon(Icons.business),
+              label: 'Companies'
+          ),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.work_outline),
+              activeIcon: Icon(Icons.work),
+              label: 'Jobs'
+          ),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.shield_outlined),
+              activeIcon: Icon(Icons.shield),
+              label: 'Community'
+          ),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.credit_card_outlined),
+              activeIcon: Icon(Icons.credit_card),
+              label: 'Billing'
+          ),
+        ],
       ),
     );
   }
