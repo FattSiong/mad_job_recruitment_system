@@ -14,6 +14,19 @@ class EmployerService {
   // Get the single instance of our Supabase client
   final _supabase = Supabase.instance.client;
 
+  Future<Map<String, dynamic>?> getEmployerProfile(String employerId) async {
+    try {
+      return await _supabase
+          .from(TableConstants.employer)
+          .select('fullName, email, profilePictureURL')
+          .eq('employerID', employerId)
+          .maybeSingle();
+    } catch (e) {
+      print('Fetch employer profile error: $e');
+      return null;
+    }
+  }
+
   /// Inserts a new job posting into the database.
   /// Returns the newly created JobModel if successful.
   Future<JobModel?> createJobPosting(JobModel newJob) async {
@@ -159,7 +172,9 @@ class EmployerService {
       // Note: Ensure your public profile table is named 'Employer' and has 'name' and 'email'
       final response = await _supabase
           .from('CompanyMember')
-          .select('companyRole, status, employerID, Employer(fullName, email)')
+          .select(
+            'companyRole, status, employerID, Employer(fullName:fullName, email:email, profilePictureURL:profilePictureURL)',
+          )
           .eq('companyID', companyId)
           .order(
             'companyRole',

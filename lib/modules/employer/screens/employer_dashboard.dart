@@ -14,7 +14,6 @@ import 'pending_invites_screen.dart';
 import 'register_company_screen.dart';
 import 'scheduled_interviews_screen.dart';
 import 'subscription_screen.dart';
-import '../../../core/constants/table_constants.dart';
 import '../../../models/company_model.dart';
 import '../../../models/job_model.dart';
 import '../../../services/employer_service.dart';
@@ -117,11 +116,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
 
     try {
       final results = await Future.wait<dynamic>([
-        Supabase.instance.client
-            .from(TableConstants.employer)
-            .select('fullName, email, profilePictureURL')
-            .eq('employerID', currentUser.id)
-            .maybeSingle(),
+        _employerService.getEmployerProfile(currentUser.id),
         _employerService.getCompanies(currentUser.id, 'employer'),
         _employerService.getEmployerJobs(currentUser.id),
         _employerService.getMyPendingInvitations(),

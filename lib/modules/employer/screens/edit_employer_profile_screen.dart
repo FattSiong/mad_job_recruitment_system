@@ -280,12 +280,10 @@ class _EditEmployerProfileScreenState extends State<EditEmployerProfileScreen> {
   }
 
   Widget _buildPhotoEditor() {
-    final hasNewImage = _newProfileImage != null;
-    final hasExistingImage = widget.initialProfilePictureUrl != null &&
-        widget.initialProfilePictureUrl!.isNotEmpty;
     final initial = _fullNameController.text.trim().isEmpty
         ? 'E'
         : _fullNameController.text.trim().substring(0, 1).toUpperCase();
+    final previewImage = _previewImageProvider();
 
     return Column(
       children: [
@@ -296,12 +294,8 @@ class _EditEmployerProfileScreenState extends State<EditEmployerProfileScreen> {
               CircleAvatar(
                 radius: 54,
                 backgroundColor: const Color(0xFFDCEBFB),
-                backgroundImage: hasNewImage
-                    ? FileImage(_newProfileImage!) as ImageProvider
-                    : hasExistingImage
-                        ? NetworkImage(widget.initialProfilePictureUrl!)
-                        : null,
-                child: !hasNewImage && !hasExistingImage
+                backgroundImage: previewImage,
+                child: previewImage == null
                     ? Text(
                         initial,
                         style: const TextStyle(
@@ -390,6 +384,19 @@ class _EditEmployerProfileScreenState extends State<EditEmployerProfileScreen> {
         ),
       ),
     );
+  }
+
+  ImageProvider? _previewImageProvider() {
+    if (_newProfileImage != null) {
+      return FileImage(_newProfileImage!);
+    }
+
+    if (widget.initialProfilePictureUrl != null &&
+        widget.initialProfilePictureUrl!.isNotEmpty) {
+      return NetworkImage(widget.initialProfilePictureUrl!);
+    }
+
+    return null;
   }
 
   Widget _buildSavePanel() {

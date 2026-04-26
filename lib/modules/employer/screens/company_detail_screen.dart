@@ -337,15 +337,26 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
                   separatorBuilder: (_, __) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final member = _members[index];
-                    final profile = member['Employer'] ?? {};
+                    final rawProfile = member['Employer'];
+                    final profile = rawProfile is List
+                        ? (rawProfile.isNotEmpty
+                            ? Map<String, dynamic>.from(rawProfile.first)
+                            : <String, dynamic>{})
+                        : rawProfile is Map
+                            ? Map<String, dynamic>.from(rawProfile)
+                            : <String, dynamic>{};
                     final name = profile['fullName'] ?? 'Unknown User';
                     final email = profile['email'] ?? 'No email provided';
+                    final profilePictureUrl =
+                        profile['profilePictureURL'] ??
+                        profile['profilepictureurl'];
                     final isOwner = member['companyRole'] == 'owner';
                     final isPending = member['status'] == 'pending';
 
                     return _buildMemberCard(
                       name: name,
                       email: email,
+                      profilePictureUrl: profilePictureUrl?.toString(),
                       role: member['companyRole'].toString(),
                       isOwner: isOwner,
                       isPending: isPending,
@@ -658,6 +669,7 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
   Widget _buildMemberCard({
     required String name,
     required String email,
+    required String? profilePictureUrl,
     required String role,
     required bool isOwner,
     required bool isPending,
@@ -667,6 +679,13 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
         : isPending
         ? const Color(0xFFC28A22)
         : const Color(0xFF163B65);
+    final hasProfilePicture =
+        profilePictureUrl != null && profilePictureUrl.trim().isNotEmpty;
+    final firstLetter = name.trim().isNotEmpty
+        ? name.trim().substring(0, 1).toUpperCase()
+        : 'U';
+    final normalizedProfilePictureUrl =
+        hasProfilePicture ? profilePictureUrl.trim() : null;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -680,10 +699,19 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
           CircleAvatar(
             radius: 24,
             backgroundColor: accentColor.withOpacity(0.12),
-            child: Icon(
-              isOwner ? Icons.star_rounded : Icons.person_rounded,
-              color: accentColor,
-            ),
+            backgroundImage: normalizedProfilePictureUrl != null
+                ? NetworkImage(normalizedProfilePictureUrl)
+                : null,
+            child: !hasProfilePicture
+                ? Text(
+                    firstLetter,
+                    style: TextStyle(
+                      color: accentColor,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 18,
+                    ),
+                  )
+                : null,
           ),
           const SizedBox(width: 14),
           Expanded(

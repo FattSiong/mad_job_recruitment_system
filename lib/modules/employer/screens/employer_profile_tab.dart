@@ -33,11 +33,6 @@ class EmployerProfileTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final resolvedEmail = email.isNotEmpty ? email : 'employer@email.com';
-    final firstLetter = displayName.isNotEmpty
-        ? displayName[0].toUpperCase()
-        : 'E';
-    final hasProfilePicture =
-        profilePictureUrl != null && profilePictureUrl!.isNotEmpty;
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -75,27 +70,7 @@ class EmployerProfileTab extends StatelessWidget {
                   ),
                   Column(
                     children: [
-                      CircleAvatar(
-                        radius: 34,
-                        backgroundColor: isPremium
-                            ? Colors.purple.shade100
-                            : const Color(0xFFDCEBFB),
-                        backgroundImage: hasProfilePicture
-                            ? NetworkImage(profilePictureUrl!)
-                            : null,
-                        child: !hasProfilePicture
-                            ? Text(
-                                firstLetter,
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: isPremium
-                                      ? Colors.purple.shade700
-                                      : const Color(0xFF163B65),
-                                ),
-                              )
-                            : null,
-                      ),
+                      _buildProfileAvatar(),
                       const SizedBox(height: 14),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -295,6 +270,34 @@ class EmployerProfileTab extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildProfileAvatar() {
+    final firstLetter = displayName.trim().isNotEmpty
+        ? displayName.trim().substring(0, 1).toUpperCase()
+        : 'E';
+    final hasProfilePicture =
+        profilePictureUrl != null && profilePictureUrl!.isNotEmpty;
+
+    return CircleAvatar(
+      radius: 34,
+      backgroundColor:
+          isPremium ? Colors.purple.shade100 : const Color(0xFFDCEBFB),
+      backgroundImage:
+          hasProfilePicture ? NetworkImage(profilePictureUrl!) : null,
+      child: !hasProfilePicture
+          ? Text(
+              firstLetter,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: isPremium
+                    ? Colors.purple.shade700
+                    : const Color(0xFF163B65),
+              ),
+            )
+          : null,
     );
   }
 }
