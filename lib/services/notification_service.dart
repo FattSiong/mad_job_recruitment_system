@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -13,6 +15,7 @@ class NotificationService {
 
   static bool _isInitialized = false;
   static String? _lastHandledCallID;
+  static bool _isRetrySyncRunning = false;
 
   static Future<void> initialize() async {
     if (_isInitialized) return;
@@ -27,11 +30,13 @@ class NotificationService {
 
     await OneSignal.Notifications.requestPermission(true);
     await syncPushTokenToCurrentUser();
+    unawaited(_syncPushTokenWithRetry());
   }
 
   static void _registerAuthStateListener() {
     Supabase.instance.client.auth.onAuthStateChange.listen((_) {
       syncPushTokenToCurrentUser();
+      unawaited(_syncPushTokenWithRetry());
     });
   }
 
@@ -40,8 +45,43 @@ class NotificationService {
       final token = state.current.id;
       if (token != null && token.isNotEmpty) {
         syncPushTokenToCurrentUser();
+      } else {
+        unawaited(_syncPushTokenWithRetry());
       }
     });
+  }
+
+  static Future<void> _syncPushTokenWithRetry() async {
+    if (_isRetrySyncRunning) return;
+
+    _isRetrySyncRunning = true;
+    try {
+      for (int attempt = 1; attempt <= 8; attempt++) {
+        await syncPushTokenToCurrentUser();
+
+        final session = Supabase.instance.client.auth.currentSession;
+        if (session == null) return;
+
+        final row = await Supabase.instance.client
+            .from('User')
+            .select('notification_token')
+            .eq('userID', session.user.id)
+            .maybeSingle();
+
+        final savedToken = row?['notification_token']?.toString();
+        if (savedToken != null && savedToken.isNotEmpty) {
+          debugPrint('Token persisted in DB after attempt $attempt');
+          return;
+        }
+
+        debugPrint('Token not yet saved, retrying... attempt $attempt');
+        await Future.delayed(const Duration(seconds: 2));
+      }
+    } catch (e) {
+      debugPrint('Retry token sync failed: $e');
+    } finally {
+      _isRetrySyncRunning = false;
+    }
   }
 
   static void _registerNotificationClickListener() {
@@ -61,7 +101,16 @@ class NotificationService {
     debugPrint('Current session user: ${session?.user.id}');
     debugPrint('Current OneSignal subscription ID: $token');
 
-    if (session == null || token == null || token.isEmpty) return;
+    if (session == null) return;
+
+    try {
+      OneSignal.login(session.user.id);
+      debugPrint('OneSignal login linked to user ${session.user.id}');
+    } catch (e) {
+      debugPrint('OneSignal login failed: $e');
+    }
+
+    if (token == null || token.isEmpty) return;
 
     try {
       await Supabase.instance.client.from('User').update({'notification_token': token}).eq('userID', session.user.id);
