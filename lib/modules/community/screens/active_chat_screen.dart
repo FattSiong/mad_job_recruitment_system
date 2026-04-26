@@ -83,7 +83,7 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
         debugPrint('OneSignal token found: $token');
 
         final requestBody = {
-          'app_id': '595705d0-3319-4ced-90ab-22185bb761dc',
+          'app_id': '16f92d86-ad69-4841-8a4f-b6c0cbb8f9f6',
           'target_channel': 'push',
           'include_subscription_ids': [token],
           'headings': {'en': isCall ? 'Incoming Call 📞' : 'New Message from You 💬'},
@@ -103,7 +103,7 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
         debugPrint('OneSignal request body: ${jsonEncode(requestBody)}');
 
         // 2. Ping OneSignal to send the notification
-        final response = await http.post(
+        var response = await http.post(
           Uri.parse('https://api.onesignal.com/notifications'),
           headers: {
             'Content-Type': 'application/json',
@@ -112,6 +112,22 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
           },
           body: jsonEncode(requestBody),
         );
+
+        if (response.statusCode == 400 && response.body.contains('Could not find android_channel_id')) {
+          debugPrint('OneSignal channel id not found in dashboard. Retrying without android_channel_id...');
+
+          final fallbackBody = Map<String, dynamic>.from(requestBody)
+            ..remove('android_channel_id');
+
+          response = await http.post(
+            Uri.parse('https://api.onesignal.com/notifications'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Key os_v2_app_lflqlubtdfgo3efleimfxn3b3r2pcgb4dmvu53ff2dejac4fschvkyxktqwln34ueqxmweuerp3zo6tgz5tyho62fckklslqf3ecm7q',
+            },
+            body: jsonEncode(fallbackBody),
+          );
+        }
 
         debugPrint('OneSignal response status: ${response.statusCode}');
         debugPrint('OneSignal response body: ${response.body}');
