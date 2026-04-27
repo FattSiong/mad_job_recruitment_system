@@ -185,6 +185,24 @@ class CommunityService {
       }
     }
 
+    rooms.sort((a, b) {
+      final aMessages = a['Message'] as List<dynamic>? ?? [];
+      final bMessages = b['Message'] as List<dynamic>? ?? [];
+
+      final aSentAt = aMessages.isNotEmpty
+          ? DateTime.tryParse(aMessages.first['sentAt']?.toString() ?? '')
+          : null;
+      final bSentAt = bMessages.isNotEmpty
+          ? DateTime.tryParse(bMessages.first['sentAt']?.toString() ?? '')
+          : null;
+
+      if (aSentAt == null && bSentAt == null) return 0;
+      if (aSentAt == null) return 1;
+      if (bSentAt == null) return -1;
+
+      return bSentAt.compareTo(aSentAt);
+    });
+
     return rooms;
   }
 
