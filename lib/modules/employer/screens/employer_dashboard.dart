@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../services/auth_service.dart';
-import '../../../core/screens/temp_main_screen.dart';
+import '../../../shared_widgets/login_screen.dart';
 import '../../community/screens/chat_list_screen.dart';
 import '../../community/screens/community_dashboard.dart';
+import '../../job_seeker/screens/qr_scanner_screen.dart';
 import 'company_list_screen.dart';
 import 'create_job_screen.dart';
 import 'edit_employer_profile_screen.dart';
@@ -78,8 +79,8 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
     if (!mounted) return;
 
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => const TempMainScreen()),
-          (route) => false,
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
+      (route) => false,
     );
   }
 
@@ -330,10 +331,17 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                           ),
                         ),
                         const Spacer(),
-                        IconButton(
-                          onPressed: _logout,
-                          icon: const Icon(Icons.logout, color: Colors.white),
-                          tooltip: 'Logout',
+                        _buildHeaderIconButton(
+                          icon: Icons.qr_code_scanner,
+                          tooltip: 'Scan QR',
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const QRScannerScreen(),
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -716,6 +724,29 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderIconButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.white.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: SizedBox(
+            width: 42,
+            height: 42,
+            child: Icon(icon, color: Colors.white, size: 20),
+          ),
+        ),
       ),
     );
   }

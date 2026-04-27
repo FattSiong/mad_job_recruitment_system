@@ -6,8 +6,8 @@ import 'package:mad_job_recruitment_system/modules/admin/screens/AdminSubscripti
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/table_constants.dart';
-import '../../../core/screens/temp_main_screen.dart';
 import '../../../services/auth_service.dart';
+import '../../../shared_widgets/login_screen.dart';
 import 'admin_job_details.dart';
 import 'company_verification_screen.dart';
 
@@ -64,8 +64,8 @@ class _AdminDashboardState extends State<AdminDashboard> with WidgetsBindingObse
     await AuthService().signOut();
     if (mounted) {
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => const TempMainScreen()),
-            (route) => false,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) => false,
       );
     }
   }
@@ -125,10 +125,10 @@ class _AdminDashboardState extends State<AdminDashboard> with WidgetsBindingObse
         index: _currentIndex,
         children: [
           _buildHomeTab(),
-          const CompanyVerificationScreen(),
-          const AdminJobModerationScreen(),
-          const AdminCommunityScreen(),
-          const AdminSubscriptionListScreen(),
+          _buildSafeTab(const CompanyVerificationScreen()),
+          _buildSafeTab(const AdminJobModerationScreen()),
+          _buildSafeTab(const AdminCommunityScreen()),
+          _buildSafeTab(const AdminSubscriptionListScreen()),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -170,6 +170,13 @@ class _AdminDashboardState extends State<AdminDashboard> with WidgetsBindingObse
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildSafeTab(Widget child) {
+    return SafeArea(
+      bottom: false,
+      child: child,
     );
   }
 
