@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:async';
+import '../../../core/constants/agora_constants.dart';
 import '../../../services/call_service.dart';
 import '../../../models/call_model.dart';
 import '../../../services/community_service.dart';
@@ -139,7 +140,7 @@ class _StandardCallScreenState extends State<StandardCallScreen> {
 
     _engine = createAgoraRtcEngine();
     await _engine.initialize(const RtcEngineContext(
-      appId: "5258f95e9daa4744b8538323423c8077",
+      appId: AgoraConstants.appId,
       channelProfile: ChannelProfileType.channelProfileCommunication,
     ));
 
