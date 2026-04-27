@@ -43,7 +43,7 @@ class _ManageJobsScreenState extends State<ManageJobsScreen> {
   // Helper widget for a clean status badge
   Widget _buildStatusBadge(String? status) {
     final currentStatus = status?.toLowerCase() ?? 'active';
-    final isClosed = currentStatus == 'closed' || currentStatus == 'archived';
+    final isClosed = currentStatus == 'inactive';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),

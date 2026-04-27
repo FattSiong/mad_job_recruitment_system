@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/constants/supabase_constants.dart';
@@ -13,13 +14,17 @@ Future<void> main() async {
   // 2. Load environment variables
   await dotenv.load(fileName: ".env");
 
-  // 3. Initialize Supabase
+  Stripe.publishableKey =
+  'pk_test_51TPT4D8sWAvwhsmDNXUbF8LCTGtSuW7jRjuiAKqtMz0EYa0dNcG1cLXRzDP7LHAPKqtYfx0PuxLt3gl2erO0ttb000Wt76CdRo';
+  Stripe.urlScheme = 'myapp';
+  await Stripe.instance.applySettings();
+
   await Supabase.initialize(
     url: SupabaseConstants.supabaseUrl,
     anonKey: SupabaseConstants.supabaseAnonKey,
   );
 
-  // 4. Initialize push notifications and incoming call notification handling.
+  // Initialize push notifications and incoming call notification handling.
   await NotificationService.initialize();
 
   runApp(const RecruitmentApp());

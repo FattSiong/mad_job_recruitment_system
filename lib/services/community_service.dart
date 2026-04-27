@@ -6,6 +6,75 @@ import 'dart:io'; // Make sure this is at the top of the file
 class CommunityService {
   final _supabase = Supabase.instance.client;
 
+  Future<Map<String, Map<String, String?>>> _getCommunityUserMeta(
+    Iterable<String> rawUserIds,
+  ) async {
+    final userIds = rawUserIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    if (userIds.isEmpty) {
+      return {};
+    }
+
+    final metaByUserId = <String, Map<String, String?>>{};
+
+    try {
+      final employerProfiles = await _supabase
+          .from('Employer')
+          .select('employerID, fullName, profilePictureURL')
+          .filter('employerID', 'in', userIds);
+
+      for (final item in employerProfiles) {
+        final employerId = item['employerID']?.toString();
+        if (employerId == null || employerId.isEmpty) continue;
+
+        metaByUserId[employerId] = {
+          'fullName': item['fullName']?.toString(),
+          'profilePictureURL': item['profilePictureURL']?.toString(),
+        };
+      }
+    } catch (e) {
+      print('Error fetching employer community profile data: $e');
+    }
+
+    try {
+      final seekerProfiles = await _supabase
+          .from('JobSeeker')
+          .select('seekerID, fullName, profilePictureURL')
+          .filter('seekerID', 'in', userIds);
+
+      for (final item in seekerProfiles) {
+        final seekerId = item['seekerID']?.toString();
+        if (seekerId == null || seekerId.isEmpty) continue;
+
+        final existingMeta = metaByUserId[seekerId] ?? <String, String?>{};
+        final seekerFullName = item['fullName']?.toString();
+        final seekerProfilePicture = item['profilePictureURL']?.toString();
+
+        if ((existingMeta['fullName'] ?? '').trim().isEmpty &&
+            seekerFullName != null &&
+            seekerFullName.trim().isNotEmpty) {
+          existingMeta['fullName'] = seekerFullName;
+        }
+
+        if ((existingMeta['profilePictureURL'] ?? '').trim().isEmpty &&
+            seekerProfilePicture != null &&
+            seekerProfilePicture.trim().isNotEmpty) {
+          existingMeta['profilePictureURL'] = seekerProfilePicture;
+        }
+
+        metaByUserId[seekerId] = existingMeta;
+      }
+    } catch (e) {
+      print('Error fetching job seeker community profile data: $e');
+    }
+
+    return metaByUserId;
+  }
+
   // 1. Fetch Chat Rooms for the List Screen
   // This requires a more complex join query in reality to get the latest message and user details
 // 1. Fetch Chat Rooms for the List Screen
@@ -24,7 +93,117 @@ class CommunityService {
         .order('sentAt', referencedTable: 'Message', ascending: false)
         .limit(1, referencedTable: 'Message');
 
-    return List<Map<String, dynamic>>.from(response);
+    final rooms = List<Map<String, dynamic>>.from(response);
+    if (rooms.isEmpty) return rooms;
+
+    final userIds = <String>{};
+    final roomIds = <String>[];
+    for (final room in rooms) {
+      final roomId = room['roomID']?.toString();
+      final user1Id = room['user1_ID']?.toString();
+      final user2Id = room['user2_ID']?.toString();
+
+      if (roomId != null && roomId.isNotEmpty) {
+        roomIds.add(roomId);
+      }
+
+      if (user1Id != null && user1Id.isNotEmpty) {
+        userIds.add(user1Id);
+      }
+
+      if (user2Id != null && user2Id.isNotEmpty) {
+        userIds.add(user2Id);
+      }
+    }
+
+    if (userIds.isEmpty) return rooms;
+
+    try {
+      final employerProfiles = await _supabase
+          .from('Employer')
+          .select('employerID, profilePictureURL')
+          .filter('employerID', 'in', userIds.toList());
+
+      final profileMap = <String, String?>{};
+      for (final item in employerProfiles) {
+        final employerId = item['employerID']?.toString();
+        if (employerId == null || employerId.isEmpty) continue;
+
+        profileMap[employerId] = item['profilePictureURL']?.toString();
+      }
+
+      for (final room in rooms) {
+        final user1Id = room['user1_ID']?.toString();
+        final user2Id = room['user2_ID']?.toString();
+
+        final user1 = Map<String, dynamic>.from(room['user1'] ?? {});
+        final user2 = Map<String, dynamic>.from(room['user2'] ?? {});
+
+        if (user1Id != null && profileMap.containsKey(user1Id)) {
+          user1['profilePictureURL'] = profileMap[user1Id];
+        }
+
+        if (user2Id != null && profileMap.containsKey(user2Id)) {
+          user2['profilePictureURL'] = profileMap[user2Id];
+        }
+
+        room['user1'] = user1;
+        room['user2'] = user2;
+      }
+    } catch (e) {
+      print('Error merging employer profile pictures into chat rooms: $e');
+    }
+
+    if (roomIds.isNotEmpty) {
+      try {
+        final unreadRows = await _supabase
+            .from('Message')
+            .select('roomID')
+            .filter('roomID', 'in', roomIds)
+            .eq('isRead', false)
+            .neq('senderID', currentUserId)
+            .or('isDeleted.is.null,isDeleted.eq.false');
+
+        final unreadCountByRoom = <String, int>{};
+        for (final row in unreadRows) {
+          final roomId = row['roomID']?.toString();
+          if (roomId == null || roomId.isEmpty) continue;
+
+          unreadCountByRoom[roomId] = (unreadCountByRoom[roomId] ?? 0) + 1;
+        }
+
+        for (final room in rooms) {
+          final roomId = room['roomID']?.toString();
+          room['unreadCount'] =
+              roomId == null ? 0 : (unreadCountByRoom[roomId] ?? 0);
+        }
+      } catch (e) {
+        print('Error fetching unread message counts: $e');
+        for (final room in rooms) {
+          room['unreadCount'] = 0;
+        }
+      }
+    }
+
+    rooms.sort((a, b) {
+      final aMessages = a['Message'] as List<dynamic>? ?? [];
+      final bMessages = b['Message'] as List<dynamic>? ?? [];
+
+      final aSentAt = aMessages.isNotEmpty
+          ? DateTime.tryParse(aMessages.first['sentAt']?.toString() ?? '')
+          : null;
+      final bSentAt = bMessages.isNotEmpty
+          ? DateTime.tryParse(bMessages.first['sentAt']?.toString() ?? '')
+          : null;
+
+      if (aSentAt == null && bSentAt == null) return 0;
+      if (aSentAt == null) return 1;
+      if (bSentAt == null) return -1;
+
+      return bSentAt.compareTo(aSentAt);
+    });
+
+    return rooms;
   }
 
   // 2. Real-Time Message Stream for the Active Chat Screen
@@ -39,6 +218,15 @@ class CommunityService {
 
   // 3. Send a New Message
   Future<void> sendMessage(MessageModel message) async {
+    if (message.messageID.isNotEmpty) {
+      await _supabase.from('Message').upsert(
+        message.toJson(),
+        onConflict: 'messageID',
+        ignoreDuplicates: true,
+      );
+      return;
+    }
+
     await _supabase.from('Message').insert(message.toJson());
   }
 
@@ -87,8 +275,38 @@ class CommunityService {
         .eq('status', 'active')
         .order('createdAt', ascending: false);
 
-    // This one magical line converts all the messy JSON into your clean Dart Object
-    return response.map((data) => CommunityPostModel.fromJson(data)).toList();
+    final posts = response
+        .map((data) => Map<String, dynamic>.from(data as Map))
+        .toList();
+    final userMetaById = await _getCommunityUserMeta(
+      posts
+          .map((post) => post['authorID']?.toString() ?? '')
+          .where((id) => id.isNotEmpty),
+    );
+
+    for (final post in posts) {
+      final authorId = post['authorID']?.toString() ?? '';
+      final user = Map<String, dynamic>.from(post['User'] ?? {});
+      final userMeta = userMetaById[authorId];
+
+      if (userMeta != null) {
+        final username = user['username']?.toString().trim() ?? '';
+        final fullName = userMeta['fullName']?.trim() ?? '';
+        final profilePictureUrl = userMeta['profilePictureURL']?.trim() ?? '';
+
+        if (username.isEmpty && fullName.isNotEmpty) {
+          user['username'] = fullName;
+        }
+
+        if (profilePictureUrl.isNotEmpty) {
+          user['profilePictureURL'] = profilePictureUrl;
+        }
+      }
+
+      post['User'] = user;
+    }
+
+    return posts.map((data) => CommunityPostModel.fromJson(data)).toList();
   }
 
   // --- Add these inside CommunityService ---
@@ -128,7 +346,38 @@ class CommunityService {
         .eq('postID', postID)
         .order('createdAt', ascending: true);
 
-    return List<Map<String, dynamic>>.from(response);
+    final comments = response
+        .map((data) => Map<String, dynamic>.from(data as Map))
+        .toList();
+    final userMetaById = await _getCommunityUserMeta(
+      comments
+          .map((comment) => comment['userID']?.toString() ?? '')
+          .where((id) => id.isNotEmpty),
+    );
+
+    for (final comment in comments) {
+      final userId = comment['userID']?.toString() ?? '';
+      final user = Map<String, dynamic>.from(comment['User'] ?? {});
+      final userMeta = userMetaById[userId];
+
+      if (userMeta != null) {
+        final username = user['username']?.toString().trim() ?? '';
+        final fullName = userMeta['fullName']?.trim() ?? '';
+        final profilePictureUrl = userMeta['profilePictureURL']?.trim() ?? '';
+
+        if (username.isEmpty && fullName.isNotEmpty) {
+          user['username'] = fullName;
+        }
+
+        if (profilePictureUrl.isNotEmpty) {
+          user['profilePictureURL'] = profilePictureUrl;
+        }
+      }
+
+      comment['User'] = user;
+    }
+
+    return comments;
   }
 
 
@@ -300,6 +549,42 @@ class CommunityService {
     }
   }
 
+  Future<String?> getUserProfilePictureUrl(String userID) async {
+    try {
+      final employerResponse = await _supabase
+          .from('Employer')
+          .select('profilePictureURL')
+          .eq('employerID', userID)
+          .maybeSingle();
+
+      final employerProfilePicture =
+          employerResponse?['profilePictureURL']?.toString().trim();
+      if (employerProfilePicture != null && employerProfilePicture.isNotEmpty) {
+        return employerProfilePicture;
+      }
+    } catch (e) {
+      print('Error fetching employer profile picture: $e');
+    }
+
+    try {
+      final seekerResponse = await _supabase
+          .from('JobSeeker')
+          .select('profilePictureURL')
+          .eq('seekerID', userID)
+          .maybeSingle();
+
+      final seekerProfilePicture =
+          seekerResponse?['profilePictureURL']?.toString().trim();
+      if (seekerProfilePicture != null && seekerProfilePicture.isNotEmpty) {
+        return seekerProfilePicture;
+      }
+    } catch (e) {
+      print('Error fetching job seeker profile picture: $e');
+    }
+
+    return null;
+  }
+
 
 
   // Add this inside your CommunityService class
@@ -310,6 +595,7 @@ class CommunityService {
           .from('Message')
           .select()
           .eq('roomID', roomID)
+          .or('isDeleted.is.null,isDeleted.eq.false')
           .not('mediaURL', 'is', null) // Only grab messages that have an attachment
           .order('sentAt', ascending: false);
 
@@ -329,7 +615,11 @@ class CommunityService {
     try {
       await _supabase
           .from('Message')
-          .delete() // Changed from .update({'isDeleted': true})
+          .update({
+            'isDeleted': true,
+            'content': 'This message was deleted',
+            'mediaURL': null,
+          })
           .eq('messageID', messageID);
     } catch (e) {
       print('Error deleting message: $e');

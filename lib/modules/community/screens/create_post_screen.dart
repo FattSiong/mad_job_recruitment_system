@@ -1,7 +1,17 @@
 import 'dart:io';
-import 'package:flutter/material.dart';
+
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+
 import '../../../services/community_service.dart';
+
+const Color _createInk = Color(0xFF172033);
+const Color _createPrimary = Color(0xFF1E4C8F);
+const Color _createMuted = Color(0xFF6B7890);
+const Color _createSoft = Color(0xFFEAF2FF);
+const Color _createBorder = Color(0xFFD5E2F3);
+const Color _createBackground = Color(0xFFF4F7FB);
+const Color _createSurface = Color(0xFFF8FBFF);
 
 class CreatePostScreen extends StatefulWidget {
   final String currentUserID;
@@ -19,56 +29,106 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   bool _isLoading = false;
   File? _selectedFile;
 
-  // Function to open the device's file explorer
+  bool get _hasContent => _contentController.text.trim().isNotEmpty;
+
+  bool get _isImageAttachment {
+    final filePath = _selectedFile?.path.toLowerCase() ?? '';
+    return filePath.endsWith('.jpg') ||
+        filePath.endsWith('.jpeg') ||
+        filePath.endsWith('.png');
+  }
+
+  String get _attachmentName =>
+      _selectedFile?.path.split(Platform.pathSeparator).last ?? '';
+
   Future<void> _pickDocument() async {
-    FilePickerResult? result = await FilePicker.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'jpg', 'png', 'jpeg'],
     );
 
-    if (result != null) {
+    if (result != null && result.files.single.path != null) {
       setState(() {
         _selectedFile = File(result.files.single.path!);
       });
     }
   }
 
-  // The Preview Dialog
   void _previewDocument(BuildContext context) {
     if (_selectedFile == null) return;
 
-    final filePath = _selectedFile!.path.toLowerCase();
-    final isImage = filePath.endsWith('.jpg') || filePath.endsWith('.jpeg') || filePath.endsWith('.png');
-
-    showDialog(
+    showDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('Attachment Preview'),
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          title: const Text(
+            'Attachment Preview',
+            style: TextStyle(
+              color: _createInk,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
           content: SizedBox(
             width: double.maxFinite,
-            height: MediaQuery.of(context).size.height * 0.5,
-            child: isImage
+            height: MediaQuery.of(context).size.height * 0.48,
+            child: _isImageAttachment
                 ? ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.file(_selectedFile!, fit: BoxFit.contain)
-            )
-                : const Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.picture_as_pdf, size: 80, color: Colors.red),
-                SizedBox(height: 16),
-                Text('PDF Attached Successfully!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                SizedBox(height: 8),
-                Text('(PDF preview requires physical device)', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
-              ],
-            ),
+                    borderRadius: BorderRadius.circular(18),
+                    child: Image.file(_selectedFile!, fit: BoxFit.contain),
+                  )
+                : Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: _createSurface,
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: _createBorder),
+                    ),
+                    child: const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.picture_as_pdf_rounded,
+                          size: 72,
+                          color: _createPrimary,
+                        ),
+                        SizedBox(height: 18),
+                        Text(
+                          'PDF attached successfully',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: _createInk,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'The file is ready to be published with your post.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: _createMuted,
+                            fontSize: 14,
+                            height: 1.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Close', style: TextStyle(color: Colors.black87))
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Close',
+                style: TextStyle(
+                  color: _createPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ],
         );
@@ -76,11 +136,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     );
   }
 
-  void _submitPost() async {
+  Future<void> _submitPost() async {
     final content = _contentController.text.trim();
     if (content.isEmpty && _selectedFile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please add some text or an attachment.')),
+        const SnackBar(
+          content: Text('Please add some text or an attachment.'),
+        ),
       );
       return;
     }
@@ -90,30 +152,149 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     try {
       String? uploadedUrl;
 
-      // 1. If a file was selected, upload it first
       if (_selectedFile != null) {
-        uploadedUrl = await _communityService.uploadPostMedia(_selectedFile!, widget.currentUserID);
+        uploadedUrl = await _communityService.uploadPostMedia(
+          _selectedFile!,
+          widget.currentUserID,
+        );
         if (uploadedUrl == null) {
           throw Exception('Failed to upload attachment.');
         }
       }
 
-      // 2. Save the post to the database (with the URL if it exists)
       await _communityService.createCommunityPost(
         authorID: widget.currentUserID,
         content: content,
         mediaURL: uploadedUrl,
       );
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Post published successfully!')));
-        Navigator.pop(context);
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Post published successfully!')),
+      );
+      Navigator.pop(context);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
+  }
+
+  Widget _buildAttachmentCard(BuildContext context) {
+    if (_selectedFile == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _createBorder),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: _createSoft,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Icon(
+              _isImageAttachment
+                  ? Icons.image_outlined
+                  : Icons.picture_as_pdf_rounded,
+              color: _createPrimary,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _attachmentName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _createInk,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _isImageAttachment ? 'Image ready to share' : 'PDF ready to share',
+                  style: const TextStyle(
+                    color: _createMuted,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: () => _previewDocument(context),
+            tooltip: 'Preview',
+            icon: const Icon(
+              Icons.visibility_outlined,
+              color: _createPrimary,
+            ),
+          ),
+          IconButton(
+            onPressed: () => setState(() => _selectedFile = null),
+            tooltip: 'Remove',
+            icon: const Icon(
+              Icons.close_rounded,
+              color: Colors.redAccent,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionChip({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: _createBorder),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18, color: _createPrimary),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: _createPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -125,134 +306,259 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black87),
-        title: const Text('Create Post', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8.0, top: 8.0, bottom: 8.0),
-            child: _isLoading
-                ? const Center(
-                child: Padding(
-                    padding: EdgeInsets.only(right: 16.0),
-                    child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                )
-            )
-                : TextButton(
-              onPressed: _submitPost,
-              style: TextButton.styleFrom(
-                backgroundColor: const Color(0xFF6B8BFE).withValues(alpha: 0.1),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-              ),
-              child: const Text('Post', style: TextStyle(color: Color(0xFF6B8BFE), fontWeight: FontWeight.bold, fontSize: 16)),
-            ),
-          )
-        ],
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
+      backgroundColor: _createBackground,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFFE9F1FB),
+              Color(0xFFF4F7FB),
+              Color(0xFFF8FAFD),
+            ],
+          ),
+        ),
+        child: SafeArea(
+          bottom: false,
           child: Column(
             children: [
-              // User Header inside create post
-              Row(
-                children: [
-                  CircleAvatar(radius: 20, backgroundColor: Colors.grey[200], child: const Icon(Icons.person, color: Colors.grey)),
-                  const SizedBox(width: 12),
-                  const Text('Posting to Community', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: Colors.black87)),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              Expanded(
-                child: TextField(
-                  controller: _contentController,
-                  maxLines: null,
-                  autofocus: true,
-                  keyboardType: TextInputType.multiline,
-                  style: const TextStyle(fontSize: 18, color: Colors.black87, height: 1.4),
-                  decoration: InputDecoration(
-                    hintText: 'What do you wanna post?',
-                    hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 18),
-                    border: InputBorder.none,
-                  ),
-                ),
-              ),
-
-              // --- The Attached File UI ---
-              if (_selectedFile != null)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[50],
-                    border: Border.all(color: Colors.grey.shade200),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                        child: Icon(
-                          _selectedFile!.path.toLowerCase().endsWith('.pdf') ? Icons.picture_as_pdf : Icons.image,
-                          color: const Color(0xFF6B8BFE),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          _selectedFile!.path.split(Platform.pathSeparator).last,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.black87),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.visibility_outlined, color: Colors.black54),
-                        onPressed: () => _previewDocument(context),
-                        tooltip: 'Preview',
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, color: Colors.redAccent),
-                        onPressed: () => setState(() => _selectedFile = null),
-                        tooltip: 'Remove',
-                      ),
-                    ],
-                  ),
-                ),
-
-              const Divider(height: 1),
-
-              // --- Interactive Buttons (Bottom Bar) ---
               Padding(
-                padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
                 child: Row(
                   children: [
-                    InkWell(
-                      onTap: _pickDocument,
-                      borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.image_outlined, color: Color(0xFF6B8BFE)),
-                            SizedBox(width: 8),
-                            Text('Attach Media', style: TextStyle(color: Color(0xFF6B8BFE), fontWeight: FontWeight.w600))
-                          ],
+                    Material(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                      child: InkWell(
+                        onTap: () => Navigator.pop(context),
+                        borderRadius: BorderRadius.circular(18),
+                        child: const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Icon(
+                            Icons.arrow_back_rounded,
+                            color: Color(0xFF163B65),
+                          ),
                         ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Create Post',
+                            style: TextStyle(
+                              color: _createInk,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                        ],
                       ),
                     ),
                   ],
                 ),
-              )
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 20),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(30),
+                          border: Border.all(color: _createBorder),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const SizedBox(width: 12),
+                                const Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Posting to Community',
+                                        style: TextStyle(
+                                          color: _createInk,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                      SizedBox(height: 4),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 18),
+                            Container(
+                              padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+                              decoration: BoxDecoration(
+                                color: _createSurface,
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(color: _createBorder),
+                              ),
+                              child: TextField(
+                                controller: _contentController,
+                                maxLines: null,
+                                minLines: 8,
+                                autofocus: true,
+                                keyboardType: TextInputType.multiline,
+                                onChanged: (_) => setState(() {}),
+                                style: const TextStyle(
+                                  color: _createInk,
+                                  fontSize: 17,
+                                  height: 1.55,
+                                ),
+                                decoration: const InputDecoration(
+                                  hintText:
+                                      'What do you want to share today?\n\nTry a progress update, question, idea, or helpful resource.',
+                                  hintStyle: TextStyle(
+                                    color: _createMuted,
+                                    fontSize: 17,
+                                    height: 1.55,
+                                  ),
+                                  border: InputBorder.none,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                          ],
+                        ),
+                      ),
+                      if (_selectedFile != null) ...[
+                        const SizedBox(height: 16),
+                        _buildAttachmentCard(context),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border(
+                    top: BorderSide(
+                      color: _createBorder.withValues(alpha: 0.95),
+                    ),
+                  ),
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          _buildActionChip(
+                            icon: Icons.attach_file_rounded,
+                            label: 'Attach Media',
+                            onTap: _pickDocument,
+                          ),
+                          const Spacer(),
+                          Text(
+                            _hasContent || _selectedFile != null
+                                ? 'Ready to publish'
+                                : 'Add text or media',
+                            style: const TextStyle(
+                              color: _createMuted,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 54,
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : _submitPost,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _createPrimary,
+                            foregroundColor: Colors.white,
+                            disabledBackgroundColor:
+                                _createPrimary.withValues(alpha: 0.55),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(22),
+                            ),
+                          ),
+                          child: _isLoading
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.4,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.send_rounded, size: 18),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Publish Post',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _CreateHintChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _CreateHintChip({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: _createSoft,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: _createPrimary),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: const TextStyle(
+              color: _createPrimary,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }

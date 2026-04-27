@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+
 import '../../../models/job_model.dart';
 import '../../../services/employer_service.dart';
+import 'applicant_detail_screen.dart';
 import 'edit_job_screen.dart';
-import 'manage_applicants_screen.dart';
+
+enum _JobDetailTab { overview, applicants }
 
 class JobDetailScreen extends StatefulWidget {
   final JobModel job;
@@ -14,234 +17,937 @@ class JobDetailScreen extends StatefulWidget {
 }
 
 class _JobDetailScreenState extends State<JobDetailScreen> {
-  final _employerService = EmployerService();
+  final EmployerService _employerService = EmployerService();
+
   late JobModel _currentJob;
-  bool _isLoading = false;
+  _JobDetailTab _selectedTab = _JobDetailTab.overview;
+
+  bool _isStatusUpdating = false;
+  bool _isApplicantsLoading = true;
+
+  List<Map<String, dynamic>> _applicants = [];
 
   @override
   void initState() {
     super.initState();
     _currentJob = widget.job;
+    _loadApplicants();
+  }
+
+  Future<void> _loadApplicants() async {
+    if (_currentJob.jobID == null) {
+      setState(() {
+        _applicants = [];
+        _isApplicantsLoading = false;
+      });
+      return;
+    }
+
+    setState(() => _isApplicantsLoading = true);
+
+    final applicants = await _employerService.getJobApplicants(
+      _currentJob.jobID!,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _applicants = applicants;
+      _isApplicantsLoading = false;
+    });
   }
 
   Future<void> _toggleJobStatus() async {
-    setState(() => _isLoading = true);
+    if (_currentJob.status.toLowerCase() == 'deleted') return;
 
-    final newStatus = _currentJob.status == 'active' ? 'closed' : 'active';
+    if (_currentJob.jobID == null) return;
 
-    // We safely unwrap jobID because it should exist if it came from the database
-    if (_currentJob.jobID != null) {
-      final success = await _employerService.updateJobStatus(_currentJob.jobID!, newStatus);
+    setState(() => _isStatusUpdating = true);
 
-      if (success && mounted) {
-        setState(() {
-          // Update the local state so the UI changes instantly
-          _currentJob = JobModel(
-            jobID: _currentJob.jobID,
-            companyID: _currentJob.companyID,
-            employerID: _currentJob.employerID,
-            title: _currentJob.title,
-            description: _currentJob.description,
-            latitude: _currentJob.latitude,
-            longitude: _currentJob.longitude,
-            salaryRange: _currentJob.salaryRange,
-            minExperienceYears: _currentJob.minExperienceYears,
-            status: newStatus,
-          );
-        });
+    final currentStatus = _currentJob.status.toLowerCase();
+    final newStatus = currentStatus == 'active' ? 'inactive' : 'active';
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Job marked as ${newStatus.toUpperCase()}')),
+    final success = await _employerService.updateJobStatus(
+      _currentJob.jobID!,
+      newStatus,
+    );
+
+    if (!mounted) return;
+
+    if (success) {
+      setState(() {
+        _currentJob = JobModel(
+          jobID: _currentJob.jobID,
+          companyID: _currentJob.companyID,
+          employerID: _currentJob.employerID,
+          title: _currentJob.title,
+          description: _currentJob.description,
+          latitude: _currentJob.latitude,
+          longitude: _currentJob.longitude,
+          salaryRange: _currentJob.salaryRange,
+          minExperienceYears: _currentJob.minExperienceYears,
+          status: newStatus,
         );
-      }
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Job marked as ${newStatus.toUpperCase()}')),
+      );
     }
 
-    setState(() => _isLoading = false);
-  }
-
-  Widget _buildStatusBadge(String status) {
-    final isActive = status.toLowerCase() == 'active';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: isActive ? Colors.green.shade100 : Colors.grey.shade200,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: isActive ? Colors.green : Colors.grey),
-      ),
-      child: Text(
-        status.toUpperCase(),
-        style: TextStyle(
-          color: isActive ? Colors.green.shade800 : Colors.grey.shade700,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
+    setState(() => _isStatusUpdating = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    final isActive = _currentJob.status.toLowerCase() == 'active';
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Job Details'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit),
-            tooltip: 'Edit Job',
-            onPressed: () async {
-              // Wait for the edit screen to return a JobModel (if the user clicked save)
-              final updatedJob = await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => EditJobScreen(job: _currentJob), // Pass the new screen
-                ),
-              );
-
-              // If they saved changes, update the local UI instantly
-              if (updatedJob != null && updatedJob is JobModel) {
-                setState(() {
-                  _currentJob = updatedJob;
-                });
-              }
-            },
-          ),
-
-          if (!_isLoading)
-            TextButton.icon(
-              onPressed: _toggleJobStatus,
-              icon: Icon(isActive ? Icons.visibility_off : Icons.visibility, color: Colors.white),
-              label: Text(
-                  isActive ? 'Close Job' : 'Reopen',
-                  style: const TextStyle(color: Colors.white)
-              ),
-            ),
-          if (_isLoading)
-            const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
-            )
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      backgroundColor: const Color(0xFFF4F7FB),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
           children: [
-            // Header
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Text(
-                    _currentJob.title,
-                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                _buildStatusBadge(_currentJob.status),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            // ATS Gateway Card (The most important action for the employer)
-            Card(
-              color: Colors.blue.shade50,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: Colors.blue.shade200),
-              ),
-              child: ListTile(
-                contentPadding: const EdgeInsets.all(16),
-                leading: const CircleAvatar(
-                  backgroundColor: Colors.blue,
-                  child: Icon(Icons.people_alt, color: Colors.white),
-                ),
-                title: const Text('Applicant Tracking System', style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: const Text('Review resumes, manage interviews, and hire candidates.'),
-                trailing: const Icon(Icons.arrow_forward_ios, color: Colors.blue),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ManageApplicantsScreen(job: _currentJob),
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Job Requirements Details
-            const Text('Job Requirements', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            _buildTopBar(context),
             const SizedBox(height: 16),
-
-            // Info Grid
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                children: [
-                  _buildInfoRow(
-                      Icons.monetization_on,
-                      'Salary',
-                      _currentJob.salaryRange
-                  ),
-                  const Divider(),
-                  _buildInfoRow(
-                      Icons.work_history,
-                      'Experience',
-                      _currentJob.minExperienceYears == 0
-                          ? 'Entry Level (Fresh Graduates)'
-                          : 'Minimum ${_currentJob.minExperienceYears} Years'
-                  ),
-                  const Divider(),
-                  _buildInfoRow(
-                      Icons.location_on,
-                      'Location',
-                      (_currentJob.latitude != null && _currentJob.longitude != null)
-                          ? 'Map Coordinates Set' // Later, you can reverse-geocode this if you implement Google Maps
-                          : 'No location provided'
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 32),
-
-            // Description
-            const Text('Full Description', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            Text(
-              _currentJob.description,
-              style: const TextStyle(fontSize: 16, height: 1.6),
-            ),
+            _buildHeroCard(),
+            const SizedBox(height: 20),
+            _buildTabSwitcher(),
+            const SizedBox(height: 20),
+            if (_selectedTab == _JobDetailTab.overview)
+              _buildOverviewSection()
+            else
+              _buildApplicantsSection(),
           ],
         ),
       ),
     );
   }
 
-  // Helper widget to keep the UI clean
-  Widget _buildInfoRow(IconData icon, String title, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
+  Widget _buildTopBar(BuildContext context) {
+    final isDeleted = _currentJob.status.toLowerCase() == 'deleted';
+
+    return Row(
+      children: [
+        Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            onTap: () => Navigator.of(context).maybePop(),
+            borderRadius: BorderRadius.circular(16),
+            child: const Padding(
+              padding: EdgeInsets.all(12),
+              child: Icon(Icons.arrow_back_rounded, color: Color(0xFF163B65)),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        const Expanded(
+          child: Text(
+            'Job Details',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1B2433),
+            ),
+          ),
+        ),
+        Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            onTap: isDeleted
+                ? null
+                : () async {
+                    final updatedJob = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => EditJobScreen(job: _currentJob),
+                      ),
+                    );
+
+                    if (updatedJob != null && updatedJob is JobModel) {
+                      setState(() {
+                        _currentJob = updatedJob;
+                      });
+                      await _loadApplicants();
+                    }
+                  },
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Icon(
+                Icons.edit_rounded,
+                color: isDeleted
+                    ? const Color(0xFF9AA5B5)
+                    : const Color(0xFF163B65),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHeroCard() {
+    final status = _currentJob.status.toLowerCase();
+    final isActive = status == 'active';
+    final isDeleted = status == 'deleted';
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF163B65), Color(0xFF335D8A)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: Colors.grey.shade600, size: 24),
-          const SizedBox(width: 16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
             children: [
-              Text(title, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-              Text(value, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 16)),
+              _buildHeroChip(
+                icon: Icons.work_outline_rounded,
+                text: 'Job Workspace',
+              ),
+              const Spacer(),
+              _buildHeroStatusBadge(_currentJob.status),
             ],
           ),
+          const SizedBox(height: 20),
+          Text(
+            _currentJob.title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+              height: 1.1,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            isDeleted
+                ? 'This role was removed by an admin and can no longer be managed.'
+                : isActive
+                ? 'This role is live and ready for applicant review.'
+                : 'This role is currently inactive, but you can reopen it anytime.',
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 15,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _buildHeroMetric(
+                Icons.people_alt_rounded,
+                '${_applicants.length} applicants',
+              ),
+              _buildHeroMetric(
+                Icons.work_history_rounded,
+                _currentJob.minExperienceYears == 0
+                    ? 'Entry level'
+                    : '${_currentJob.minExperienceYears}+ years',
+              ),
+              _buildHeroMetric(
+                Icons.monetization_on_rounded,
+                _currentJob.salaryRange ?? 'Salary not set',
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: _isStatusUpdating
+                ? Container(
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.14),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Center(
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      ),
+                    ),
+                  )
+                : isDeleted
+                ? Container(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.14),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Text(
+                      'This job was deleted by admin',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  )
+                : ElevatedButton.icon(
+                    onPressed: _toggleJobStatus,
+                    icon: Icon(
+                      isActive
+                          ? Icons.visibility_off_rounded
+                          : Icons.visibility_rounded,
+                    ),
+                    label: Text(isActive ? 'Close Job' : 'Reopen Job'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF163B65),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  ),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTabSwitcher() {
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildTabButton(
+              label: 'Overview',
+              tab: _JobDetailTab.overview,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _buildTabButton(
+              label: 'Applicants',
+              tab: _JobDetailTab.applicants,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabButton({required String label, required _JobDetailTab tab}) {
+    final isSelected = _selectedTab == tab;
+
+    return Material(
+      color: isSelected ? const Color(0xFFDCEBFB) : Colors.transparent,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            _selectedTab = tab;
+          });
+        },
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: isSelected
+                  ? const Color(0xFF163B65)
+                  : const Color(0xFF687588),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOverviewSection() {
+    return Column(
+      children: [
+        _buildSectionCard(
+          title: 'Job Requirements',
+          subtitle:
+              'Core information employers and applicants care about first.',
+          child: Column(
+            children: [
+              _buildInfoRow(
+                Icons.monetization_on_rounded,
+                'Salary',
+                _currentJob.salaryRange ?? 'Not specified',
+              ),
+              const SizedBox(height: 14),
+              _buildInfoRow(
+                Icons.work_history_rounded,
+                'Experience',
+                _currentJob.minExperienceYears == 0
+                    ? 'Entry Level (Fresh Graduates)'
+                    : 'Minimum ${_currentJob.minExperienceYears} Years',
+              ),
+              const SizedBox(height: 14),
+              _buildInfoRow(
+                Icons.location_on_rounded,
+                'Location',
+                (_currentJob.latitude != null && _currentJob.longitude != null)
+                    ? 'Map coordinates set'
+                    : 'No location provided',
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        _buildSectionCard(
+          title: 'Full Description',
+          subtitle: 'The complete role description visible in the job post.',
+          child: Text(
+            _currentJob.description.trim().isEmpty
+                ? 'No description provided.'
+                : _currentJob.description,
+            style: const TextStyle(
+              fontSize: 15,
+              height: 1.6,
+              color: Color(0xFF1B2433),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildApplicantCard(Map<String, dynamic> data) {
+    final seeker = data['JobSeeker'] ?? {};
+    final name = seeker['fullName'] ?? 'Unknown Applicant';
+    final status = data['applicationStatus'] ?? 'pending';
+    final aiScore = data['aiRankingScore'];
+
+    final appliedAt = data['appliedAt'] != null
+        ? DateTime.tryParse(data['appliedAt'].toString())
+        : null;
+
+    final appliedDate = appliedAt != null
+        ? appliedAt.toLocal().toString().split(' ')[0]
+        : 'Unknown Date';
+
+    return Material(
+      color: const Color(0xFFF7F9FC),
+      borderRadius: BorderRadius.circular(22),
+      child: InkWell(
+        onTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ApplicantDetailScreen(
+                applicantData: data,
+                jobTitle: _currentJob.title,
+                jobStatus: _currentJob.status,
+              ),
+            ),
+          );
+          await _loadApplicants();
+        },
+        borderRadius: BorderRadius.circular(22),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 26,
+                    backgroundColor: const Color(0xFFDCEBFB),
+                    child: Text(
+                      name.isNotEmpty ? name[0].toUpperCase() : 'A',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF163B65),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF1B2433),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          seeker['email'] ?? 'No email provided',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFF687588),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  _buildApplicantStatusBadge(status),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildApplicantInfoPill(
+                      icon: Icons.schedule_rounded,
+                      text: 'Applied: $appliedDate',
+                    ),
+                  ),
+                  if (aiScore != null) ...[
+                    const SizedBox(width: 10),
+                    _buildApplicantsMetaChip(
+                      icon: Icons.auto_awesome_rounded,
+                      text: '$aiScore%',
+                      color: const Color(0xFFC28A22),
+                      backgroundColor: const Color(0xFFFEF3DC),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 14),
+              const Row(
+                children: [
+                  Spacer(),
+                  Text(
+                    'Open profile',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF163B65),
+                    ),
+                  ),
+                  SizedBox(width: 6),
+                  Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 18,
+                    color: Color(0xFF163B65),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionCard({
+    required String title,
+    required String subtitle,
+    required Widget child,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1B2433),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              fontSize: 13,
+              height: 1.4,
+              color: Color(0xFF687588),
+            ),
+          ),
+          const SizedBox(height: 18),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String title, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1F5FA),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(icon, color: const Color(0xFF163B65)),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF687588),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 15,
+                  height: 1.45,
+                  color: Color(0xFF1B2433),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildApplicantsSection() {
+    if (_currentJob.status.toLowerCase() == 'deleted') {
+      return _buildSectionCard(
+        title: 'Applicants Archived',
+        subtitle: 'This job was deleted by admin.',
+        child: const Text(
+          'Applicant records still exist for history, but employer actions are disabled for deleted jobs.',
+          style: TextStyle(
+            fontSize: 14,
+            height: 1.45,
+            color: Color(0xFF687588),
+          ),
+        ),
+      );
+    }
+
+    if (_isApplicantsLoading) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(28),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_applicants.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(28),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: const Color(0xFFDCEBFB),
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: const Icon(
+                Icons.people_outline_rounded,
+                size: 36,
+                color: Color(0xFF163B65),
+              ),
+            ),
+            const SizedBox(height: 18),
+            const Text(
+              'No applicants yet',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF1B2433),
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'When candidates apply for this role, they will appear here for review.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                height: 1.45,
+                color: Color(0xFF687588),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final pendingCount = _applicants.where((item) {
+      return (item['applicationStatus'] ?? '').toString().toLowerCase() == 'pending';
+    }).length;
+
+    final scheduledCount = _applicants.where((item) {
+      return (item['applicationStatus'] ?? '').toString().toLowerCase() == 'scheduled';
+    }).length;
+
+    return _buildSectionCard(
+      title: 'Applicants',
+      subtitle: 'Review candidate progress and open each application in detail.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _buildApplicantsMetaChip(
+                icon: Icons.groups_rounded,
+                text: '${_applicants.length} total',
+                color: const Color(0xFF163B65),
+                backgroundColor: const Color(0xFFDCEBFB),
+              ),
+              _buildApplicantsMetaChip(
+                icon: Icons.access_time_outlined,
+                text: '$pendingCount pending',
+                color: const Color(0xFFB28600),
+                backgroundColor: const Color(0xFFFFF8E1),
+              ),
+              _buildApplicantsMetaChip(
+                icon: Icons.event_available_rounded,
+                text: '$scheduledCount scheduled',
+                color: const Color(0xFF6B4FD3),
+                backgroundColor: const Color(0xFFF3ECFF),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _applicants.length,
+            separatorBuilder: (context, index) => const SizedBox(height: 12),
+            itemBuilder: (context, index) {
+              final data = _applicants[index];
+              return _buildApplicantCard(data);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+
+  Widget _buildHeroChip({required IconData icon, required String text}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white, size: 16),
+          const SizedBox(width: 8),
+          Text(
+            text,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeroMetric(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white, size: 16),
+          const SizedBox(width: 8),
+          Text(
+            text,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeroStatusBadge(String status) {
+    final normalized = status.toLowerCase();
+
+    late final Color bgColor;
+    late final Color textColor;
+
+    switch (normalized) {
+      case 'active':
+        bgColor = const Color(0xFFE5F6ED);
+        textColor = const Color(0xFF2D8A5D);
+        break;
+      case 'inactive':
+        bgColor = const Color(0xFFEFF3F8);
+        textColor = const Color(0xFF687588);
+        break;
+      case 'deleted':
+        bgColor = const Color(0xFFFCE9E9);
+        textColor = const Color(0xFFC24E4E);
+        break;
+      default:
+        bgColor = const Color(0xFFEFF3F8);
+        textColor = const Color(0xFF687588);
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        status.toUpperCase(),
+        style: TextStyle(
+          color: textColor,
+          fontWeight: FontWeight.w800,
+          fontSize: 11,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildApplicantsMetaChip({
+    required IconData icon,
+    required String text,
+    required Color color,
+    required Color backgroundColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildApplicantInfoPill({
+    required IconData icon,
+    required String text,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: const Color(0xFF687588)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF687588),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildApplicantStatusBadge(String status) {
+    Color color;
+
+    switch (status.toLowerCase()) {
+      case 'pending':
+        color = const Color(0xFFC28A22);
+        break;
+      case 'scheduled':
+        color = const Color(0xFF6B4FD3);
+        break;
+      case 'accepted':
+        color = const Color(0xFF2D8A5D);
+        break;
+      case 'rejected':
+        color = const Color(0xFFC24E4E);
+        break;
+      case 'interviewed':
+        color = const Color(0xFF1E8F8B);
+        break;
+      default:
+        color = const Color(0xFF687588);
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        status.toUpperCase(),
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
