@@ -9,6 +9,7 @@ class CommunityPostModel {
   // Joined User Data
   final String username;
   final String role;
+  final String? profilePictureURL;
 
   // Interaction Data
   final int likeCount;
@@ -28,6 +29,7 @@ class CommunityPostModel {
     required this.createdAt,
     required this.username,
     required this.role,
+    this.profilePictureURL,
     required this.likeCount,
     required this.commentCount,
     required this.savedCount,
@@ -51,6 +53,7 @@ class CommunityPostModel {
       createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt']).toLocal() : DateTime.now(),
       username: user['username'] ?? 'Unknown User',
       role: user['role'] ?? 'Member',
+      profilePictureURL: user['profilePictureURL'] as String?,
       likeCount: likes.length,
       commentCount: comments.length,
       savedCount: saves.length,

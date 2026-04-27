@@ -1,12 +1,10 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
 
 // IMPORTANT: Replace these imports with your actual project paths
 import '../../../services/community_service.dart';
 import '../../../models/community_post_model.dart';
 import 'active_chat_screen.dart';
-import 'chat_list_screen.dart';
+import 'create_post_screen.dart';
 import 'edit_screen.dart';
 import 'report_screen.dart';
 import 'saved_posts_screen.dart';
@@ -33,6 +31,111 @@ String getRelativeTime(String? dateString) {
   }
 }
 
+const Color _communityInk = Color(0xFF172033);
+const Color _communityPrimary = Color(0xFF1E4C8F);
+const Color _communityAccent = Color(0xFF4C83D8);
+const Color _communityMuted = Color(0xFF6B7890);
+const Color _communitySoft = Color(0xFFEAF2FF);
+const Color _communityBorder = Color(0xFFD5E2F3);
+const Color _communityBackground = Color(0xFFF4F7FB);
+const Color _communitySurface = Color(0xFFF8FBFF);
+
+class _CommunityHeroPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _CommunityHeroPill({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: Colors.white),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CommunityMetricCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _CommunityMetricCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: Colors.white, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.78),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ========================================================================
 // 1. MAIN DASHBOARD SCREEN
 // ========================================================================
@@ -49,55 +152,106 @@ class _CommunityDashboardState extends State<CommunityDashboard> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFFE6E9FA), // Soft lavender/blue
-            Color(0xFFD4E0F9), // Light blue
-            Color(0xFFE2DDF5), // Soft purple tint
-          ],
-        ),
-      ),
-      child: DefaultTabController(
-        length: 2,
-        child: Scaffold(
-          backgroundColor: Colors.transparent,
-          appBar: AppBar(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            title: const Text(
-              'Community Hub',
-              style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
-            ),
-            actions: [
-              // The person icon has been removed from here
-              _buildAppBarIcon(Icons.bookmarks_outlined, () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => SavedPostsScreen(currentUserID: widget.currentUserID)),
-                ).then((_) => _refreshFeed());
-              }),
-              const SizedBox(width: 16),
-            ],
-            bottom: const TabBar(
-              indicatorColor: Color(0xFF6B8BFE),
-              labelColor: Color(0xFF6B8BFE),
-              unselectedLabelColor: Colors.grey,
-              tabs: [
-                Tab(icon: Icon(Icons.dynamic_feed), text: 'Posts'),
-                Tab(icon: Icon(Icons.person_outline), text: 'My Posts'), // Changed from Messages to My Posts
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF4F7FB),
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color(0xFFE9F1FB),
+                Color(0xFFF4F7FB),
+                Color(0xFFF8FAFD),
               ],
             ),
           ),
-          body: TabBarView(
-            children: [
-              CommunityFeedTab(key: UniqueKey(), currentUserID: widget.currentUserID, onPostCreated: _refreshFeed),
-              // Replaced ChatListScreen with MyPostsScreen
-              MyPostsScreen(currentUserID: widget.currentUserID),
-            ],
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Community Hub',
+                                  style: TextStyle(
+                                    color: Color(0xFF1B2433),
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                SizedBox(height: 6),
+                              ],
+                            ),
+                          ),
+                          _buildAppBarIcon(Icons.bookmarks_rounded, () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => SavedPostsScreen(
+                                  currentUserID: widget.currentUserID,
+                                ),
+                              ),
+                            ).then((_) => _refreshFeed());
+                          }),
+                        ],
+                      ),
+
+                      const SizedBox(height: 18),
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const TabBar(
+                          dividerColor: Colors.transparent,
+                          indicator: BoxDecoration(
+                            color: Color(0xFF163B65),
+                            borderRadius: BorderRadius.all(Radius.circular(16)),
+                          ),
+                          indicatorSize: TabBarIndicatorSize.tab,
+                          labelColor: Colors.white,
+                          unselectedLabelColor: Color(0xFF687588),
+                          labelStyle: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                          tabs: [
+                            Tab(text: 'Community Feed'),
+                            Tab(text: 'My Posts'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Expanded(
+                  child: TabBarView(
+                    children: [
+                      CommunityFeedTab(
+                        key: UniqueKey(),
+                        currentUserID: widget.currentUserID,
+                        onPostCreated: _refreshFeed,
+                      ),
+                      MyPostsScreen(currentUserID: widget.currentUserID),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -105,15 +259,16 @@ class _CommunityDashboardState extends State<CommunityDashboard> {
   }
 
   Widget _buildAppBarIcon(IconData icon, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.6),
-          shape: BoxShape.circle,
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          child: Icon(icon, color: const Color(0xFF163B65), size: 22),
         ),
-        child: Icon(icon, color: Colors.black87, size: 22),
       ),
     );
   }
@@ -152,8 +307,68 @@ class _CommunityFeedTabState extends State<CommunityFeedTab> {
 
           final posts = snapshot.data ?? [];
 
+          if (posts.isEmpty) {
+            return ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+              children: [
+                CreatePostHeaderWidget(
+                  currentUserID: widget.currentUserID,
+                  onPostCreated: widget.onPostCreated,
+                ),
+                Container(
+                  padding: const EdgeInsets.all(28),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(28),
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 72,
+                        height: 72,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDCEBFB),
+                          borderRadius: BorderRadius.circular(22),
+                        ),
+                        child: const Icon(
+                          Icons.auto_awesome_motion_rounded,
+                          size: 34,
+                          color: Color(0xFF163B65),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      const Text(
+                        'Start the feed',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF1B2433),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Share your first thought, update, or question and give the community something to respond to.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          height: 1.45,
+                          color: Color(0xFF687588),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          }
+
           return ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
             itemCount: posts.length + 1,
             itemBuilder: (context, index) {
               if (index == 0) {
@@ -219,45 +434,106 @@ class CreatePostHeaderWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      // Added horizontal margins so it aligns perfectly with the post cards below it
       margin: const EdgeInsets.only(bottom: 24, top: 8),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          )
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFFFFFFFF),
+            Color(0xFFF8FBFF),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(30),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Start a conversation',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1B2433),
+            ),
+          ),
+          const SizedBox(height: 16),
+          InkWell(
+            onTap: () => _openCreatePostScreen(context),
+            borderRadius: BorderRadius.circular(24),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF4F7FB),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: const Color(0xFFD9E4F1)),
+              ),
+              child: const Row(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: Color(0xFFDCEBFB),
+                    child: Icon(
+                      Icons.edit,
+                      color: Color(0xFF163B65),
+                      size: 20,
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'What do you want to share today?',
+                      style: TextStyle(
+                        color: Color(0xFF687588),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    Icons.arrow_forward_rounded,
+                    color: Color(0xFF163B65),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
         ],
       ),
-      // The single input field button
-      child: InkWell(
-        onTap: () => _openCreatePostScreen(context),
-        borderRadius: BorderRadius.circular(24),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.grey.shade100, width: 1.5),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4, offset: const Offset(0, 2))
-            ],
+    );
+  }
+}
+
+class _ComposerHintChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _ComposerHintChip({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF3F8),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: const Color(0xFF687588)),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF687588),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-          child: Row(
-            children: [
-              const Icon(Icons.edit_square, color: Color(0xFF6B8BFE), size: 22),
-              const SizedBox(width: 12),
-              Text(
-                  "What do you wanna post?",
-                  style: TextStyle(color: Colors.grey.shade500, fontSize: 15)
-              ),
-            ],
-          ),
-        ),
+        ],
       ),
     );
   }
@@ -284,12 +560,23 @@ class PostCard extends StatefulWidget {
 
 class _PostCardState extends State<PostCard> {
   final CommunityService _communityService = CommunityService();
+  final TextEditingController _commentController = TextEditingController();
+  final TextEditingController _replyController = TextEditingController();
 
   late int _commentCount;
   late int _likeCount;
   late int _savedCount;
   late bool _isLiked;
   late bool _isSaved;
+  Future<List<Map<String, dynamic>>>? _commentsFuture;
+  final Set<String> _expandedThreads = <String>{};
+  String? _activeReplyCommentID;
+  StateSetter? _commentsSheetSetState;
+  bool _isSubmittingComment = false;
+  bool _isSubmittingReply = false;
+
+  bool get _isDeletedPost =>
+      widget.post.status.trim().toLowerCase() == 'deleted';
 
   @override
   void initState() {
@@ -301,7 +588,15 @@ class _PostCardState extends State<PostCard> {
     _isSaved = widget.post.isSavedBy(widget.currentUserID);
   }
 
+  @override
+  void dispose() {
+    _commentController.dispose();
+    _replyController.dispose();
+    super.dispose();
+  }
+
   void _handleLike() async {
+    if (_isDeletedPost) return;
     setState(() {
       _isLiked = !_isLiked;
       _likeCount += _isLiked ? 1 : -1;
@@ -318,6 +613,7 @@ class _PostCardState extends State<PostCard> {
   }
 
   void _handleSave() async {
+    if (_isDeletedPost) return;
     final bool wasSaved = _isSaved;
     setState(() {
       _isSaved = !_isSaved;
@@ -390,943 +686,1132 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final String timeAgo = getRelativeTime(widget.post.createdAt.toIso8601String());
-    final String currentUID = widget.currentUserID.trim();
-    final String creatorID = widget.post.authorID.trim();
-
-    // Check if the post is deleted
-    final bool isDeleted = widget.post.status.trim().toLowerCase() == 'deleted';
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 15, offset: const Offset(0, 5))],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header Row
-            Row(
-              children: [
-                InkWell(
-                  borderRadius: BorderRadius.circular(22),
-                  onTap: () {
-                    if (currentUID == creatorID) return;
-                    showModalBottomSheet(
-                      context: context,
-                      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-                      builder: (context) => SafeArea(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const SizedBox(height: 8),
-                            Container(height: 4, width: 40, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
-                            const SizedBox(height: 20),
-                            CircleAvatar(radius: 36, backgroundColor: Colors.blueAccent.withValues(alpha: 0.1), child: const Icon(Icons.person, color: Colors.blueAccent, size: 40)),
-                            const SizedBox(height: 12),
-                            Text(widget.post.username, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                            Text(widget.post.role, style: TextStyle(color: Colors.grey[600], fontSize: 14)),
-                            const SizedBox(height: 24),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
-                              child: ElevatedButton.icon(
-                                onPressed: () async {
-                                  Navigator.pop(context);
-                                  try {
-                                    String roomID = await _communityService.getOrCreateChatRoom(currentUID, creatorID);
-                                    if (context.mounted) {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(builder: (context) => ActiveChatScreen(roomID: roomID, currentUserID: currentUID, otherUserName: widget.post.username, otherUserID: creatorID)),
-                                      );
-                                    }
-                                  } catch (e) {
-                                    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-                                  }
-                                },
-                                icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
-                                label: const Text('Contact', style: TextStyle(color: Colors.white, fontSize: 16)),
-                                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6B8BFE), minimumSize: const Size(double.infinity, 48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                  child: CircleAvatar(
-                    radius: 22,
-                    backgroundColor: Colors.grey[200],
-                    child: const Icon(Icons.person, color: Colors.grey, size: 28),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(widget.post.username, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
-                      const SizedBox(height: 2),
-                      Text('${widget.post.role} • $timeAgo', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                    ],
-                  ),
-                ),
-
-                // --- iPhone Styled 3-Dot Menu ---
-                // The menu button is ALWAYS visible now, but the items change.
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_horiz, color: Colors.grey),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  color: const Color(0xFFF9F9F9).withValues(alpha: 0.95),
-                  elevation: 8,
-                  offset: const Offset(0, 40),
-                  onSelected: (value) async {
-                    if (value == 'report') {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => ReportScreen(targetID: widget.post.postID, currentUserID: widget.currentUserID, isPost: true)));
-                    } else if (value == 'delete') {
-                      _showDeleteConfirmationDialog(context, widget.post.postID);
-                    } else if (value == 'edit') {
-                      bool? wasEdited = await Navigator.push(context, MaterialPageRoute(builder: (context) => EditScreen(targetID: widget.post.postID, initialContent: widget.post.content, initialMediaURL: widget.post.mediaURL, currentUserID: widget.currentUserID, isPost: true)));
-                      if (wasEdited == true) widget.onDelete();
-                    }
-                  },
-                  itemBuilder: (BuildContext context) => [
-
-                    // 👇 RULE 1: If the post is deleted -> Show ONLY Delete
-                    if (isDeleted) ...[
-                      const PopupMenuItem<String>(
-                          value: 'delete',
-                          height: 48,
-                          child: Row(children: [Icon(Icons.remove_circle_outline, color: Colors.red, size: 22), SizedBox(width: 12), Text('Delete Post', style: TextStyle(color: Colors.red, fontSize: 16))])
-                      ),
-                    ]
-
-                    // 👇 RULE 2: If it's your post (and not deleted) -> Show Edit and Delete
-                    else if (currentUID == creatorID) ...[
-                      const PopupMenuItem<String>(
-                          value: 'edit',
-                          height: 48,
-                          child: Row(children: [Icon(Icons.edit_outlined, color: Colors.black87, size: 22), SizedBox(width: 12), Text('Edit Post', style: TextStyle(color: Colors.black87, fontSize: 16))])
-                      ),
-                      const PopupMenuDivider(height: 0),
-                      const PopupMenuItem<String>(
-                          value: 'delete',
-                          height: 48,
-                          child: Row(children: [Icon(Icons.remove_circle_outline, color: Colors.red, size: 22), SizedBox(width: 12), Text('Delete Post', style: TextStyle(color: Colors.red, fontSize: 16))])
-                      ),
-                    ]
-
-                    // 👇 RULE 3: If it's someone else's post (and not deleted) -> Show Report only
-                    else ...[
-                        const PopupMenuItem<String>(
-                            value: 'report',
-                            height: 48,
-                            child: Row(children: [Icon(Icons.flag_outlined, color: Colors.black87, size: 22), SizedBox(width: 12), Text('Report Post', style: TextStyle(color: Colors.black87, fontSize: 16))])
-                        ),
-                      ],
-
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // Content Text
-            Text(widget.post.content, style: const TextStyle(fontSize: 15, height: 1.4, color: Colors.black87)),
-
-            if (widget.post.mediaURL != null) ...[
-              const SizedBox(height: 12),
-              if (widget.post.mediaURL!.toLowerCase().contains('.pdf'))
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade300)),
-                  child: Row(
-                    children: const [
-                      Icon(Icons.picture_as_pdf, color: Colors.redAccent),
-                      SizedBox(width: 8),
-                      Text("Attached PDF Document", style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, decoration: TextDecoration.underline)),
-                    ],
-                  ),
-                )
-              else
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: Image.network(
-                    widget.post.mediaURL!,
-                    width: double.infinity,
-                    height: 220,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
-                  ),
-                ),
-            ],
-
-            const SizedBox(height: 16),
-
-            // Footer Interaction Buttons
-            Row(
-              children: [
-                _buildInteractionPill(_isLiked ? Icons.thumb_up : Icons.thumb_up_outlined, _likeCount.toString(), _isLiked ? Colors.blue : Colors.black87, _handleLike),
-                const SizedBox(width: 12),
-                _buildInteractionPill(Icons.chat_bubble_outline, _commentCount.toString(), Colors.black87, () {
-                  showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    backgroundColor: Colors.white,
-                    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-                    builder: (context) => CommentSheet(
-                      postID: widget.post.postID,
-                      currentUserID: widget.currentUserID,
-                      onCommentAdded: () => setState(() => _commentCount++),
-                    ),
-                  );
-                }),
-                const Spacer(),
-                _buildInteractionPill(_isSaved ? Icons.bookmark : Icons.bookmark_border, "", _isSaved ? Colors.blue : Colors.black87, _handleSave),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ========================================================================
-// 5. COMMENT BOTTOM SHEET
-// ========================================================================
-class CommentSheet extends StatefulWidget {
-  final String postID;
-  final String currentUserID;
-  final VoidCallback onCommentAdded;
-
-  const CommentSheet({
-    super.key,
-    required this.postID,
-    required this.currentUserID,
-    required this.onCommentAdded,
-  });
-
-  @override
-  State<CommentSheet> createState() => _CommentSheetState();
-}
-
-class _CommentSheetState extends State<CommentSheet> {
-  final CommunityService _communityService = CommunityService();
-
-  final TextEditingController _commentController = TextEditingController();
-  final TextEditingController _replyController = TextEditingController();
-  final TextEditingController _editController = TextEditingController(); // 👈 Added edit controller
-
-  bool _isPosting = false;
-  String? _activeReplyCommentID;
-  String? _activeEditCommentID; // 👈 Tracks which comment is being edited
-  final Set<String> _expandedThreads = {};
-
-  @override
-  void dispose() {
-    _commentController.dispose();
-    _replyController.dispose();
-    _editController.dispose();
-    super.dispose();
+  void _refreshCommentSheet([VoidCallback? updates]) {
+    if (!mounted) return;
+    setState(() {
+      updates?.call();
+    });
+    _commentsSheetSetState?.call(() {});
   }
 
-  void _submitComment() async {
-    if (_commentController.text.trim().isEmpty) return;
-    _postData(_commentController.text.trim(), null);
+  void _reloadCommentsSheet([VoidCallback? updates]) {
+    _refreshCommentSheet(() {
+      _commentsFuture = _communityService.getComments(widget.post.postID);
+      updates?.call();
+    });
   }
 
-  void _submitReply(String parentID) async {
-    if (_replyController.text.trim().isEmpty) return;
-    _postData(_replyController.text.trim(), parentID);
-    setState(() => _expandedThreads.add(parentID));
-  }
-
-  Future<void> _postData(String content, String? parentID) async {
-    setState(() => _isPosting = true);
-    try {
-      await _communityService.addComment(postID: widget.postID, userID: widget.currentUserID, content: content, parentCommentID: parentID);
-      _commentController.clear();
-      _replyController.clear();
-      _activeReplyCommentID = null;
-      widget.onCommentAdded();
-      setState(() {});
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-    } finally {
-      setState(() => _isPosting = false);
-    }
-  }
-
-  // 👈 NEW: Submits the inline edit changes to the database
-  Future<void> _submitEdit(String commentID) async {
-    final updatedContent = _editController.text.trim();
-    if (updatedContent.isEmpty) return;
-
-    setState(() => _isPosting = true);
-    try {
-      await _communityService.editComment(commentID, updatedContent);
-      _activeEditCommentID = null;
-      _editController.clear();
-      setState(() {}); // Refresh list
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error updating comment: $e')));
-    } finally {
-      setState(() => _isPosting = false);
-    }
-  }
-
-  void _showDeleteCommentConfirmationDialog(BuildContext context, String commentID) {
-    showDialog(
+  Future<void> _openCommentSheet() async {
+    if (_isDeletedPost) return;
+    _commentsFuture = _communityService.getComments(widget.post.postID);
+    await showModalBottomSheet<void>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('Delete Comment'),
-          content: const Text('Are you sure you want to delete this comment? This action cannot be undone.'),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
-            ElevatedButton(
-              onPressed: () async {
-                Navigator.pop(context);
-                try {
-                  await _communityService.deleteComment(commentID);
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Comment deleted successfully.')));
-                    setState(() {});
-                  }
-                } catch (e) {
-                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red[50], elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-              child: const Text('Delete', style: TextStyle(color: Colors.red)),
-            ),
-          ],
-        );
-      },
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, modalSetState) {
+          _commentsSheetSetState = modalSetState;
+          return _buildCommentsSheet(context);
+        },
+      ),
     );
+    _commentsSheetSetState = null;
   }
 
-  Widget _buildCommentRow(Map<String, dynamic> comment, {bool isReply = false, String? repliedToUsername}) {
-    final user = comment['User'] ?? {};
-    final timeAgo = getRelativeTime(comment['createdAt']);
-    final commentID = comment['commentID'];
-    final String commentCreatorID = comment['userID'] ?? '';
+  Future<void> _submitComment() async {
+    final content = _commentController.text.trim();
+    if (content.isEmpty || _isSubmittingComment) return;
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        CircleAvatar(
-            radius: 18,
-            backgroundColor: Colors.grey[200],
-            child: Icon(Icons.person, color: Colors.grey[500], size: 24)
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // --- Header Row (Username, Time, Menu) ---
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: RichText(
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      text: TextSpan(
-                        style: const TextStyle(fontSize: 14, fontFamily: 'Roboto'),
-                        children: [
-                          TextSpan(
-                              text: user['username'] ?? 'Unknown',
-                              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)
-                          ),
-                          if (isReply && repliedToUsername != null) ...[
-                            WidgetSpan(
-                              alignment: PlaceholderAlignment.middle,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 6.0),
-                                child: Container(
-                                  width: 14,
-                                  height: 14,
-                                  decoration: BoxDecoration(
-                                      color: const Color(0xFFFF9500),
-                                      borderRadius: BorderRadius.circular(3)
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: const Icon(
-                                    Icons.play_arrow,
-                                    color: Colors.white,
-                                    size: 11,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            TextSpan(
-                                text: repliedToUsername,
-                                style: const TextStyle(color: Color(0xFF6B8BFE), fontWeight: FontWeight.bold)
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(timeAgo, style: TextStyle(color: Colors.grey[400], fontSize: 12)),
-                  const SizedBox(width: 4),
+    _refreshCommentSheet(() => _isSubmittingComment = true);
+    try {
+      await _communityService.addComment(
+        postID: widget.post.postID,
+        userID: widget.currentUserID,
+        content: content,
+      );
+      _commentController.clear();
+      _reloadCommentsSheet(() {
+        _commentCount += 1;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to add comment: $e')));
+      }
+    } finally {
+      if (mounted) {
+        _refreshCommentSheet(() => _isSubmittingComment = false);
+      }
+    }
+  }
 
-                  // --- iPhone Styled 3-Dot Menu ---
-                  if (_activeEditCommentID != commentID) // Hide menu while editing
-                    PopupMenuButton<String>(
-                      icon: const Icon(Icons.more_horiz, color: Colors.grey, size: 18),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      color: const Color(0xFFF9F9F9).withValues(alpha: 0.95),
-                      elevation: 8,
-                      offset: const Offset(0, 30),
-                      onSelected: (value) async {
-                        if (value == 'report') {
-                          Navigator.push(context, MaterialPageRoute(builder: (context) => ReportScreen(targetID: commentID, currentUserID: widget.currentUserID, isPost: false)));
-                        } else if (value == 'delete') {
-                          _showDeleteCommentConfirmationDialog(context, commentID);
-                        } else if (value == 'edit') {
-                          // 👈 Trigger the inline edit state
-                          setState(() {
-                            _activeEditCommentID = commentID;
-                            _editController.text = comment['content'] ?? '';
-                            _activeReplyCommentID = null; // Close reply box if open
-                          });
-                        }
-                      },
-                      itemBuilder: (BuildContext context) => [
-                        if (widget.currentUserID == commentCreatorID) ...[
-                          const PopupMenuItem<String>(
-                              value: 'edit',
-                              height: 44,
-                              child: Row(children: [Icon(Icons.edit_outlined, color: Colors.black87, size: 20), SizedBox(width: 12), Text('Edit Comment', style: TextStyle(color: Colors.black87, fontSize: 15))])
-                          ),
-                          const PopupMenuDivider(height: 0),
-                          const PopupMenuItem<String>(
-                              value: 'delete',
-                              height: 44,
-                              child: Row(children: [Icon(Icons.remove_circle_outline, color: Colors.red, size: 20), SizedBox(width: 12), Text('Delete Comment', style: TextStyle(color: Colors.red, fontSize: 15))])
-                          ),
-                          const PopupMenuDivider(height: 0),
-                        ],
-                        const PopupMenuItem<String>(
-                            value: 'report',
-                            height: 44,
-                            child: Row(children: [Icon(Icons.flag_outlined, color: Colors.black87, size: 20), SizedBox(width: 12), Text('Report Comment', style: TextStyle(color: Colors.black87, fontSize: 15))])
-                        ),
-                      ],
-                    ),
-                ],
-              ),
-              const SizedBox(height: 4),
+  Future<void> _submitReply(Map<String, dynamic> targetComment) async {
+    final rawContent = _replyController.text.trim();
+    if (rawContent.isEmpty || _isSubmittingReply) return;
 
-              // --- Conditional UI: Show Edit Box OR Text Content ---
-              if (_activeEditCommentID == commentID)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4.0, bottom: 8.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                        decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(20)),
-                        child: TextField(
-                          controller: _editController,
-                          autofocus: true,
-                          maxLines: null,
-                          style: const TextStyle(fontSize: 14),
-                          decoration: const InputDecoration(
-                              hintText: 'Edit your comment...',
-                              border: InputBorder.none,
-                              isDense: true
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          TextButton(
-                              onPressed: () => setState(() { _activeEditCommentID = null; _editController.clear(); }),
-                              child: const Text('Cancel', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold))
-                          ),
-                          const SizedBox(width: 8),
-                          ElevatedButton(
-                              onPressed: _isPosting ? null : () => _submitEdit(commentID),
-                              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6B8BFE), elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), padding: const EdgeInsets.symmetric(horizontal: 20)),
-                              child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
-                          ),
-                        ],
-                      )
-                    ],
-                  ),
-                )
-              else
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(comment['content'] ?? '', style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.4)),
-                    // --- Reply Button ---
-                    if (!isReply)
-                      InkWell(
-                        onTap: () => setState(() {
-                          _activeReplyCommentID = _activeReplyCommentID == commentID ? null : commentID;
-                          _activeEditCommentID = null; // Close edit box if open
-                        }),
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 8.0, bottom: 4.0, right: 16.0),
-                          child: Text('Reply', style: TextStyle(color: Colors.grey[600], fontSize: 12, fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                  ],
+    final targetCommentID = targetComment['commentID']?.toString() ?? '';
+    final directParentCommentID = targetComment['parentCommentID']?.toString();
+    final effectiveParentCommentID =
+        (directParentCommentID != null && directParentCommentID.isNotEmpty)
+            ? directParentCommentID
+            : targetCommentID;
+    final targetUsername =
+        targetComment['User']?['username']?.toString().trim() ?? '';
+    final content =
+        targetUsername.isNotEmpty && !rawContent.startsWith('@$targetUsername ')
+            ? '@$targetUsername $rawContent'
+            : rawContent;
+
+    _refreshCommentSheet(() => _isSubmittingReply = true);
+    try {
+      await _communityService.addComment(
+        postID: widget.post.postID,
+        userID: widget.currentUserID,
+        content: content,
+        parentCommentID: effectiveParentCommentID,
+      );
+      _replyController.clear();
+      _reloadCommentsSheet(() {
+        _activeReplyCommentID = null;
+        _expandedThreads.add(effectiveParentCommentID);
+        _commentCount += 1;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to add reply: $e')));
+      }
+    } finally {
+      if (mounted) {
+        _refreshCommentSheet(() => _isSubmittingReply = false);
+      }
+    }
+  }
+
+  Future<void> _handlePostMenuSelection(String value) async {
+    switch (value) {
+      case 'edit':
+        if (_isDeletedPost) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'This post was removed by admin and can no longer be edited.',
                 ),
+              ),
+            );
+          }
+          return;
+        }
+        final didUpdate = await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(
+            builder: (context) => EditScreen(
+              targetID: widget.post.postID,
+              initialContent: widget.post.content,
+              initialMediaURL: widget.post.mediaURL,
+              currentUserID: widget.currentUserID,
+              isPost: true,
+            ),
+          ),
+        );
+        if (didUpdate == true) {
+          widget.onDelete();
+        }
+        break;
+      case 'delete':
+        _showDeleteConfirmationDialog(context, widget.post.postID);
+        break;
+      case 'report':
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ReportScreen(
+              targetID: widget.post.postID,
+              currentUserID: widget.currentUserID,
+              isPost: true,
+            ),
+          ),
+        );
+        break;
+      case 'message':
+        try {
+          final roomID = await _communityService.getOrCreateChatRoom(
+            widget.currentUserID,
+            widget.post.authorID,
+          );
+          if (!mounted) return;
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ActiveChatScreen(
+                roomID: roomID,
+                currentUserID: widget.currentUserID,
+                otherUserName: widget.post.username,
+                otherUserID: widget.post.authorID,
+              ),
+            ),
+          );
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Unable to open chat: $e')),
+            );
+          }
+        }
+        break;
+    }
+  }
+
+  Future<void> _handleCommentMenuSelection(Map<String, dynamic> comment, String value) async {
+    final commentID = comment['commentID']?.toString();
+    if (commentID == null || commentID.isEmpty) return;
+
+    switch (value) {
+      case 'edit':
+        final didUpdate = await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(
+            builder: (context) => EditScreen(
+              targetID: commentID,
+              initialContent: comment['content']?.toString() ?? '',
+              currentUserID: widget.currentUserID,
+              isPost: false,
+            ),
+          ),
+        );
+        if (didUpdate == true && mounted) {
+          _reloadCommentsSheet();
+        }
+        break;
+      case 'delete':
+        final shouldDelete = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Text('Delete Comment'),
+            content: const Text('Are you sure you want to delete this comment?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Delete', style: TextStyle(color: Colors.red)),
+              ),
             ],
           ),
+        );
+
+        if (shouldDelete == true) {
+          try {
+            await _communityService.deleteComment(commentID);
+            if (!mounted) return;
+            _reloadCommentsSheet(() {
+              _activeReplyCommentID = _activeReplyCommentID == commentID ? null : _activeReplyCommentID;
+              _expandedThreads.remove(commentID);
+              if (_commentCount > 0) {
+                _commentCount -= 1;
+              }
+            });
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Failed to delete comment: $e')),
+              );
+            }
+          }
+        }
+        break;
+      case 'report':
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ReportScreen(
+              targetID: commentID,
+              currentUserID: widget.currentUserID,
+              isPost: false,
+            ),
+          ),
+        );
+        break;
+    }
+  }
+
+  Widget _buildMediaPreview() {
+    final mediaUrl = widget.post.mediaURL;
+    if (mediaUrl == null || mediaUrl.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final isImage =
+        mediaUrl.endsWith('.png') ||
+        mediaUrl.endsWith('.jpg') ||
+        mediaUrl.endsWith('.jpeg') ||
+        mediaUrl.contains('image');
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          width: double.infinity,
+          color: _communitySoft,
+          child: isImage
+              ? Image.network(
+                  mediaUrl,
+                  height: 220,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => _buildMediaFallback(mediaUrl),
+                )
+              : _buildMediaFallback(mediaUrl),
         ),
-      ],
+      ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildMediaFallback(String mediaUrl) {
+    final fileName = mediaUrl.split('/').last.split('?').first;
     return Container(
-      height: MediaQuery.of(context).size.height * 0.85,
+      padding: const EdgeInsets.all(20),
+      child: Row(
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(
+              mediaUrl.endsWith('.pdf') ? Icons.picture_as_pdf_rounded : Icons.insert_drive_file_rounded,
+              color: _communityPrimary,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              fileName,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _communityInk,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUserAvatar({
+    required String displayName,
+    String? profilePictureUrl,
+    required double radius,
+    double? fontSize,
+  }) {
+    final trimmedName = displayName.trim();
+    final avatarLetter =
+        trimmedName.isEmpty ? 'U' : trimmedName.substring(0, 1).toUpperCase();
+    final hasProfilePicture =
+        profilePictureUrl != null && profilePictureUrl.trim().isNotEmpty;
+
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: _communitySoft,
+      backgroundImage: hasProfilePicture ? NetworkImage(profilePictureUrl!) : null,
+      child: hasProfilePicture
+          ? null
+          : Text(
+              avatarLetter,
+              style: TextStyle(
+                color: _communityPrimary,
+                fontWeight: FontWeight.w800,
+                fontSize: fontSize ?? radius,
+              ),
+            ),
+    );
+  }
+
+  Widget _buildCommentsSheet(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.88,
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        color: _communityBackground,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
       child: Column(
         children: [
-          Container(margin: const EdgeInsets.symmetric(vertical: 12), height: 5, width: 48, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-          const Text('Comments', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black87)),
-          const SizedBox(height: 12),
-          const Divider(height: 1, thickness: 1, color: Color(0xFFF0F0F0)),
-
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF163B65),
+                  Color(0xFF27528D),
+                ],
+              ),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  height: 5,
+                  width: 52,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Comments',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 22,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 6),
+              ],
+            ),
+          ),
           Expanded(
             child: FutureBuilder<List<Map<String, dynamic>>>(
-              future: _communityService.getComments(widget.postID),
+              future: _commentsFuture,
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-                if (snapshot.hasError) return Padding(padding: const EdgeInsets.all(16.0), child: Text("Database Error:\n\n${snapshot.error}", style: const TextStyle(color: Colors.red)));
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return Center(
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.chat_bubble_outline, size: 48, color: Colors.grey[300]),
-                        const SizedBox(height: 16),
-                        Text("No comments yet. Start the conversation!", style: TextStyle(color: Colors.grey[500], fontSize: 15)),
+                        SizedBox(
+                          width: 40,
+                          height: 40,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3,
+                            color: _communityPrimary,
+                          ),
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          'Loading comments...',
+                          style: TextStyle(
+                            color: _communityMuted,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ],
+                    ),
+                  );
+                }
+                if (snapshot.hasError) {
+                  return Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: _communityBorder),
+                        ),
+                        child: Text(
+                          "Database Error:\n\n${snapshot.error}",
+                          style: const TextStyle(color: Colors.red),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                  );
+                }
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return Center(
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 20),
+                      padding: const EdgeInsets.all(28),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(28),
+                        border: Border.all(color: _communityBorder),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 72,
+                            height: 72,
+                            decoration: BoxDecoration(
+                              color: _communitySoft,
+                              borderRadius: BorderRadius.circular(22),
+                            ),
+                            child: const Icon(
+                              Icons.chat_bubble_outline_rounded,
+                              size: 34,
+                              color: _communityPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          const Text(
+                            'No comments yet',
+                            style: TextStyle(
+                              color: _communityInk,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Start the conversation with the first comment on this post.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: _communityMuted,
+                              fontSize: 14,
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 }
 
                 final allComments = snapshot.data!;
-                final topLevelComments = allComments.where((c) => c['parentCommentID'] == null).toList();
+                final topLevelComments =
+                    allComments
+                        .where((comment) {
+                          final parentCommentID = comment['parentCommentID']?.toString();
+                          return parentCommentID == null || parentCommentID.isEmpty;
+                        })
+                        .toList();
                 final Map<String, List<Map<String, dynamic>>> repliesMap = {};
 
-                for (var comment in allComments) {
-                  if (comment['parentCommentID'] != null) {
-                    repliesMap.putIfAbsent(comment['parentCommentID'], () => []).add(comment);
+                for (final comment in allComments) {
+                  final parentCommentID = comment['parentCommentID']?.toString();
+                  if (parentCommentID != null && parentCommentID.isNotEmpty) {
+                    repliesMap.putIfAbsent(parentCommentID, () => []).add(comment);
                   }
                 }
 
                 return ListView.separated(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
                   itemCount: topLevelComments.length,
-                  separatorBuilder: (context, index) => const SizedBox(height: 20),
+                  separatorBuilder: (context, index) => const SizedBox(height: 18),
                   itemBuilder: (context, index) {
-                    final parentComment = topLevelComments[index];
-                    final commentID = parentComment['commentID'];
-                    final replies = repliesMap[commentID] ?? [];
-                    final isExpanded = _expandedThreads.contains(commentID);
-                    final String parentAuthorName = parentComment['User']?['username'] ?? 'Unknown';
-
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildCommentRow(parentComment, isReply: false),
-
-                        // Active Reply Input Box
-                        if (_activeReplyCommentID == commentID)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 48.0, top: 12.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Row(
-                                  children: [
-                                    const CircleAvatar(radius: 12, backgroundColor: Color(0xFFE6E9FA), child: Icon(Icons.person, color: Color(0xFF6B8BFE), size: 16)),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                                        decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(20)),
-                                        child: TextField(
-                                          controller: _replyController,
-                                          autofocus: true,
-                                          style: const TextStyle(fontSize: 14),
-                                          decoration: const InputDecoration(hintText: 'Add a reply...', hintStyle: TextStyle(fontSize: 14), border: InputBorder.none, isDense: true),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  children: [
-                                    TextButton(onPressed: () => setState(() { _activeReplyCommentID = null; _replyController.clear(); }), child: const Text('Cancel', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold))),
-                                    const SizedBox(width: 8),
-                                    ElevatedButton(
-                                        onPressed: _isPosting ? null : () => _submitReply(commentID),
-                                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6B8BFE), elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), padding: const EdgeInsets.symmetric(horizontal: 20)),
-                                        child: const Text('Reply', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
-                                    ),
-                                  ],
-                                )
-                              ],
-                            ),
-                          ),
-
-                        // "Hide/View Replies" Toggle
-                        if (replies.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 48.0, top: 4.0),
-                            child: InkWell(
-                              onTap: () => setState(() { isExpanded ? _expandedThreads.remove(commentID) : _expandedThreads.add(commentID); }),
-                              borderRadius: BorderRadius.circular(12),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 0.0),
-                                child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Text('—', style: TextStyle(color: Color(0xFF6B8BFE), fontWeight: FontWeight.bold, fontSize: 14)),
-                                      const SizedBox(width: 8),
-                                      Text(isExpanded ? 'Hide replies' : 'View replies', style: const TextStyle(color: Color(0xFF6B8BFE), fontWeight: FontWeight.w600, fontSize: 13))
-                                    ]
-                                ),
-                              ),
-                            ),
-                          ),
-
-                        // Nested Reply List
-                        if (isExpanded && replies.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 48.0, top: 8.0),
-                            child: Container(
-                              decoration: BoxDecoration(border: Border(left: BorderSide(color: Colors.grey.shade200, width: 2))),
-                              padding: const EdgeInsets.only(left: 16.0, top: 8.0),
-                              child: Column(children: replies.map((reply) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 16.0),
-                                  child: _buildCommentRow(reply, isReply: true, repliedToUsername: parentAuthorName)
-                              )).toList()),
-                            ),
-                          ),
-                      ],
+                    return _buildCommentThread(
+                      comment: topLevelComments[index],
+                      repliesMap: repliesMap,
+                      depth: 0,
                     );
                   },
                 );
               },
             ),
           ),
-
-          // --- Redesigned Bottom Input Area ---
-          Container(
-            padding: EdgeInsets.only(left: 16, right: 16, top: 12, bottom: 12 + MediaQuery.of(context).padding.bottom),
-            decoration: BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Colors.grey.shade200))),
-            child: Row(
-              children: [
-                Expanded(
-                    child: TextField(
-                        controller: _commentController,
-                        decoration: InputDecoration(
-                            hintText: 'Add a comment...',
-                            hintStyle: TextStyle(color: Colors.grey[500]),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
-                            filled: true,
-                            fillColor: Colors.grey[100],
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)
-                        )
-                    )
-                ),
-                const SizedBox(width: 12),
-                InkWell(
-                  onTap: _isPosting ? null : _submitComment,
-                  borderRadius: BorderRadius.circular(24),
-                  child: CircleAvatar(
-                    radius: 22,
-                    backgroundColor: _isPosting ? Colors.grey[300] : const Color(0xFF6B8BFE),
-                    child: _isPosting
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Padding(
-                      padding: EdgeInsets.only(left: 4.0),
-                      child: Icon(Icons.send, color: Colors.white, size: 20),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          _buildCommentComposer(context),
         ],
       ),
     );
   }
-}
 
-// ========================================================================
-// 6. CREATE POST SCREEN
-// ========================================================================
-class CreatePostScreen extends StatefulWidget {
-  final String currentUserID;
+  Widget _buildCommentThread({
+    required Map<String, dynamic> comment,
+    required Map<String, List<Map<String, dynamic>>> repliesMap,
+    required int depth,
+  }) {
+    final commentID = comment['commentID']?.toString() ?? '';
+    final replies = repliesMap[commentID] ?? [];
+    final isExpanded = _expandedThreads.contains(commentID);
+    final double indent = ((depth * 26.0).clamp(0.0, 78.0)) as double;
 
-  const CreatePostScreen({super.key, required this.currentUserID});
-
-  @override
-  State<CreatePostScreen> createState() => _CreatePostScreenState();
-}
-
-class _CreatePostScreenState extends State<CreatePostScreen> {
-  final TextEditingController _contentController = TextEditingController();
-  final CommunityService _communityService = CommunityService();
-
-  bool _isLoading = false;
-  File? _selectedFile;
-
-  Future<void> _pickDocument() async {
-    FilePickerResult? result = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf', 'jpg', 'png', 'jpeg'],
-    );
-
-    if (result != null) {
-      setState(() {
-        _selectedFile = File(result.files.single.path!);
-      });
-    }
-  }
-
-  void _previewDocument(BuildContext context) {
-    if (_selectedFile == null) return;
-
-    final filePath = _selectedFile!.path.toLowerCase();
-    final isImage = filePath.endsWith('.jpg') || filePath.endsWith('.jpeg') || filePath.endsWith('.png');
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('Attachment Preview'),
-          content: SizedBox(
-            width: double.maxFinite,
-            height: MediaQuery.of(context).size.height * 0.5,
-            child: isImage
-                ? ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.file(_selectedFile!, fit: BoxFit.contain)
-            )
-                : const Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.picture_as_pdf, size: 80, color: Colors.red),
-                SizedBox(height: 16),
-                Text('PDF Attached Successfully!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                SizedBox(height: 8),
-                Text('(PDF preview requires physical device)', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
-              ],
-            ),
+    return Padding(
+      padding: EdgeInsets.only(left: indent),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildCommentRow(
+            comment,
+            isReply: depth > 0,
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close', style: TextStyle(color: Colors.black87))),
-          ],
-        );
-      },
-    );
-  }
-
-  void _submitPost() async {
-    final content = _contentController.text.trim();
-    if (content.isEmpty && _selectedFile == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please add some text or an attachment.')),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      String? uploadedUrl;
-
-      // 1. Upload File
-      if (_selectedFile != null) {
-        uploadedUrl = await _communityService.uploadPostMedia(_selectedFile!, widget.currentUserID);
-        if (uploadedUrl == null) {
-          throw Exception('Failed to upload attachment.');
-        }
-      }
-
-      // 2. Save Post
-      await _communityService.createCommunityPost(
-        authorID: widget.currentUserID,
-        content: content,
-        mediaURL: uploadedUrl,
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Post published successfully!')));
-        Navigator.pop(context);
-      }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  @override
-  void dispose() {
-    _contentController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black87),
-        title: const Text('Create Post', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8.0),
-            child: _isLoading
-                ? const Center(child: Padding(padding: EdgeInsets.only(right: 16.0), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))))
-                : TextButton(
-              onPressed: _submitPost,
-              style: TextButton.styleFrom(
-                backgroundColor: const Color(0xFF6B8BFE).withValues(alpha: 0.1),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-              ),
-              child: const Text('Post', style: TextStyle(color: Color(0xFF6B8BFE), fontWeight: FontWeight.bold, fontSize: 16)),
+          if (_activeReplyCommentID == commentID)
+            Padding(
+              padding: const EdgeInsets.only(left: 50, top: 12),
+              child: _buildReplyComposer(comment),
             ),
-          )
-        ],
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  CircleAvatar(radius: 20, backgroundColor: Colors.grey[200], child: const Icon(Icons.person, color: Colors.grey)),
-                  const SizedBox(width: 12),
-                  const Text('Posting to Community', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: Colors.black87)),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              Expanded(
-                child: TextField(
-                  controller: _contentController,
-                  maxLines: null,
-                  autofocus: true,
-                  keyboardType: TextInputType.multiline,
-                  style: const TextStyle(fontSize: 18, color: Colors.black87, height: 1.4),
-                  decoration: InputDecoration(
-                    hintText: 'What do you want to talk about?',
-                    hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 18),
-                    border: InputBorder.none,
-                  ),
-                ),
-              ),
-
-              if (_selectedFile != null)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  padding: const EdgeInsets.all(12),
+          if (replies.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 50, top: 10),
+              child: InkWell(
+                onTap: () => _refreshCommentSheet(() {
+                  if (isExpanded) {
+                    _expandedThreads.remove(commentID);
+                  } else {
+                    _expandedThreads.add(commentID);
+                  }
+                }),
+                borderRadius: BorderRadius.circular(999),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: Colors.grey[50],
-                    border: Border.all(color: Colors.grey.shade200),
-                    borderRadius: BorderRadius.circular(16),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: _communityBorder),
                   ),
                   child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                        child: Icon(
-                          _selectedFile!.path.toLowerCase().endsWith('.pdf') ? Icons.picture_as_pdf : Icons.image,
-                          color: const Color(0xFF6B8BFE),
+                      Icon(
+                        isExpanded
+                            ? Icons.keyboard_arrow_up_rounded
+                            : Icons.keyboard_arrow_down_rounded,
+                        color: _communityPrimary,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        isExpanded
+                            ? 'Hide replies'
+                            : 'View replies (${replies.length})',
+                        style: const TextStyle(
+                          color: _communityPrimary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          _selectedFile!.path.split(Platform.pathSeparator).last,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.black87),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.visibility_outlined, color: Colors.black54),
-                        onPressed: () => _previewDocument(context),
-                        tooltip: 'Preview',
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, color: Colors.redAccent),
-                        onPressed: () => setState(() => _selectedFile = null),
-                        tooltip: 'Remove',
                       ),
                     ],
                   ),
                 ),
-
-              const Divider(height: 1),
-
-              Padding(
-                padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
-                child: Row(
-                  children: [
-                    InkWell(
-                      onTap: _pickDocument,
-                      borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.image_outlined, color: Color(0xFF6B8BFE)),
-                            SizedBox(width: 8),
-                            Text('Attach Media', style: TextStyle(color: Color(0xFF6B8BFE), fontWeight: FontWeight.w600))
-                          ],
+              ),
+            ),
+          if (isExpanded && replies.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 50, top: 12),
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                    left: BorderSide(
+                      color: _communityBorder.withValues(alpha: 0.9),
+                      width: 2,
+                    ),
+                  ),
+                ),
+                padding: const EdgeInsets.only(left: 14, top: 4),
+                child: Column(
+                  children: replies
+                      .map(
+                        (reply) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _buildCommentThread(
+                            comment: reply,
+                            repliesMap: repliesMap,
+                            depth: depth + 1,
+                          ),
                         ),
+                      )
+                      .toList(),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCommentRow(
+    Map<String, dynamic> comment, {
+    required bool isReply,
+  }) {
+    final authorData = Map<String, dynamic>.from(comment['User'] ?? {});
+    final authorName =
+        authorData['username']?.toString().trim().isNotEmpty == true
+            ? authorData['username'].toString().trim()
+            : 'Unknown User';
+    final authorRole = authorData['role']?.toString() ?? 'Member';
+    final authorProfilePictureUrl = authorData['profilePictureURL']?.toString();
+    final authorID = comment['userID']?.toString();
+    final commentID = comment['commentID']?.toString() ?? '';
+    final createdAt = getRelativeTime(comment['createdAt']?.toString());
+    final content = comment['content']?.toString() ?? '';
+    final isOwner = authorID == widget.currentUserID;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildUserAvatar(
+          displayName: authorName,
+          profilePictureUrl: authorProfilePictureUrl,
+          radius: isReply ? 16 : 18,
+          fontSize: isReply ? 13 : 14,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: _communityBorder),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            authorName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: _communityInk,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: _communitySoft,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  authorRole,
+                                  style: const TextStyle(
+                                    color: _communityPrimary,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                createdAt,
+                                style: const TextStyle(
+                                  color: _communityMuted,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
+                    ),
+                    PopupMenuButton<String>(
+                      onSelected: (value) => _handleCommentMenuSelection(comment, value),
+                      itemBuilder: (context) => [
+                        if (isOwner)
+                          const PopupMenuItem<String>(
+                            value: 'edit',
+                            child: Text('Edit'),
+                          ),
+                        if (isOwner)
+                          const PopupMenuItem<String>(
+                            value: 'delete',
+                            child: Text('Delete'),
+                          ),
+                        if (!isOwner)
+                          const PopupMenuItem<String>(
+                            value: 'report',
+                            child: Text('Report'),
+                          ),
+                      ],
+                      icon: const Icon(Icons.more_horiz_rounded, color: _communityMuted),
                     ),
                   ],
                 ),
-              )
-            ],
+                const SizedBox(height: 8),
+                RichText(
+                  text: TextSpan(
+                    style: const TextStyle(
+                      color: _communityInk,
+                      fontSize: 14,
+                      height: 1.5,
+                    ),
+                    children: _buildCommentContentSpans(content),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  onPressed: () {
+                    _refreshCommentSheet(() {
+                      if (_activeReplyCommentID == commentID) {
+                        _activeReplyCommentID = null;
+                        _replyController.clear();
+                      } else {
+                        _activeReplyCommentID = commentID;
+                        _replyController.clear();
+                      }
+                    });
+                  },
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size(0, 0),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    foregroundColor: _communityPrimary,
+                  ),
+                  icon: const Icon(Icons.reply_rounded, size: 16),
+                  label: const Text(
+                    'Reply',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
+      ],
+    );
+  }
+
+  List<TextSpan> _buildCommentContentSpans(String content) {
+    final trimmedContent = content.trimLeft();
+    final mentionMatch = RegExp(r'^@\S+').firstMatch(trimmedContent);
+
+    if (mentionMatch == null) {
+      return [TextSpan(text: content)];
+    }
+
+    final mention = mentionMatch.group(0) ?? '';
+    final remainingText = trimmedContent.substring(mention.length);
+
+    return [
+      TextSpan(
+        text: '$mention ',
+        style: const TextStyle(
+          color: _communityPrimary,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      TextSpan(text: remainingText.trimLeft()),
+    ];
+  }
+
+  Widget _buildReplyComposer(Map<String, dynamic> targetComment) {
+    final targetUsername =
+        targetComment['User']?['username']?.toString().trim() ?? '';
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _communityBorder),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _replyController,
+              minLines: 1,
+              maxLines: 3,
+              textInputAction: TextInputAction.newline,
+              decoration: InputDecoration(
+                hintText: targetUsername.isNotEmpty
+                    ? 'Reply to @$targetUsername...'
+                    : 'Write a reply...',
+                border: InputBorder.none,
+                isCollapsed: true,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          InkWell(
+            onTap: _isSubmittingReply ? null : () => _submitReply(targetComment),
+            borderRadius: BorderRadius.circular(999),
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: _communityPrimary,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: _isSubmittingReply
+                  ? const Padding(
+                      padding: EdgeInsets.all(10),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(
+                      Icons.arrow_upward_rounded,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCommentComposer(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          top: BorderSide(color: _communityBorder.withValues(alpha: 0.9)),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _communitySurface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: _communityBorder),
+                ),
+                child: TextField(
+                  controller: _commentController,
+                  minLines: 1,
+                  maxLines: 4,
+                  textInputAction: TextInputAction.newline,
+                  decoration: const InputDecoration(
+                    hintText: 'Add a comment...',
+                    border: InputBorder.none,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            InkWell(
+              onTap: _isSubmittingComment ? null : _submitComment,
+              borderRadius: BorderRadius.circular(999),
+              child: Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: _communityPrimary,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: _isSubmittingComment
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(
+                        Icons.send_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final postAuthorName = widget.post.username.trim().isNotEmpty
+        ? widget.post.username.trim()
+        : 'Unknown User';
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: _communityBorder),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF163B65).withValues(alpha: 0.06),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildUserAvatar(
+                displayName: postAuthorName,
+                profilePictureUrl: widget.post.profilePictureURL,
+                radius: 24,
+                fontSize: 18,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      postAuthorName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _communityInk,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: _communitySoft,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                      child: Text(
+                        widget.post.role,
+                        style: const TextStyle(
+                          color: _communityPrimary,
+                          fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          getRelativeTime(widget.post.createdAt.toIso8601String()),
+                          style: const TextStyle(
+                            color: _communityMuted,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              PopupMenuButton<String>(
+                onSelected: _handlePostMenuSelection,
+                itemBuilder: (context) => [
+                  if (widget.post.authorID == widget.currentUserID && !_isDeletedPost)
+                    const PopupMenuItem<String>(
+                      value: 'edit',
+                      child: Text('Edit post'),
+                    ),
+                  if (widget.post.authorID == widget.currentUserID)
+                    const PopupMenuItem<String>(
+                      value: 'delete',
+                      child: Text('Delete post'),
+                    ),
+                  if (widget.post.authorID != widget.currentUserID && !_isDeletedPost)
+                    const PopupMenuItem<String>(
+                      value: 'message',
+                      child: Text('Message author'),
+                    ),
+                  if (widget.post.authorID != widget.currentUserID && !_isDeletedPost)
+                    const PopupMenuItem<String>(
+                      value: 'report',
+                      child: Text('Report post'),
+                    ),
+                ],
+                icon: const Icon(Icons.more_horiz_rounded, color: _communityMuted),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            widget.post.content,
+            style: const TextStyle(
+              color: _communityInk,
+              fontSize: 15,
+              height: 1.55,
+            ),
+          ),
+          _buildMediaPreview(),
+          if (_isDeletedPost) ...[
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 12,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.redAccent.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: Colors.redAccent.withValues(alpha: 0.18),
+                ),
+              ),
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: EdgeInsets.only(top: 1),
+                    child: Icon(
+                      Icons.info_outline_rounded,
+                      size: 18,
+                      color: Color(0xFFB84444),
+                    ),
+                  ),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Removed by admin. This post is read-only now, but you can still delete it from your history.',
+                      style: TextStyle(
+                        color: Color(0xFF8E2C2C),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        height: 1.45,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              _buildInteractionPill(
+                _isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                _likeCount.toString(),
+                _isLiked ? Colors.redAccent : _communityMuted,
+                _isDeletedPost ? () {} : _handleLike,
+              ),
+              const SizedBox(width: 10),
+              _buildInteractionPill(
+                Icons.chat_bubble_outline_rounded,
+                _commentCount.toString(),
+                _communityPrimary,
+                _isDeletedPost ? () {} : _openCommentSheet,
+              ),
+              const SizedBox(width: 10),
+              _buildInteractionPill(
+                _isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                _savedCount.toString(),
+                _isSaved ? _communityPrimary : _communityMuted,
+                _isDeletedPost ? () {} : _handleSave,
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

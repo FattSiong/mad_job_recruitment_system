@@ -6,6 +6,75 @@ import 'dart:io'; // Make sure this is at the top of the file
 class CommunityService {
   final _supabase = Supabase.instance.client;
 
+  Future<Map<String, Map<String, String?>>> _getCommunityUserMeta(
+    Iterable<String> rawUserIds,
+  ) async {
+    final userIds = rawUserIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    if (userIds.isEmpty) {
+      return {};
+    }
+
+    final metaByUserId = <String, Map<String, String?>>{};
+
+    try {
+      final employerProfiles = await _supabase
+          .from('Employer')
+          .select('employerID, fullName, profilePictureURL')
+          .filter('employerID', 'in', userIds);
+
+      for (final item in employerProfiles) {
+        final employerId = item['employerID']?.toString();
+        if (employerId == null || employerId.isEmpty) continue;
+
+        metaByUserId[employerId] = {
+          'fullName': item['fullName']?.toString(),
+          'profilePictureURL': item['profilePictureURL']?.toString(),
+        };
+      }
+    } catch (e) {
+      print('Error fetching employer community profile data: $e');
+    }
+
+    try {
+      final seekerProfiles = await _supabase
+          .from('JobSeeker')
+          .select('seekerID, fullName, profilePictureURL')
+          .filter('seekerID', 'in', userIds);
+
+      for (final item in seekerProfiles) {
+        final seekerId = item['seekerID']?.toString();
+        if (seekerId == null || seekerId.isEmpty) continue;
+
+        final existingMeta = metaByUserId[seekerId] ?? <String, String?>{};
+        final seekerFullName = item['fullName']?.toString();
+        final seekerProfilePicture = item['profilePictureURL']?.toString();
+
+        if ((existingMeta['fullName'] ?? '').trim().isEmpty &&
+            seekerFullName != null &&
+            seekerFullName.trim().isNotEmpty) {
+          existingMeta['fullName'] = seekerFullName;
+        }
+
+        if ((existingMeta['profilePictureURL'] ?? '').trim().isEmpty &&
+            seekerProfilePicture != null &&
+            seekerProfilePicture.trim().isNotEmpty) {
+          existingMeta['profilePictureURL'] = seekerProfilePicture;
+        }
+
+        metaByUserId[seekerId] = existingMeta;
+      }
+    } catch (e) {
+      print('Error fetching job seeker community profile data: $e');
+    }
+
+    return metaByUserId;
+  }
+
   // 1. Fetch Chat Rooms for the List Screen
   // This requires a more complex join query in reality to get the latest message and user details
 // 1. Fetch Chat Rooms for the List Screen
@@ -188,8 +257,38 @@ class CommunityService {
         .eq('status', 'active')
         .order('createdAt', ascending: false);
 
-    // This one magical line converts all the messy JSON into your clean Dart Object
-    return response.map((data) => CommunityPostModel.fromJson(data)).toList();
+    final posts = response
+        .map((data) => Map<String, dynamic>.from(data as Map))
+        .toList();
+    final userMetaById = await _getCommunityUserMeta(
+      posts
+          .map((post) => post['authorID']?.toString() ?? '')
+          .where((id) => id.isNotEmpty),
+    );
+
+    for (final post in posts) {
+      final authorId = post['authorID']?.toString() ?? '';
+      final user = Map<String, dynamic>.from(post['User'] ?? {});
+      final userMeta = userMetaById[authorId];
+
+      if (userMeta != null) {
+        final username = user['username']?.toString().trim() ?? '';
+        final fullName = userMeta['fullName']?.trim() ?? '';
+        final profilePictureUrl = userMeta['profilePictureURL']?.trim() ?? '';
+
+        if (username.isEmpty && fullName.isNotEmpty) {
+          user['username'] = fullName;
+        }
+
+        if (profilePictureUrl.isNotEmpty) {
+          user['profilePictureURL'] = profilePictureUrl;
+        }
+      }
+
+      post['User'] = user;
+    }
+
+    return posts.map((data) => CommunityPostModel.fromJson(data)).toList();
   }
 
   // --- Add these inside CommunityService ---
@@ -229,7 +328,38 @@ class CommunityService {
         .eq('postID', postID)
         .order('createdAt', ascending: true);
 
-    return List<Map<String, dynamic>>.from(response);
+    final comments = response
+        .map((data) => Map<String, dynamic>.from(data as Map))
+        .toList();
+    final userMetaById = await _getCommunityUserMeta(
+      comments
+          .map((comment) => comment['userID']?.toString() ?? '')
+          .where((id) => id.isNotEmpty),
+    );
+
+    for (final comment in comments) {
+      final userId = comment['userID']?.toString() ?? '';
+      final user = Map<String, dynamic>.from(comment['User'] ?? {});
+      final userMeta = userMetaById[userId];
+
+      if (userMeta != null) {
+        final username = user['username']?.toString().trim() ?? '';
+        final fullName = userMeta['fullName']?.trim() ?? '';
+        final profilePictureUrl = userMeta['profilePictureURL']?.trim() ?? '';
+
+        if (username.isEmpty && fullName.isNotEmpty) {
+          user['username'] = fullName;
+        }
+
+        if (profilePictureUrl.isNotEmpty) {
+          user['profilePictureURL'] = profilePictureUrl;
+        }
+      }
+
+      comment['User'] = user;
+    }
+
+    return comments;
   }
 
 
@@ -416,6 +546,22 @@ class CommunityService {
       }
     } catch (e) {
       print('Error fetching employer profile picture: $e');
+    }
+
+    try {
+      final seekerResponse = await _supabase
+          .from('JobSeeker')
+          .select('profilePictureURL')
+          .eq('seekerID', userID)
+          .maybeSingle();
+
+      final seekerProfilePicture =
+          seekerResponse?['profilePictureURL']?.toString().trim();
+      if (seekerProfilePicture != null && seekerProfilePicture.isNotEmpty) {
+        return seekerProfilePicture;
+      }
+    } catch (e) {
+      print('Error fetching job seeker profile picture: $e');
     }
 
     return null;
