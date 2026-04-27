@@ -9,6 +9,9 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/snackbar_helper.dart';
+import '../../../services/auth_service.dart';
+import '../../../core/screens/temp_main_screen.dart';
 import '../../../core/utils/file_preview_helper.dart';
 import '../../../models/education_model.dart';
 import '../../../models/job_seeker_model.dart';
@@ -1080,25 +1083,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         _buildEditableField(
                           label: 'LinkedIn URL',
                           controller: _linkedinController,
-                          icon: const FaIcon(FontAwesomeIcons.linkedin, color: _textMuted, size: 18),
+                          icon: const FaIcon(
+                            FontAwesomeIcons.linkedin,
+                            color: _textMuted,
+                            size: 18,
+                          ),
                           isLink: true,
                           validator: (value) {
                             final text = value?.trim() ?? '';
                             if (text.isEmpty) return null;
-                            final uri = Uri.tryParse(text.startsWith('http') ? text : 'https://$text');
-                            return uri != null && uri.hasAuthority ? null : 'Enter a valid URL';
+
+                            final normalized = text.startsWith('http') ? text : 'https://$text';
+                            final uri = Uri.tryParse(normalized);
+
+                            if (uri == null || !uri.hasAuthority) {
+                              return 'Enter a valid LinkedIn URL';
+                            }
+
+                            if (!uri.host.toLowerCase().contains('linkedin.com')) {
+                              return 'Use a valid linkedin.com URL';
+                            }
+
+                            return null;
                           },
                         ),
                         _buildEditableField(
                           label: 'GitHub URL',
                           controller: _githubController,
-                          icon: const FaIcon(FontAwesomeIcons.github, color: _textMuted, size: 18),
+                          icon: const FaIcon(
+                            FontAwesomeIcons.github,
+                            color: _textMuted,
+                            size: 18,
+                          ),
                           isLink: true,
                           validator: (value) {
                             final text = value?.trim() ?? '';
                             if (text.isEmpty) return null;
-                            final uri = Uri.tryParse(text.startsWith('http') ? text : 'https://$text');
-                            return uri != null && uri.hasAuthority ? null : 'Enter a valid URL';
+
+                            final normalized = text.startsWith('http') ? text : 'https://$text';
+                            final uri = Uri.tryParse(normalized);
+
+                            if (uri == null || !uri.hasAuthority) {
+                              return 'Enter a valid GitHub URL';
+                            }
+
+                            if (!uri.host.toLowerCase().contains('github.com')) {
+                              return 'Use a valid github.com URL';
+                            }
+
+                            return null;
                           },
                         ),
                       ],
@@ -1321,6 +1354,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     DateTime? startDate;
     DateTime? endDate;
     bool isCurrentRole = false;
+    String? startDateErrorText;
+    String? endDateErrorText;
 
     showModalBottomSheet(
       context: context,
@@ -1379,12 +1414,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: InkWell(
                             onTap: () async {
                               final date = await _pickDate(context, startDate);
-                              if (date != null) setModalState(() => startDate = date);
+                              if (date != null) {
+                                setModalState(() {
+                                  startDate = date;
+                                  startDateErrorText = null;
+                                });
+                              }
                             },
                             child: InputDecorator(
                               decoration: _sheetInputDecoration(
                                 'Start Date*',
                                 Icons.calendar_today,
+                              ).copyWith(
+                                errorText: startDateErrorText,
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: startDateErrorText != null
+                                        ? AppColors.errorRed
+                                        : Colors.grey.shade300,
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: startDateErrorText != null
+                                        ? AppColors.errorRed
+                                        : AppColors.primaryBlue,
+                                    width: 1.5,
+                                  ),
+                                ),
+                                errorBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: AppColors.errorRed),
+                                ),
+                                focusedErrorBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(
+                                    color: AppColors.errorRed,
+                                    width: 1.5,
+                                  ),
+                                ),
                               ),
                               child: Text(
                                 startDate == null
@@ -1406,29 +1476,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ? null
                                 : () async {
                               final date = await _pickDate(context, endDate);
-                              if (date != null) setModalState(() => endDate = date);
+                              if (date != null) {
+                                setModalState(() {
+                                  endDate = date;
+                                  endDateErrorText = null;
+                                });
+                              }
+
                             },
                             child: InputDecorator(
-                              decoration: InputDecoration(
-                                labelText: 'End Date',
-                                prefixIcon: Icon(
-                                  Icons.calendar_today,
-                                  color: Colors.grey.shade600,
-                                  size: 20,
-                                ),
+                              decoration: _sheetInputDecoration(
+                                'End Date',
+                                Icons.calendar_today,
+                              ).copyWith(
                                 filled: true,
                                 fillColor: isCurrentRole
                                     ? Colors.grey.shade200
                                     : Colors.grey.shade50,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide:
-                                  BorderSide(color: Colors.grey.shade300),
-                                ),
+                                errorText: endDateErrorText,
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide:
-                                  BorderSide(color: Colors.grey.shade300),
+                                  borderSide: BorderSide(
+                                    color: endDateErrorText != null
+                                        ? AppColors.errorRed
+                                        : Colors.grey.shade300,
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: endDateErrorText != null
+                                        ? AppColors.errorRed
+                                        : AppColors.primaryBlue,
+                                    width: 1.5,
+                                  ),
+                                ),
+                                errorBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: AppColors.errorRed),
+                                ),
+                                focusedErrorBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(
+                                    color: AppColors.errorRed,
+                                    width: 1.5,
+                                  ),
                                 ),
                               ),
                               child: Text(
@@ -1448,17 +1540,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ],
                     ),
-                    if (startDate == null)
-                      const Padding(
-                        padding: EdgeInsets.only(left: 12.0, top: 6),
-                        child: Text(
-                          'Start date required',
-                          style: TextStyle(
-                            color: AppColors.errorRed,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
                     const SizedBox(height: 8),
                     Row(
                       children: [
@@ -1471,7 +1552,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           onChanged: (v) {
                             setModalState(() {
                               isCurrentRole = v ?? false;
-                              if (isCurrentRole) endDate = null;
+                              if (isCurrentRole) {
+                                endDate = null;
+                                endDateErrorText = null;
+                              }
                             });
                           },
                         ),
@@ -1496,29 +1580,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 32),
                     ElevatedButton(
                       onPressed: () {
-                        if (formKey.currentState!.validate() && startDate != null) {
-                          if (!isCurrentRole && endDate == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Please select an end date or mark as current role.',
-                                ),
-                              ),
-                            );
-                            return;
-                          }
-                          if (!isCurrentRole &&
-                              endDate != null &&
-                              endDate!.isBefore(startDate!)) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'End date cannot be before start date.',
-                                ),
-                              ),
-                            );
-                            return;
-                          }
+                        if (formKey.currentState!.validate()) {
+                          setModalState(() {
+                            if (startDate == null) {
+                              startDateErrorText = 'Required';
+                            } else {
+                              startDateErrorText = null;
+                            }
+
+                            if (startDate != null) {
+                              if (!isCurrentRole && endDate == null) {
+                                endDateErrorText = 'Required';
+                              } else if (!isCurrentRole &&
+                                  endDate != null &&
+                                  endDate!.isBefore(startDate!)) {
+                                endDateErrorText = 'Invalid end date';
+                              } else {
+                                endDateErrorText = null;
+                              }
+                            } else {
+                              endDateErrorText = null;
+                            }
+                          });
+
+                          if (startDateErrorText != null || endDateErrorText != null) return;
 
                           final newExp = WorkExperienceModel(
                             seekerID: '',
@@ -1574,6 +1659,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     DateTime? startDate;
     DateTime? endDate;
     bool isCurrent = false;
+    String? startDateErrorText;
+    String? endDateErrorText;
+
 
     final List<String> degreeOptions = [
       'High School / SPM',
@@ -1681,12 +1769,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: InkWell(
                             onTap: () async {
                               final date = await _pickDate(context, startDate);
-                              if (date != null) setModalState(() => startDate = date);
+                              if (date != null) {
+                                setModalState(() {
+                                  startDate = date;
+                                  startDateErrorText = null;
+                                });
+                              }
                             },
                             child: InputDecorator(
                               decoration: _sheetInputDecoration(
                                 'Start Date*',
                                 Icons.calendar_today,
+                              ).copyWith(
+                                errorText: startDateErrorText,
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: startDateErrorText != null
+                                        ? AppColors.errorRed
+                                        : Colors.grey.shade300,
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: startDateErrorText != null
+                                        ? AppColors.errorRed
+                                        : AppColors.primaryBlue,
+                                    width: 1.5,
+                                  ),
+                                ),
+                                errorBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: AppColors.errorRed),
+                                ),
+                                focusedErrorBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(
+                                    color: AppColors.errorRed,
+                                    width: 1.5,
+                                  ),
+                                ),
                               ),
                               child: Text(
                                 startDate == null
@@ -1708,29 +1831,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ? null
                                 : () async {
                               final date = await _pickDate(context, endDate);
-                              if (date != null) setModalState(() => endDate = date);
+                              if (date != null) {
+                                setModalState(() {
+                                  endDate = date;
+                                  endDateErrorText = null;
+                                });
+                              }
                             },
                             child: InputDecorator(
-                              decoration: InputDecoration(
-                                labelText: 'End Date',
-                                prefixIcon: Icon(
-                                  Icons.calendar_today,
-                                  color: Colors.grey.shade600,
-                                  size: 20,
-                                ),
+                              decoration: _sheetInputDecoration(
+                                'End Date',
+                                Icons.calendar_today,
+                              ).copyWith(
                                 filled: true,
                                 fillColor: isCurrent
                                     ? Colors.grey.shade200
                                     : Colors.grey.shade50,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide:
-                                  BorderSide(color: Colors.grey.shade300),
-                                ),
+                                errorText: endDateErrorText,
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide:
-                                  BorderSide(color: Colors.grey.shade300),
+                                  borderSide: BorderSide(
+                                    color: endDateErrorText != null
+                                        ? AppColors.errorRed
+                                        : Colors.grey.shade300,
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: endDateErrorText != null
+                                        ? AppColors.errorRed
+                                        : AppColors.primaryBlue,
+                                    width: 1.5,
+                                  ),
+                                ),
+                                errorBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: AppColors.errorRed),
+                                ),
+                                focusedErrorBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(
+                                    color: AppColors.errorRed,
+                                    width: 1.5,
+                                  ),
                                 ),
                               ),
                               child: Text(
@@ -1750,17 +1894,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ],
                     ),
-                    if (startDate == null)
-                      const Padding(
-                        padding: EdgeInsets.only(left: 12.0, top: 6),
-                        child: Text(
-                          'Start date required',
-                          style: TextStyle(
-                            color: AppColors.errorRed,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
                     const SizedBox(height: 8),
                     Row(
                       children: [
@@ -1773,7 +1906,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           onChanged: (v) {
                             setModalState(() {
                               isCurrent = v ?? false;
-                              if (isCurrent) endDate = null;
+                              if (isCurrent) {
+                                endDate = null;
+                                endDateErrorText = null;
+                              }
                             });
                           },
                         ),
@@ -1798,29 +1934,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 32),
                     ElevatedButton(
                       onPressed: () {
-                        if (formKey.currentState!.validate() && startDate != null) {
-                          if (!isCurrent && endDate == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Please select an end date or mark as current study.',
-                                ),
-                              ),
-                            );
-                            return;
-                          }
-                          if (!isCurrent &&
-                              endDate != null &&
-                              endDate!.isBefore(startDate!)) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'End date cannot be before start date.',
-                                ),
-                              ),
-                            );
-                            return;
-                          }
+                        if (formKey.currentState!.validate()) {
+                          setModalState(() {
+                            if (startDate == null) {
+                              startDateErrorText = 'Required';
+                            } else {
+                              startDateErrorText = null;
+                            }
+
+                            if (startDate != null) {
+                              if (!isCurrent && endDate == null) {
+                                endDateErrorText = 'Required';
+                              } else if (!isCurrent &&
+                                  endDate != null &&
+                                  endDate!.isBefore(startDate!)) {
+                                endDateErrorText = 'Invalid end date';
+                              } else {
+                                endDateErrorText = null;
+                              }
+                            } else {
+                              endDateErrorText = null;
+                            }
+                          });
+
+                          if (startDateErrorText != null || endDateErrorText != null) return;
 
                           final newEdu = EducationModel(
                             institutionName: institutionController.text.trim(),
