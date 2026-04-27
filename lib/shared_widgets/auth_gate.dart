@@ -7,7 +7,6 @@ import '../modules/job_seeker/screens/seeker_dashboard.dart';
 import 'login_screen.dart';
 import '../modules/employer/screens/employer_dashboard.dart';
 import '../modules/admin/screens/admin_dashboard.dart';
-import '../../../core/screens/temp_main_screen.dart';
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -36,8 +35,7 @@ class _AuthGateState extends State<AuthGate> {
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
-          // MaterialPageRoute(builder: (context) => const LoginScreen()),
-          MaterialPageRoute(builder: (context) => const TempMainScreen()),
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
         );
         return;
       }
@@ -67,8 +65,7 @@ class _AuthGateState extends State<AuthGate> {
         // Fallback just in case something is wrong with their data
         Navigator.pushReplacement(
           context,
-          // MaterialPageRoute(builder: (context) => const LoginScreen()),
-          MaterialPageRoute(builder: (context) => const TempMainScreen()),
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
         );
       }
     } catch (e) {
@@ -76,8 +73,7 @@ class _AuthGateState extends State<AuthGate> {
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        // MaterialPageRoute(builder: (context) => const LoginScreen()),
-        MaterialPageRoute(builder: (context) => const TempMainScreen()),
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
       );
     }
   }
