@@ -17,6 +17,7 @@ import 'dart:convert';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/file_preview_helper.dart';
 import '../../../services/call_service.dart';
+import '../../../services/notification_service.dart';
 import 'standard_call_screen.dart';
 
 class ActiveChatScreen extends StatefulWidget {
@@ -116,11 +117,10 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
       debugPrint('Push type: ${isCall ? 'call' : 'message'}');
       debugPrint('Receiver userID: ${widget.otherUserID}');
 
-      const String oneSignalAppId = '16f92d86-ad69-4841-8a4f-b6c0cbb8f9f6';
       const String oneSignalRestApiKey = 'os_v2_app_c34s3bvnnfeedcspw3amxohz62pdusnidibetufmo2b5zeh25cmys643hvxviodmkoa3i4rljlt67paibzgnuq57gdipg4eztmebpqq';
 
       final requestBody = {
-        'app_id': oneSignalAppId,
+        'app_id': NotificationService.oneSignalAppId,
         'target_channel': 'push',
         'include_aliases': {
           'external_id': [widget.otherUserID],
@@ -128,7 +128,7 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
         'headings': {'en': isCall ? 'Incoming Call' : 'New Message'},
         'contents': {'en': content},
         'data': {
-          'type': isCall ? 'call' : 'chat',
+          'type': isCall ? 'call' : 'message',
           'roomID': widget.roomID,
           ...?additionalData,
         },

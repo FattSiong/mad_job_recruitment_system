@@ -12,7 +12,7 @@ class NotificationService {
 
   static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-  static const String _oneSignalAppId = '16f92d86-ad69-4841-8a4f-b6c0cbb8f9f6';
+  static const String oneSignalAppId = '16f92d86-ad69-4841-8a4f-b6c0cbb8f9f6';
 
   static bool _isInitialized = false;
   static String? _lastHandledCallID;
@@ -25,7 +25,7 @@ class NotificationService {
     _isInitialized = true;
 
     OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
-    OneSignal.initialize(_oneSignalAppId);
+    OneSignal.initialize(oneSignalAppId);
 
     _registerAuthStateListener();
     _registerPushSubscriptionObserver();
