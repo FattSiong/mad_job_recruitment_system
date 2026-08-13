@@ -7,6 +7,8 @@ class EmployerProfileTab extends StatelessWidget {
   final bool isPremium;
   final Future<void> Function() onEditProfile;
   final Future<void> Function() onOpenSubscription;
+  final VoidCallback onOpenTransactionHistory;
+  final VoidCallback onOpenPostInterviewAiReportDraft;
   final VoidCallback onOpenRegisterCompany;
   final VoidCallback onOpenManageCompanies;
   final VoidCallback onOpenManageJobs;
@@ -22,6 +24,8 @@ class EmployerProfileTab extends StatelessWidget {
     required this.isPremium,
     required this.onEditProfile,
     required this.onOpenSubscription,
+    required this.onOpenTransactionHistory,
+    required this.onOpenPostInterviewAiReportDraft,
     required this.onOpenRegisterCompany,
     required this.onOpenManageCompanies,
     required this.onOpenManageJobs,
@@ -152,6 +156,22 @@ class EmployerProfileTab extends StatelessWidget {
                   ],
                 ),
               ),
+            const SizedBox(height: 12),
+            _buildProfileTile(
+              icon: Icons.receipt_long_outlined,
+              title: 'Transaction History',
+              subtitle: 'View your Premium payment records',
+              color: const Color(0xFF1E8F8B),
+              onTap: onOpenTransactionHistory,
+            ),
+            const SizedBox(height: 12),
+            _buildProfileTile(
+              icon: Icons.auto_awesome_outlined,
+              title: 'AI Interview Report (Draft)',
+              subtitle: 'Temporary FYP documentation preview',
+              color: const Color(0xFF6B4FD3),
+              onTap: onOpenPostInterviewAiReportDraft,
+            ),
             const SizedBox(height: 12),
             _buildProfileTile(
               icon: Icons.app_registration,

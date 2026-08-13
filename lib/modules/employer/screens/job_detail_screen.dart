@@ -519,9 +519,17 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                     const SizedBox(width: 10),
                     _buildApplicantsMetaChip(
                       icon: Icons.auto_awesome_rounded,
-                      text: '$aiScore%',
+                      text: 'AI match $aiScore%',
                       color: const Color(0xFFC28A22),
                       backgroundColor: const Color(0xFFFEF3DC),
+                    ),
+                  ] else ...[
+                    const SizedBox(width: 10),
+                    _buildApplicantsMetaChip(
+                      icon: Icons.auto_awesome_outlined,
+                      text: 'AI match pending',
+                      color: const Color(0xFF687588),
+                      backgroundColor: const Color(0xFFEFF3F8),
                     ),
                   ],
                 ],
@@ -663,49 +671,55 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     }
 
     if (_applicants.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(28),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Column(
-          children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: const Color(0xFFDCEBFB),
-                borderRadius: BorderRadius.circular(22),
-              ),
-              child: const Icon(
-                Icons.people_outline_rounded,
-                size: 36,
-                color: Color(0xFF163B65),
-              ),
+      return Column(
+        children: [
+          _buildAiRankingPanel(),
+          const SizedBox(height: 18),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
             ),
-            const SizedBox(height: 18),
-            const Text(
-              'No applicants yet',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF1B2433),
-              ),
+            child: Column(
+              children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDCEBFB),
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                  child: const Icon(
+                    Icons.people_outline_rounded,
+                    size: 36,
+                    color: Color(0xFF163B65),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  'No applicants yet',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF1B2433),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'When candidates apply for this role, they will appear here for review.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    height: 1.45,
+                    color: Color(0xFF687588),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 10),
-            const Text(
-              'When candidates apply for this role, they will appear here for review.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                height: 1.45,
-                color: Color(0xFF687588),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       );
     }
 
@@ -717,46 +731,167 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
       return (item['applicationStatus'] ?? '').toString().toLowerCase() == 'scheduled';
     }).length;
 
-    return _buildSectionCard(
-      title: 'Applicants',
-      subtitle: 'Review candidate progress and open each application in detail.',
+    return Column(
+      children: [
+        _buildAiRankingPanel(),
+        const SizedBox(height: 18),
+        _buildSectionCard(
+          title: 'Applicants',
+          subtitle: 'Review candidate progress and open each application in detail.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _buildApplicantsMetaChip(
+                    icon: Icons.groups_rounded,
+                    text: '${_applicants.length} total',
+                    color: const Color(0xFF163B65),
+                    backgroundColor: const Color(0xFFDCEBFB),
+                  ),
+                  _buildApplicantsMetaChip(
+                    icon: Icons.access_time_outlined,
+                    text: '$pendingCount pending',
+                    color: const Color(0xFFB28600),
+                    backgroundColor: const Color(0xFFFFF8E1),
+                  ),
+                  _buildApplicantsMetaChip(
+                    icon: Icons.event_available_rounded,
+                    text: '$scheduledCount scheduled',
+                    color: const Color(0xFF6B4FD3),
+                    backgroundColor: const Color(0xFFF3ECFF),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _applicants.length,
+                separatorBuilder: (context, index) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final data = _applicants[index];
+                  return _buildApplicantCard(data);
+                },
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAiRankingPanel() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFEEF4FF), Color(0xFFF8F5FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFD8E4F5)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
+          Row(
             children: [
-              _buildApplicantsMetaChip(
-                icon: Icons.groups_rounded,
-                text: '${_applicants.length} total',
-                color: const Color(0xFF163B65),
-                backgroundColor: const Color(0xFFDCEBFB),
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF163B65),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.auto_awesome_rounded,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'AI Candidate Ranking',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF1B2433),
+                      ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      'Find the strongest matches faster',
+                      style: TextStyle(fontSize: 13, color: Color(0xFF687588)),
+                    ),
+                  ],
+                ),
               ),
               _buildApplicantsMetaChip(
-                icon: Icons.access_time_outlined,
-                text: '$pendingCount pending',
-                color: const Color(0xFFB28600),
-                backgroundColor: const Color(0xFFFFF8E1),
-              ),
-              _buildApplicantsMetaChip(
-                icon: Icons.event_available_rounded,
-                text: '$scheduledCount scheduled',
+                icon: Icons.schedule_rounded,
+                text: 'Coming soon',
                 color: const Color(0xFF6B4FD3),
-                backgroundColor: const Color(0xFFF3ECFF),
+                backgroundColor: const Color(0xFFF0EAFF),
               ),
             ],
           ),
           const SizedBox(height: 18),
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _applicants.length,
-            separatorBuilder: (context, index) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final data = _applicants[index];
-              return _buildApplicantCard(data);
-            },
+          const Text(
+            'Rank applicants against this job’s requirements using their resumes, skills, and experience. AI match scores will appear on each candidate once ranking is available.',
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.45,
+              color: Color(0xFF4F5D70),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildApplicantsMetaChip(
+                icon: Icons.description_outlined,
+                text: 'Resume match',
+                color: const Color(0xFF163B65),
+                backgroundColor: Colors.white,
+              ),
+              _buildApplicantsMetaChip(
+                icon: Icons.psychology_outlined,
+                text: 'Skills & experience',
+                color: const Color(0xFF163B65),
+                backgroundColor: Colors.white,
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('AI candidate ranking will be available soon.'),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.auto_awesome_rounded),
+              label: const Text('Rank candidates with AI'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF163B65),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                side: const BorderSide(color: Color(0xFF163B65)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+            ),
           ),
         ],
       ),
