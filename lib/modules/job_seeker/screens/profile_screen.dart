@@ -19,6 +19,9 @@ import '../../../models/work_experience_model.dart';
 import '../../../services/auth_service.dart';
 import '../../../shared_widgets/login_screen.dart';
 import '../controllers/profile_controller.dart';
+import 'ai_resume_assistant_screen.dart';
+import 'build_resume_screen.dart';
+import 'career_tools_mockup_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -637,6 +640,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const BuildResumeScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.description_outlined),
+              label: const Text('Build Resume'),
+              style: _secondaryButtonStyle().copyWith(
+                foregroundColor: WidgetStateProperty.all(_primary),
+                side: WidgetStateProperty.all(
+                  const BorderSide(color: Color(0xFFB8D1EE)),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
           if (_profile!.resumeURL != null) ...[
             Row(
               children: [
@@ -731,6 +756,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
               label: Text(
                 _profile!.resumeURL != null ? 'Upload New Resume' : 'Upload Resume',
               ),
+              style: _secondaryButtonStyle().copyWith(
+                foregroundColor: WidgetStateProperty.all(_primary),
+                side: WidgetStateProperty.all(
+                  const BorderSide(color: Color(0xFFB8D1EE)),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const AiResumeAssistantScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.auto_awesome_rounded),
+              label: const Text('AI Resume Assistant'),
               style: _secondaryButtonStyle().copyWith(
                 foregroundColor: WidgetStateProperty.all(_primary),
                 side: WidgetStateProperty.all(
@@ -985,6 +1032,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _buildCareerToolButton({
+    required String label,
+    required IconData icon,
+    required CareerToolMockupType type,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => CareerToolsMockupScreen(type: type),
+              ),
+            );
+          },
+          icon: Icon(icon),
+          label: Text(label),
+          style: _secondaryButtonStyle().copyWith(
+            foregroundColor: WidgetStateProperty.all(_primary),
+            side: WidgetStateProperty.all(
+              const BorderSide(color: Color(0xFFB8D1EE)),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1139,8 +1217,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
 
+
+
                 _buildSectionHeader('Resume Document'),
                 _buildResumeSection(),
+
+                _buildSectionHeader('Career Tools'),
+                _buildCareerToolButton(
+                  label: 'AI Career Advisor',
+                  icon: Icons.smart_toy_outlined,
+                  type: CareerToolMockupType.aiCareerAdvisor,
+                ),
+                _buildCareerToolButton(
+                  label: 'Mock Interview',
+                  icon: Icons.record_voice_over_outlined,
+                  type: CareerToolMockupType.mockInterview,
+                ),
+                _buildCareerToolButton(
+                  label: 'Skill Gap Analysis',
+                  icon: Icons.insights_outlined,
+                  type: CareerToolMockupType.skillGapAnalysis,
+                ),
+                _buildCareerToolButton(
+                  label: 'Guidance Reports',
+                  icon: Icons.assignment_outlined,
+                  type: CareerToolMockupType.guidanceReports,
+                ),
 
                 _buildSectionHeader(
                   'Work Experience',
