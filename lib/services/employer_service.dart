@@ -188,6 +188,21 @@ class EmployerService {
     }
   }
 
+  Future<List<JobModel>> _syncExpiredJobs(List<JobModel> jobs) async {
+    final List<JobModel> updatedList = [];
+    for (final job in jobs) {
+      if (job.status.toLowerCase() == 'active' && job.isExpired) {
+        if (job.jobID != null) {
+          await updateJobStatus(job.jobID!, 'inactive');
+        }
+        updatedList.add(job.copyWith(status: 'inactive'));
+      } else {
+        updatedList.add(job);
+      }
+    }
+    return updatedList;
+  }
+
   Future<List<JobModel>> getEmployerJobs(
     String employerId, {
     bool includeDeleted = false,
@@ -204,7 +219,8 @@ class EmployerService {
 
       final response = await query.order('createdAt', ascending: false);
 
-      return (response as List).map((json) => JobModel.fromJson(json)).toList();
+      final jobs = (response as List).map((json) => JobModel.fromJson(json)).toList();
+      return await _syncExpiredJobs(jobs);
     } catch (e) {
       print('Error fetching jobs: $e');
       return [];
@@ -243,7 +259,8 @@ class EmployerService {
 
       final response = await query.order('createdAt', ascending: false);
 
-      return (response as List).map((json) => JobModel.fromJson(json)).toList();
+      final jobs = (response as List).map((json) => JobModel.fromJson(json)).toList();
+      return await _syncExpiredJobs(jobs);
     } catch (e) {
       print('Error fetching workspace jobs: $e');
       return [];
@@ -292,7 +309,8 @@ class EmployerService {
 
       final response = await query.order('createdAt', ascending: false);
 
-      return (response as List).map((json) => JobModel.fromJson(json)).toList();
+      final jobs = (response as List).map((json) => JobModel.fromJson(json)).toList();
+      return await _syncExpiredJobs(jobs);
     } catch (e) {
       print('Fetch jobs by company error: $e');
       return [];

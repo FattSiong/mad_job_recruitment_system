@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../models/job_model.dart';
 import '../../../models/company_model.dart';
@@ -23,8 +24,38 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
   final _minSalaryController = TextEditingController();
   final _maxSalaryController = TextEditingController();
   final _experienceController = TextEditingController();
+  final _workingPeriodController = TextEditingController(
+    text: 'Mon - Fri, 9:00 AM - 6:00 PM',
+  );
 
   String _selectedJobType = 'Full-time';
+  String _selectedWorkplaceType = 'On-site';
+  String _selectedQualification = 'No Minimum';
+  String _expiryUnit = 'Months'; // 'Weeks' or 'Months'
+  int _expiryDuration = 1;
+
+  static const List<String> _workingPeriodPresets = [
+    'Mon - Fri, 9:00 AM - 6:00 PM',
+    'Mon - Sat, 9:00 AM - 5:00 PM',
+    'Shift-based',
+    'Flexible Hours',
+  ];
+
+  DateTime get _calculatedExpiryDate {
+    final now = DateTime.now();
+    if (_expiryUnit == 'Weeks') {
+      return now.add(Duration(days: _expiryDuration * 7));
+    } else {
+      return DateTime(
+        now.year,
+        now.month + _expiryDuration,
+        now.day,
+        23,
+        59,
+        59,
+      );
+    }
+  }
 
   final _employerService = EmployerService();
 
@@ -49,6 +80,7 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
   String? _maxSalaryError;
   String? _preScreeningError;
   String? _experienceError;
+  String? _workingPeriodError;
 
   @override
   void initState() {
@@ -72,11 +104,13 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
     if (_titleError != null ||
         _descriptionError != null ||
         _experienceError != null ||
+        _workingPeriodError != null ||
         _formError != null) {
       setState(() {
         _titleError = null;
         _descriptionError = null;
         _experienceError = null;
+        _workingPeriodError = null;
         _formError = null;
       });
     }
@@ -333,6 +367,7 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
       _maxSalaryError = null;
       _preScreeningError = null;
       _experienceError = null;
+      _workingPeriodError = null;
     });
 
     final currentUser = Supabase.instance.client.auth.currentUser;
@@ -341,6 +376,7 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
     final title = _titleController.text.trim();
     final description = _descriptionController.text.trim();
     final experienceText = _experienceController.text.trim();
+    final workingPeriodText = _workingPeriodController.text.trim();
 
     bool hasError = false;
 
@@ -351,6 +387,11 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
 
     if (title.isEmpty) {
       _titleError = 'Please enter the job title.';
+      hasError = true;
+    }
+
+    if (workingPeriodText.isEmpty) {
+      _workingPeriodError = 'Please specify the working period / schedule.';
       hasError = true;
     }
 
@@ -447,6 +488,10 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
       minExperienceYears: parsedExperience,
       jobType: _selectedJobType,
       locationName: _selectedLocationName,
+      expiresAt: _calculatedExpiryDate,
+      workplaceType: _selectedWorkplaceType,
+      workingPeriod: workingPeriodText,
+      qualification: _selectedQualification,
     );
 
     final createdJob = await _employerService.createJobPosting(newJob);
@@ -485,6 +530,7 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
     _minSalaryController.dispose();
     _maxSalaryController.dispose();
     _experienceController.dispose();
+    _workingPeriodController.dispose();
     for (var controller in _questionControllers) {
       controller.dispose();
     }
@@ -510,6 +556,8 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
             _buildCompanySelection(),
             const SizedBox(height: 18),
             _buildJobDetailsSection(),
+            const SizedBox(height: 18),
+            _buildJobExpirySection(),
             const SizedBox(height: 18),
             _buildSalarySection(),
             const SizedBox(height: 18),
@@ -736,8 +784,9 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
   Widget _buildJobDetailsSection() {
     return _buildSectionCard(
       title: 'Job Details',
-      subtitle: 'The core information for your posting.',
+      subtitle: 'The core information, work arrangement, and requirements for your posting.',
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildStyledField(
             controller: _titleController,
@@ -769,6 +818,130 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
             },
           ),
           const SizedBox(height: 16),
+          _buildStyledDropdown(
+            value: _selectedWorkplaceType,
+            label: 'Work Arrangement',
+            icon: Icons.maps_home_work_rounded,
+            items: const [
+              DropdownMenuItem(
+                value: 'On-site',
+                child: Text('On-site (Work at Company)'),
+              ),
+              DropdownMenuItem(
+                value: 'Remote',
+                child: Text('Remote (Work from Home)'),
+              ),
+              DropdownMenuItem(
+                value: 'Hybrid',
+                child: Text('Hybrid (Both Home & Company)'),
+              ),
+            ],
+            onChanged: (val) {
+              if (val != null) {
+                setState(() {
+                  _selectedWorkplaceType = val;
+                  _formError = null;
+                });
+              }
+            },
+          ),
+          const SizedBox(height: 16),
+          _buildStyledField(
+            controller: _workingPeriodController,
+            label: 'Working Period / Schedule',
+            icon: Icons.access_time_filled_rounded,
+            errorText: _workingPeriodError,
+            onChanged: (_) => _clearJobDetailsErrors(),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _workingPeriodPresets.map((preset) {
+              final isSelected = _workingPeriodController.text.trim() == preset;
+              return InkWell(
+                onTap: () {
+                  setState(() {
+                    _workingPeriodController.text = preset;
+                    _workingPeriodError = null;
+                    _formError = null;
+                  });
+                },
+                borderRadius: BorderRadius.circular(999),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? const Color(0xFF163B65)
+                        : const Color(0xFFF1F5FA),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    preset,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isSelected
+                          ? Colors.white
+                          : const Color(0xFF4F5C6C),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 16),
+          _buildStyledDropdown(
+            value: _selectedQualification,
+            label: 'Minimum Qualification',
+            icon: Icons.school_rounded,
+            items: const [
+              DropdownMenuItem(
+                value: 'No Minimum',
+                child: Text('No Minimum Qualification'),
+              ),
+              DropdownMenuItem(
+                value: 'SPM / O-Level',
+                child: Text('SPM / O-Level'),
+              ),
+              DropdownMenuItem(
+                value: 'STPM / A-Level / Foundation',
+                child: Text('STPM / A-Level / Foundation'),
+              ),
+              DropdownMenuItem(
+                value: 'Certificate / SKM',
+                child: Text('Certificate / SKM'),
+              ),
+              DropdownMenuItem(
+                value: 'Diploma',
+                child: Text('Diploma'),
+              ),
+              DropdownMenuItem(
+                value: "Bachelor's Degree",
+                child: Text("Bachelor's Degree"),
+              ),
+              DropdownMenuItem(
+                value: "Master's Degree",
+                child: Text("Master's Degree"),
+              ),
+              DropdownMenuItem(
+                value: 'Doctorate (PhD)',
+                child: Text('Doctorate (PhD)'),
+              ),
+            ],
+            onChanged: (val) {
+              if (val != null) {
+                setState(() {
+                  _selectedQualification = val;
+                  _formError = null;
+                });
+              }
+            },
+          ),
+          const SizedBox(height: 16),
           _buildStyledField(
             controller: _experienceController,
             label: 'Minimum Experience (Years)',
@@ -777,6 +950,107 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             errorText: _experienceError,
             onChanged: (_) => _clearJobDetailsErrors(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildJobExpirySection() {
+    final List<int> durationOptions = _expiryUnit == 'Weeks'
+        ? const [1, 2, 3, 4]
+        : const [1, 2, 3, 6, 12];
+    final formattedExpiry =
+        DateFormat('dd MMM yyyy').format(_calculatedExpiryDate);
+
+    return _buildSectionCard(
+      title: 'Job Expiry Duration',
+      subtitle:
+          'Set how long this job stays active. Once expired, it will automatically become inactive.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _buildStyledDropdown(
+                  value: _expiryDuration.toString(),
+                  label: 'Duration',
+                  icon: Icons.timelapse_rounded,
+                  items: durationOptions
+                      .map(
+                        (d) => DropdownMenuItem(
+                          value: d.toString(),
+                          child: Text('$d'),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      setState(() {
+                        _expiryDuration = int.parse(val);
+                      });
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildStyledDropdown(
+                  value: _expiryUnit,
+                  label: 'Unit',
+                  icon: Icons.calendar_month_rounded,
+                  items: const [
+                    DropdownMenuItem(value: 'Weeks', child: Text('Week(s)')),
+                    DropdownMenuItem(value: 'Months', child: Text('Month(s)')),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) {
+                      setState(() {
+                        _expiryUnit = val;
+                        final validOptions = val == 'Weeks'
+                            ? const [1, 2, 3, 4]
+                            : const [1, 2, 3, 6, 12];
+                        if (!validOptions.contains(_expiryDuration)) {
+                          _expiryDuration = 1;
+                        }
+                      });
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEFF5FC),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFD3E3F8)),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.event_available_rounded,
+                  color: Color(0xFF163B65),
+                  size: 20,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Expires on $formattedExpiry ($_expiryDuration ${_expiryUnit.toLowerCase()}). Status will switch to Inactive automatically after this date.',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      height: 1.4,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF163B65),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

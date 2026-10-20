@@ -159,6 +159,11 @@ class _EditJobScreenState extends State<EditJobScreen> {
       longitude: _selectedLng,
       minExperienceYears: parsedExperience,
       jobType: _selectedJobType,
+      locationName: widget.job.locationName,
+      expiresAt: widget.job.expiresAt,
+      workplaceType: widget.job.workplaceType,
+      workingPeriod: widget.job.workingPeriod,
+      qualification: widget.job.qualification,
     );
 
     final success = await _employerService.updateJobPosting(updatedJob);

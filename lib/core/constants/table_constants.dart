@@ -16,4 +16,13 @@ class TableConstants {
   static const String postComment = 'PostComment';
   static const String chatRoom = 'ChatRoom';
   static const String message = 'Message';
+  static const String reportedJob = 'ReportedJob';
+  static const String postLike = 'PostLike';
+  static const String postSaved = 'PostSaved';
+  static const String reportedPost = 'ReportedPost';
+  static const String reportedComment = 'ReportedComment';
+  static const String interviewRoom = 'InterviewRoom';
+  static const String workExperience = 'WorkExperience';
+  static const String education = 'Education';
+  static const String calls = 'Calls';
 }

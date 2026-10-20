@@ -21,6 +21,23 @@ class JobDiscoveryController {
     return maxSalary;
   }
 
+  Future<List<JobModel>> _filterAndDeactivateExpiredJobs(List<JobModel> jobs) async {
+    final List<JobModel> activeJobs = [];
+    for (final job in jobs) {
+      if (job.isExpired) {
+        if (job.jobID != null) {
+          await _supabase
+              .from('Job')
+              .update({'status': 'inactive'})
+              .eq('jobID', job.jobID!);
+        }
+      } else {
+        activeJobs.add(job);
+      }
+    }
+    return activeJobs;
+  }
+
   Future<List<JobModel>> fetchActiveJobs() async {
     try {
       final response = await _supabase
@@ -29,9 +46,10 @@ class JobDiscoveryController {
           .eq('status', 'active')
           .order('createdAt', ascending: false);
 
-      return (response as List<dynamic>)
+      final jobs = (response as List<dynamic>)
           .map((jobJson) => JobModel.fromJson(jobJson as Map<String, dynamic>))
           .toList();
+      return await _filterAndDeactivateExpiredJobs(jobs);
     } catch (e) {
       print('Unexpected Error fetching jobs: $e');
       return [];
@@ -81,6 +99,7 @@ class JobDiscoveryController {
 
       final response = await queryBuilder.order('createdAt', ascending: false);
       List<JobModel> jobs = (response as List).map((j) => JobModel.fromJson(j)).toList();
+      jobs = await _filterAndDeactivateExpiredJobs(jobs);
 
       // ==========================================
       // 2. Client-Side Filtering
