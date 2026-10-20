@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../../models/job_model.dart';
 import '../../../services/employer_service.dart';
@@ -65,33 +66,37 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     setState(() => _isStatusUpdating = true);
 
     final currentStatus = _currentJob.status.toLowerCase();
-    final newStatus = currentStatus == 'active' ? 'inactive' : 'active';
+    final isActivating = currentStatus != 'active';
+    final newStatus = isActivating ? 'active' : 'inactive';
+
+    DateTime? newExpiresAt;
+    if (isActivating) {
+      final now = DateTime.now();
+      newExpiresAt = DateTime(now.year, now.month + 1, now.day, 23, 59, 59);
+    }
 
     final success = await _employerService.updateJobStatus(
       _currentJob.jobID!,
       newStatus,
+      expiresAt: newExpiresAt,
     );
 
     if (!mounted) return;
 
     if (success) {
       setState(() {
-        _currentJob = JobModel(
-          jobID: _currentJob.jobID,
-          companyID: _currentJob.companyID,
-          employerID: _currentJob.employerID,
-          title: _currentJob.title,
-          description: _currentJob.description,
-          latitude: _currentJob.latitude,
-          longitude: _currentJob.longitude,
-          salaryRange: _currentJob.salaryRange,
-          minExperienceYears: _currentJob.minExperienceYears,
+        _currentJob = _currentJob.copyWith(
           status: newStatus,
+          expiresAt: newExpiresAt,
         );
       });
 
+      final message = isActivating
+          ? 'Job activated! Expiry date set to ${DateFormat('dd MMM yyyy').format(newExpiresAt!)}.'
+          : 'Job marked as INACTIVE.';
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Job marked as ${newStatus.toUpperCase()}')),
+        SnackBar(content: Text(message)),
       );
     }
 
@@ -248,6 +253,14 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                 '${_applicants.length} applicants',
               ),
               _buildHeroMetric(
+                Icons.schedule_rounded,
+                _currentJob.jobType,
+              ),
+              _buildHeroMetric(
+                Icons.maps_home_work_rounded,
+                _currentJob.workplaceType,
+              ),
+              _buildHeroMetric(
                 Icons.work_history_rounded,
                 _currentJob.minExperienceYears == 0
                     ? 'Entry level'
@@ -255,7 +268,9 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
               ),
               _buildHeroMetric(
                 Icons.monetization_on_rounded,
-                _currentJob.salaryRange ?? 'Salary not set',
+                _currentJob.salaryRange.isNotEmpty
+                    ? _currentJob.salaryRange
+                    : 'Salary not set',
               ),
             ],
           ),
@@ -303,7 +318,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                           ? Icons.visibility_off_rounded
                           : Icons.visibility_rounded,
                     ),
-                    label: Text(isActive ? 'Close Job' : 'Reopen Job'),
+                    label: Text(isActive ? 'Inactivate Job' : 'Activate Job'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
                       foregroundColor: const Color(0xFF163B65),
@@ -376,19 +391,78 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     );
   }
 
+  String _formatWorkplaceLabel(String workplaceType) {
+    switch (workplaceType.trim().toLowerCase()) {
+      case 'remote':
+        return 'Remote (Work from Home)';
+      case 'hybrid':
+        return 'Hybrid (Both Home & Company)';
+      case 'on-site':
+      default:
+        return 'On-site (Work at Company)';
+    }
+  }
+
+  String _formatExpiryLabel() {
+    if (_currentJob.expiresAt == null) {
+      return 'No expiry date set';
+    }
+    final formatted = DateFormat('dd MMM yyyy').format(
+      _currentJob.expiresAt!.toLocal(),
+    );
+    if (_currentJob.isExpired) {
+      return 'Expired on $formatted (Inactive)';
+    }
+    if (_currentJob.status.toLowerCase() != 'active') {
+      return 'Inactive (Will reset to 1 month upon activation)';
+    }
+    return 'Active until $formatted';
+  }
+
   Widget _buildOverviewSection() {
+    final locationDisplay =
+        (_currentJob.locationName != null &&
+                _currentJob.locationName!.trim().isNotEmpty)
+            ? _currentJob.locationName!.trim()
+            : (_currentJob.latitude != null && _currentJob.longitude != null)
+                ? 'Map coordinates set (${_currentJob.latitude!.toStringAsFixed(4)}, ${_currentJob.longitude!.toStringAsFixed(4)})'
+                : 'No location provided';
+
     return Column(
       children: [
         _buildSectionCard(
-          title: 'Job Requirements',
+          title: 'Job Requirements & Details',
           subtitle:
-              'Core information employers and applicants care about first.',
+              'Core information, work arrangement, schedule, and qualifications.',
           child: Column(
             children: [
               _buildInfoRow(
-                Icons.monetization_on_rounded,
-                'Salary',
-                _currentJob.salaryRange ?? 'Not specified',
+                Icons.schedule_rounded,
+                'Job Type',
+                _currentJob.jobType,
+              ),
+              const SizedBox(height: 14),
+              _buildInfoRow(
+                Icons.maps_home_work_rounded,
+                'Work Arrangement',
+                _formatWorkplaceLabel(_currentJob.workplaceType),
+              ),
+              const SizedBox(height: 14),
+              _buildInfoRow(
+                Icons.access_time_filled_rounded,
+                'Working Period / Schedule',
+                (_currentJob.workingPeriod != null &&
+                        _currentJob.workingPeriod!.trim().isNotEmpty)
+                    ? _currentJob.workingPeriod!.trim()
+                    : 'Not specified',
+              ),
+              const SizedBox(height: 14),
+              _buildInfoRow(
+                Icons.school_rounded,
+                'Minimum Qualification',
+                _currentJob.qualification == 'No Minimum'
+                    ? 'No Minimum Qualification'
+                    : _currentJob.qualification,
               ),
               const SizedBox(height: 14),
               _buildInfoRow(
@@ -400,11 +474,23 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
               ),
               const SizedBox(height: 14),
               _buildInfoRow(
+                Icons.monetization_on_rounded,
+                'Salary',
+                _currentJob.salaryRange.isNotEmpty
+                    ? _currentJob.salaryRange
+                    : 'Not specified',
+              ),
+              const SizedBox(height: 14),
+              _buildInfoRow(
                 Icons.location_on_rounded,
                 'Location',
-                (_currentJob.latitude != null && _currentJob.longitude != null)
-                    ? 'Map coordinates set'
-                    : 'No location provided',
+                locationDisplay,
+              ),
+              const SizedBox(height: 14),
+              _buildInfoRow(
+                Icons.event_available_rounded,
+                'Job Expiry Date',
+                _formatExpiryLabel(),
               ),
             ],
           ),

@@ -44,6 +44,7 @@ class JobModel {
 
   JobModel copyWith({
     String? status,
+    DateTime? expiresAt,
   }) {
     return JobModel(
       jobID: jobID,
@@ -60,7 +61,7 @@ class JobModel {
       minExperienceYears: minExperienceYears,
       locationName: locationName,
       companyName: companyName,
-      expiresAt: expiresAt,
+      expiresAt: expiresAt ?? this.expiresAt,
       workplaceType: workplaceType,
       workingPeriod: workingPeriod,
       qualification: qualification,

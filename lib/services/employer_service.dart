@@ -384,13 +384,20 @@ class EmployerService {
     return {'min': '3000', 'max': '4500'};
   }
 
-  Future<bool> updateJobStatus(String jobId, String newStatus) async {
+  Future<bool> updateJobStatus(
+    String jobId,
+    String newStatus, {
+    DateTime? expiresAt,
+  }) async {
     try {
+      final Map<String, dynamic> updateData = {'status': newStatus};
+      if (expiresAt != null) {
+        updateData['expiresAt'] = expiresAt.toUtc().toIso8601String();
+      }
+
       await _supabase
-          .from(
-            'Job',
-          ) // Or TableConstants.job if you are using your constants file
-          .update({'status': newStatus})
+          .from(TableConstants.job)
+          .update(updateData)
           .eq('jobID', jobId);
       return true;
     } catch (e) {
