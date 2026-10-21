@@ -94,12 +94,6 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
   final List<bool> _isGeneratingQuestion = [];
   final List<bool> _isAIGeneratedList = [];
 
-  void _clearFormError() {
-    if (_formError != null) {
-      setState(() => _formError = null);
-    }
-  }
-
   void _clearJobDetailsErrors() {
     if (_titleError != null ||
         _descriptionError != null ||
@@ -125,15 +119,6 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
         _salaryError = null;
         _minSalaryError = null;
         _maxSalaryError = null;
-        _formError = null;
-      });
-    }
-  }
-
-  void _clearPreScreeningError() {
-    if (_preScreeningError != null || _formError != null) {
-      setState(() {
-        _preScreeningError = null;
         _formError = null;
       });
     }
@@ -787,11 +772,12 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
         icon: Icons.business_rounded,
         items: _myCompanies
             .map(
-              (c) => DropdownMenuItem(
-            value: c.companyID,
-            child: Text(c.name),
-          ),
-        )
+              (c) => _buildDropdownItem(
+                value: c.companyID ?? '',
+                label: c.name,
+                isSelected: _selectedCompanyID == c.companyID,
+              ),
+            )
             .toList(),
         errorText: _companyError,
         onChanged: (val) {
@@ -824,9 +810,17 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
             value: _selectedJobType,
             label: 'Job Type',
             icon: Icons.schedule_rounded,
-            items: const [
-              DropdownMenuItem(value: 'Full-time', child: Text('Full-time')),
-              DropdownMenuItem(value: 'Part-time', child: Text('Part-time')),
+            items: [
+              _buildDropdownItem(
+                value: 'Full-time',
+                label: 'Full-time',
+                isSelected: _selectedJobType == 'Full-time',
+              ),
+              _buildDropdownItem(
+                value: 'Part-time',
+                label: 'Part-time',
+                isSelected: _selectedJobType == 'Part-time',
+              ),
             ],
             onChanged: (val) {
               if (val != null) {
@@ -846,18 +840,21 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
             value: _selectedWorkplaceType,
             label: 'Work Arrangement',
             icon: Icons.maps_home_work_rounded,
-            items: const [
-              DropdownMenuItem(
+            items: [
+              _buildDropdownItem(
                 value: 'On-site',
-                child: Text('On-site (Work at Company)'),
+                label: 'On-site (Work at Company)',
+                isSelected: _selectedWorkplaceType == 'On-site',
               ),
-              DropdownMenuItem(
+              _buildDropdownItem(
                 value: 'Remote',
-                child: Text('Remote (Work from Home)'),
+                label: 'Remote (Work from Home)',
+                isSelected: _selectedWorkplaceType == 'Remote',
               ),
-              DropdownMenuItem(
+              _buildDropdownItem(
                 value: 'Hybrid',
-                child: Text('Hybrid (Both Home & Company)'),
+                label: 'Hybrid (Both Home & Company)',
+                isSelected: _selectedWorkplaceType == 'Hybrid',
               ),
             ],
             onChanged: (val) {
@@ -922,38 +919,47 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
             value: _selectedQualification,
             label: 'Minimum Qualification',
             icon: Icons.school_rounded,
-            items: const [
-              DropdownMenuItem(
+            items: [
+              _buildDropdownItem(
                 value: 'No Minimum',
-                child: Text('No Minimum Qualification'),
+                label: 'No Minimum Qualification',
+                isSelected: _selectedQualification == 'No Minimum',
               ),
-              DropdownMenuItem(
+              _buildDropdownItem(
                 value: 'SPM / O-Level',
-                child: Text('SPM / O-Level'),
+                label: 'SPM / O-Level',
+                isSelected: _selectedQualification == 'SPM / O-Level',
               ),
-              DropdownMenuItem(
+              _buildDropdownItem(
                 value: 'STPM / A-Level / Foundation',
-                child: Text('STPM / A-Level / Foundation'),
+                label: 'STPM / A-Level / Foundation',
+                isSelected:
+                    _selectedQualification == 'STPM / A-Level / Foundation',
               ),
-              DropdownMenuItem(
+              _buildDropdownItem(
                 value: 'Certificate / SKM',
-                child: Text('Certificate / SKM'),
+                label: 'Certificate / SKM',
+                isSelected: _selectedQualification == 'Certificate / SKM',
               ),
-              DropdownMenuItem(
+              _buildDropdownItem(
                 value: 'Diploma',
-                child: Text('Diploma'),
+                label: 'Diploma',
+                isSelected: _selectedQualification == 'Diploma',
               ),
-              DropdownMenuItem(
+              _buildDropdownItem(
                 value: "Bachelor's Degree",
-                child: Text("Bachelor's Degree"),
+                label: "Bachelor's Degree",
+                isSelected: _selectedQualification == "Bachelor's Degree",
               ),
-              DropdownMenuItem(
+              _buildDropdownItem(
                 value: "Master's Degree",
-                child: Text("Master's Degree"),
+                label: "Master's Degree",
+                isSelected: _selectedQualification == "Master's Degree",
               ),
-              DropdownMenuItem(
+              _buildDropdownItem(
                 value: 'Doctorate (PhD)',
-                child: Text('Doctorate (PhD)'),
+                label: 'Doctorate (PhD)',
+                isSelected: _selectedQualification == 'Doctorate (PhD)',
               ),
             ],
             onChanged: (val) {
@@ -1003,9 +1009,10 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
                   icon: Icons.timelapse_rounded,
                   items: durationOptions
                       .map(
-                        (d) => DropdownMenuItem(
+                        (d) => _buildDropdownItem(
                           value: d.toString(),
-                          child: Text('$d'),
+                          label: '$d',
+                          isSelected: _expiryDuration == d,
                         ),
                       )
                       .toList(),
@@ -1024,9 +1031,17 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
                   value: _expiryUnit,
                   label: 'Unit',
                   icon: Icons.calendar_month_rounded,
-                  items: const [
-                    DropdownMenuItem(value: 'Weeks', child: Text('Week(s)')),
-                    DropdownMenuItem(value: 'Months', child: Text('Month(s)')),
+                  items: [
+                    _buildDropdownItem(
+                      value: 'Weeks',
+                      label: 'Week(s)',
+                      isSelected: _expiryUnit == 'Weeks',
+                    ),
+                    _buildDropdownItem(
+                      value: 'Months',
+                      label: 'Month(s)',
+                      isSelected: _expiryUnit == 'Months',
+                    ),
                   ],
                   onChanged: (val) {
                     if (val != null) {
@@ -1429,14 +1444,16 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
                             value: _questionTypes[index],
                             label: 'Format',
                             icon: Icons.rule_rounded,
-                            items: const [
-                              DropdownMenuItem(
+                            items: [
+                              _buildDropdownItem(
                                 value: 'Text',
-                                child: Text('Text Answer'),
+                                label: 'Text Answer',
+                                isSelected: _questionTypes[index] == 'Text',
                               ),
-                              DropdownMenuItem(
+                              _buildDropdownItem(
                                 value: 'File',
-                                child: Text('File Upload'),
+                                label: 'File Upload',
+                                isSelected: _questionTypes[index] == 'File',
                               ),
                             ],
                             onChanged: (val) {
@@ -1673,6 +1690,39 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
     );
   }
 
+  DropdownMenuItem<String> _buildDropdownItem({
+    required String value,
+    required String label,
+    bool isSelected = false,
+  }) {
+    return DropdownMenuItem<String>(
+      value: value,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected
+                    ? const Color(0xFF163B65)
+                    : const Color(0xFF1B2433),
+              ),
+            ),
+          ),
+          if (isSelected)
+            const Icon(
+              Icons.check_rounded,
+              size: 18,
+              color: Color(0xFF163B65),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStyledDropdown({
     required String? value,
     required String label,
@@ -1685,29 +1735,53 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
       value: value,
       items: items,
       onChanged: onChanged,
+      isExpanded: true,
+      dropdownColor: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      elevation: 6,
+      menuMaxHeight: 340,
       icon: const Icon(
         Icons.keyboard_arrow_down_rounded,
-        color: Color(0xFF687588),
+        color: Color(0xFF163B65),
+        size: 22,
+      ),
+      style: const TextStyle(
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+        color: Color(0xFF1B2433),
       ),
       decoration: InputDecoration(
         labelText: label,
+        labelStyle: const TextStyle(
+          color: Color(0xFF687588),
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+        floatingLabelStyle: const TextStyle(
+          color: Color(0xFF163B65),
+          fontWeight: FontWeight.w700,
+        ),
         errorText: errorText,
-        prefixIcon: Icon(icon, color: const Color(0xFF687588)),
+        prefixIcon: Icon(icon, color: const Color(0xFF163B65)),
         filled: true,
         fillColor: const Color(0xFFF7F9FC),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
-          borderSide: BorderSide.none,
+          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
           borderSide: const BorderSide(
             color: Color(0xFF163B65),
-            width: 1.4,
+            width: 1.6,
           ),
         ),
         errorBorder: OutlineInputBorder(
@@ -1718,7 +1792,7 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
           borderRadius: BorderRadius.circular(18),
           borderSide: const BorderSide(
             color: Color(0xFFC24E4E),
-            width: 1.4,
+            width: 1.6,
           ),
         ),
       ),
