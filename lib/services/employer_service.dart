@@ -317,51 +317,79 @@ class EmployerService {
     }
   }
 
-  /// Simulated AI Salary Suggestion
+  /// AI Salary Suggestion tailored to Malaysian job market and full job context
   Future<Map<String, String>> getAiSalarySuggestion(
     String jobTitle,
     String jobDescription,
     int minExperience,
-    String jobType,
-  ) async {
+    String jobType, {
+    String workplaceType = 'On-site',
+    String workingPeriod = 'Mon - Fri, 9:00 AM - 6:00 PM',
+    String qualification = 'No Minimum',
+    String? locationName,
+  }) async {
     try {
       // 1. Retrieve the hidden API key
-      final apiKey = 'AIzaSyCPF5BiUdWIoroAWm42IhiUfxDMkQzFJ6U';
+      const apiKey = 'AIzaSyCPF5BiUdWIoroAWm42IhiUfxDMkQzFJ6U';
 
-      // 2. Initialize the Flash model
+      // 2. Initialize the Flash model with JSON response mime type
       final model = GenerativeModel(
         model: 'gemini-3-flash-preview',
         apiKey: apiKey,
+        generationConfig: GenerationConfig(
+          responseMimeType: 'application/json',
+        ),
       );
+
+      final locationContext =
+          (locationName != null && locationName.trim().isNotEmpty)
+              ? locationName.trim()
+              : 'Malaysia';
+      final descContext =
+          jobDescription.trim().isEmpty ? 'Not provided' : jobDescription.trim();
 
       String prompt;
 
       if (jobType == 'Part-time') {
-        prompt =
-            '''
-        You are an expert HR recruiter in Malaysia. 
-        Analyze the following part-time job details and suggest a realistic HOURLY salary rate in RM.
-        
-        Job Title: "$jobTitle"
-        Minimum Experience Required: $minExperience years
-        Description: "$jobDescription"
-        
-        Return ONLY a valid JSON object with the "min" key containing the hourly rate, and the "max" key completely empty.
-        Example: {"min": "15", "max": ""}
-        ''';
+        prompt = '''
+You are a Senior Compensation & Benefits HR Specialist in Malaysia.
+Estimate a realistic HOURLY salary rate in Malaysian Ringgit (MYR / RM) based on the following part-time job details:
+
+- Job Title: "$jobTitle"
+- Employment Type: Part-time
+- Work Arrangement: $workplaceType
+- Working Schedule: $workingPeriod
+- Minimum Qualification: $qualification
+- Minimum Experience Required: $minExperience year(s)
+- Work Location: $locationContext
+- Job Description: "$descContext"
+
+Guidelines:
+1. Base your estimate on current Malaysian part-time market rates (accounting for location, qualification level, and experience).
+2. Suggest a realistic integer hourly rate in RM (e.g., 10 to 50) in the "min" key, and leave the "max" key as an empty string "".
+3. Return ONLY a valid JSON object with keys "min" and "max" containing numeric strings only (no "RM", commas, or text).
+Example: {"min": "15", "max": ""}
+''';
       } else {
-        prompt =
-            '''
-        You are an expert HR recruiter in Malaysia. 
-        Analyze the following full-time job details and suggest a realistic MONTHLY salary range in RM.
-        
-        Job Title: "$jobTitle"
-        Minimum Experience Required: $minExperience years
-        Description: "$jobDescription"
-        
-        Return ONLY a valid JSON object with exactly two keys: "min" and "max". 
-        Example: {"min": "4000", "max": "6000"}
-        ''';
+        prompt = '''
+You are a Senior Compensation & Benefits HR Specialist in Malaysia.
+Estimate a realistic MONTHLY salary range in Malaysian Ringgit (MYR / RM) based on the following full-time job details:
+
+- Job Title: "$jobTitle"
+- Employment Type: Full-time
+- Work Arrangement: $workplaceType
+- Working Schedule: $workingPeriod
+- Minimum Qualification: $qualification
+- Minimum Experience Required: $minExperience year(s)
+- Work Location: $locationContext
+- Job Description: "$descContext"
+
+Guidelines:
+1. Base your estimate on current Malaysian full-time job market benchmarks (accounting for location such as Klang Valley vs other states, qualification level, work arrangement, and experience).
+2. Respect Malaysia's minimum wage floor (at least RM 1700/month) and round both "min" and "max" to the nearest RM 100, with a realistic 15% to 30% spread between "min" and "max".
+3. Return ONLY a valid JSON object with keys "min" and "max" containing numeric strings only (no "RM", commas, or text).
+Example: {"min": "4000", "max": "5200"}
+''';
       }
 
       // 4. Send to Gemini
@@ -369,11 +397,13 @@ class EmployerService {
       final String? responseText = response.text;
 
       if (responseText != null && responseText.isNotEmpty) {
-        // Parse the JSON string into a Dart Map
-        final Map<String, dynamic> jsonMap = jsonDecode(responseText.trim());
+        final cleanedJson = responseText
+            .replaceAll(RegExp(r'```json|```'), '')
+            .trim();
+        final Map<String, dynamic> jsonMap = jsonDecode(cleanedJson);
         return {
-          'min': jsonMap['min'].toString(),
-          'max': jsonMap['max'].toString(),
+          'min': (jsonMap['min'] ?? '').toString().replaceAll(RegExp(r'[^0-9]'), ''),
+          'max': (jsonMap['max'] ?? '').toString().replaceAll(RegExp(r'[^0-9]'), ''),
         };
       }
     } catch (e) {
@@ -381,7 +411,9 @@ class EmployerService {
     }
 
     // 5. Fallback just in case the AI fails or the user has no internet
-    return {'min': '3000', 'max': '4500'};
+    return jobType == 'Part-time'
+        ? {'min': '15', 'max': ''}
+        : {'min': '3000', 'max': '4500'};
   }
 
   Future<bool> updateJobStatus(
@@ -532,46 +564,72 @@ class EmployerService {
   Future<String> generateAiQuestion(
     String jobTitle,
     String jobDesc,
-    String questionType,
-  ) async {
+    String questionType, {
+    String jobType = 'Full-time',
+    String workplaceType = 'On-site',
+    String workingPeriod = 'Mon - Fri, 9:00 AM - 6:00 PM',
+    String qualification = 'No Minimum',
+    int minExperience = 0,
+    List<String> existingQuestions = const [],
+  }) async {
     try {
       // 1. Initialize the Model
-      // ⚠️ Note for FYP: Hardcoding the API key is fine for testing, but for production
-      // or public GitHub repos, it's best to hide this in a .env file using flutter_dotenv!
-      final apiKey = 'AIzaSyCPF5BiUdWIoroAWm42IhiUfxDMkQzFJ6U';
+      const apiKey = 'AIzaSyCPF5BiUdWIoroAWm42IhiUfxDMkQzFJ6U';
       final model = GenerativeModel(
         model: 'gemini-3-flash-preview',
         apiKey: apiKey,
       );
 
-      // 2. Build a highly specific Prompt
-      String prompt =
-          '''
-            You are an expert HR recruiter. You need to write ONE pre-screening interview question for a candidate applying for the role of "$jobTitle".
-          ''';
+      final descContext =
+          jobDesc.trim().isEmpty ? 'Not provided' : jobDesc.trim();
+      final seniorityNote = minExperience == 0
+          ? 'Entry-level / Fresh Graduate (0 years required — focus on foundational skills, projects, coursework, or adaptability rather than years of senior leadership).'
+          : 'Requires at least $minExperience year(s) of relevant experience.';
 
-      // Inject the job description only if the user typed one
-      if (jobDesc.isNotEmpty) {
-        prompt += 'Here is the job description for context: "$jobDesc"\n\n';
-      }
+      // 2. Build a rich, context-aware Prompt
+      String prompt = '''
+You are an expert HR Recruiter in Malaysia creating ONE pre-screening question for candidates applying for the following role:
+- Job Title: "$jobTitle"
+- Employment Type: $jobType ($workplaceType)
+- Working Schedule: $workingPeriod
+- Minimum Qualification: $qualification
+- Experience Level: $seniorityNote
+- Job Description: "$descContext"
+''';
 
-      // Change the AI's goal based on what the employer wants
       if (questionType == 'File') {
         prompt += '''
-          The candidate must answer this question by UPLOADING A FILE. 
-          Write a professional request asking them to upload a relevant portfolio, document, certificate, or code sample to prove their skills.
-        ''';
+
+Format Required: FILE UPLOAD
+Write a clear, professional request (1-2 sentences max) asking the candidate to upload ONE specific, realistic supporting document relevant to "$jobTitle" and their qualification/experience level (for example: a portfolio PDF, project sample, certification, transcript, or work sample).
+''';
       } else {
         prompt += '''
-          The candidate must answer this question by TYPING TEXT.
-          Write a professional interview question to test their experience, situational judgment, or technical knowledge.
-        ''';
+
+Format Required: TEXT ANSWER
+Write ONE concise, practical pre-screening question (1-2 sentences max) that a candidate can answer in a short paragraph on a mobile app. Focus on role-specific problem solving, hands-on competency, situational judgment, or readiness for the $workplaceType / $workingPeriod arrangement.
+''';
+      }
+
+      final nonEmptyExisting = existingQuestions
+          .map((q) => q.trim())
+          .where((q) => q.isNotEmpty)
+          .toList();
+      if (nonEmptyExisting.isNotEmpty) {
+        prompt += '''
+
+IMPORTANT — Avoid Duplicates:
+The form already contains the following pre-screening question(s):
+- ${nonEmptyExisting.join('\n- ')}
+You MUST generate a completely different question covering a distinct topic or competency.
+''';
       }
 
       // 3. The Constraint Rule (Stops the AI from saying "Here is your question:")
       prompt += '''
-          \nCRITICAL INSTRUCTION: Output ONLY the question/request itself. Do not use quotation marks, bullet points, introductory text, or conversational filler.
-        ''';
+
+CRITICAL INSTRUCTION: Output ONLY the question/request text itself. Do not use quotation marks, numbering, bullet points, or introductory filler.
+''';
 
       // 4. Send to Gemini
       final content = [Content.text(prompt)];
@@ -579,7 +637,6 @@ class EmployerService {
 
       // 5. Clean and return the result
       if (response.text != null && response.text!.isNotEmpty) {
-        // .trim() removes extra spaces/newlines, .replaceAll removes accidental quotes
         return response.text!.trim().replaceAll('"', '');
       }
 

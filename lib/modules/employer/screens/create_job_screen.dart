@@ -234,6 +234,10 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
       _descriptionController.text.trim(),
       parsedExperience,
       _selectedJobType,
+      workplaceType: _selectedWorkplaceType,
+      workingPeriod: _workingPeriodController.text.trim(),
+      qualification: _selectedQualification,
+      locationName: _selectedLocationName,
     );
 
     if (!mounted) return;
@@ -338,9 +342,29 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
 
     final type = _questionTypes[index];
     final desc = _descriptionController.text.trim();
+    final int parsedExperience =
+        int.tryParse(_experienceController.text.trim()) ?? 0;
+    final List<String> otherQuestions = [];
+    for (int i = 0; i < _questionControllers.length; i++) {
+      if (i != index) {
+        final qText = _questionControllers[i].text.trim();
+        if (qText.isNotEmpty) {
+          otherQuestions.add(qText);
+        }
+      }
+    }
 
-    final aiQuestion =
-    await _employerService.generateAiQuestion(title, desc, type);
+    final aiQuestion = await _employerService.generateAiQuestion(
+      title,
+      desc,
+      type,
+      jobType: _selectedJobType,
+      workplaceType: _selectedWorkplaceType,
+      workingPeriod: _workingPeriodController.text.trim(),
+      qualification: _selectedQualification,
+      minExperience: parsedExperience,
+      existingQuestions: otherQuestions,
+    );
 
     if (!mounted) return;
 
