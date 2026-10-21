@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:intl/intl.dart';
+import '../../../models/company_model.dart';
 import '../../../models/job_model.dart';
 import '../../../services/employer_service.dart';
+import 'company_map_picker.dart';
 
 class EditJobScreen extends StatefulWidget {
   final JobModel job;
@@ -18,18 +23,89 @@ class _EditJobScreenState extends State<EditJobScreen> {
   final _minSalaryController = TextEditingController();
   final _maxSalaryController = TextEditingController();
   final _experienceController = TextEditingController();
+  final _workingPeriodController = TextEditingController();
 
   final _employerService = EmployerService();
 
+  CompanyModel? _jobCompany;
+
   late String _selectedJobType;
+  late String _selectedWorkplaceType;
+  late String _selectedQualification;
+
+  bool _updateExpiryDate = false;
+  String _expiryUnit = 'Months'; // 'Weeks' or 'Months'
+  int _expiryDuration = 1;
+
   double? _selectedLat;
   double? _selectedLng;
+  String? _selectedLocationName;
+
   bool _isSubmitting = false;
+  bool _isFetchingAi = false;
+
+  String? _formError;
+  String? _titleError;
+  String? _descriptionError;
+  String? _locationError;
+  String? _salaryError;
+  String? _minSalaryError;
+  String? _maxSalaryError;
+  String? _experienceError;
+  String? _workingPeriodError;
+
+  static const List<String> _workingPeriodPresets = [
+    'Mon - Fri, 9:00 AM - 6:00 PM',
+    'Mon - Sat, 9:00 AM - 5:00 PM',
+    'Shift-based',
+    'Flexible Hours',
+  ];
+
+  static const List<String> _qualificationOptions = [
+    'No Minimum',
+    'SPM / O-Level',
+    'STPM / A-Level / Foundation',
+    'Certificate / SKM',
+    'Diploma',
+    "Bachelor's Degree",
+    "Master's Degree",
+    'Doctorate (PhD)',
+  ];
+
+  DateTime get _calculatedExpiryDate {
+    final now = DateTime.now();
+    if (_expiryUnit == 'Weeks') {
+      return now.add(Duration(days: _expiryDuration * 7));
+    } else {
+      return DateTime(
+        now.year,
+        now.month + _expiryDuration,
+        now.day,
+        23,
+        59,
+        59,
+      );
+    }
+  }
+
+  bool get _hasActiveSubscription {
+    if (_jobCompany == null) return false;
+    return _jobCompany!.currentPlanType.toUpperCase() != 'FREE';
+  }
 
   @override
   void initState() {
     super.initState();
     _initializeData();
+    _loadCompanyDetails();
+  }
+
+  Future<void> _loadCompanyDetails() async {
+    final company = await _employerService.getCompanyById(widget.job.companyID);
+    if (!mounted) return;
+    setState(() {
+      _jobCompany = company;
+    });
   }
 
   void _initializeData() {
@@ -38,102 +114,321 @@ class _EditJobScreenState extends State<EditJobScreen> {
     _titleController.text = job.title;
     _descriptionController.text = job.description;
     _experienceController.text = job.minExperienceYears.toString();
-    // Keep the stored value compatible with the choices shown in the form.
+
+    _workingPeriodController.text =
+        (job.workingPeriod != null && job.workingPeriod!.trim().isNotEmpty)
+            ? job.workingPeriod!.trim()
+            : 'Mon - Fri, 9:00 AM - 6:00 PM';
+
+    // Normalize Job Type
     _selectedJobType = job.jobType == 'Part Time'
         ? 'Part-time'
         : job.jobType == 'Full Time'
-        ? 'Full-time'
-        : job.jobType;
+            ? 'Full-time'
+            : (job.jobType == 'Part-time' || job.jobType == 'Full-time')
+                ? job.jobType
+                : 'Full-time';
+
+    // Normalize Workplace Type
+    const validWorkplaces = ['On-site', 'Remote', 'Hybrid'];
+    final rawWorkplace = job.workplaceType.trim();
+    _selectedWorkplaceType = validWorkplaces.contains(rawWorkplace)
+        ? rawWorkplace
+        : 'On-site';
+
+    // Normalize Qualification
+    final rawQual = job.qualification.trim();
+    final matchedQual = _qualificationOptions.firstWhere(
+      (q) => q.toLowerCase() == rawQual.toLowerCase(),
+      orElse: () => 'No Minimum',
+    );
+    _selectedQualification = matchedQual;
+
+    // If the job had no expiry date set previously, enable setting one by default
+    _updateExpiryDate = job.expiresAt == null;
+
     _selectedLat = job.latitude;
     _selectedLng = job.longitude;
+    if (job.locationName != null && job.locationName!.trim().isNotEmpty) {
+      _selectedLocationName = job.locationName!.trim();
+    } else if (_selectedLat != null && _selectedLng != null) {
+      _selectedLocationName =
+          'Coordinates: ${_selectedLat!.toStringAsFixed(4)}, ${_selectedLng!.toStringAsFixed(4)}';
+    }
 
-    // 🧠 The tricky part: Extracting the numbers back out of the formatted string
-    if (job.salaryRange != null && job.salaryRange!.isNotEmpty) {
-      // Remove the "RM " and commas
-      String rawSalary = job.salaryRange!
+    // Extract numbers from the formatted salary string
+    if (job.salaryRange.isNotEmpty) {
+      final rawSalary = job.salaryRange
           .replaceAll('RM ', '')
           .replaceAll(',', '');
 
       if (_selectedJobType == 'Part-time') {
-        // Example: "15 / hr" -> "15"
         _minSalaryController.text = rawSalary.replaceAll(' / hr', '').trim();
       } else {
         if (rawSalary.contains('-')) {
-          // Example: "4000 - 6000"
           final parts = rawSalary.split('-');
           if (parts.length == 2) {
             _minSalaryController.text = parts[0].trim();
             _maxSalaryController.text = parts[1].trim();
           }
         } else {
-          // Fixed full-time salary: Example "4000"
           _minSalaryController.text = rawSalary.trim();
         }
       }
     }
   }
 
-  void _openLocationPicker() {
+  void _clearJobDetailsErrors() {
+    if (_titleError != null ||
+        _descriptionError != null ||
+        _experienceError != null ||
+        _workingPeriodError != null ||
+        _formError != null) {
+      setState(() {
+        _titleError = null;
+        _descriptionError = null;
+        _experienceError = null;
+        _workingPeriodError = null;
+        _formError = null;
+      });
+    }
+  }
+
+  void _clearSalaryError() {
+    if (_salaryError != null ||
+        _minSalaryError != null ||
+        _maxSalaryError != null ||
+        _formError != null) {
+      setState(() {
+        _salaryError = null;
+        _minSalaryError = null;
+        _maxSalaryError = null;
+        _formError = null;
+      });
+    }
+  }
+
+  Future<void> _suggestSalary() async {
     setState(() {
-      _selectedLat = 3.2162;
-      _selectedLng = 101.7289;
+      _salaryError = null;
+      _titleError = null;
+      _formError = null;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Test location updated!'),
-        backgroundColor: Colors.blue,
+
+    if (!_hasActiveSubscription) {
+      setState(() {
+        _salaryError =
+            'Premium feature: upgrade your company plan to use AI salary suggestions.';
+      });
+      return;
+    }
+
+    if (_titleController.text.trim().isEmpty) {
+      setState(() {
+        _titleError = 'Please enter a job title first.';
+        _salaryError =
+            'Enter the job title first so AI can suggest a salary range.';
+      });
+      return;
+    }
+
+    setState(() => _isFetchingAi = true);
+
+    final int parsedExperience =
+        int.tryParse(_experienceController.text.trim()) ?? 0;
+
+    final suggestionMap = await _employerService.getAiSalarySuggestion(
+      _titleController.text.trim(),
+      _descriptionController.text.trim(),
+      parsedExperience,
+      _selectedJobType,
+      workplaceType: _selectedWorkplaceType,
+      workingPeriod: _workingPeriodController.text.trim(),
+      qualification: _selectedQualification,
+      locationName: _selectedLocationName,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _minSalaryController.text = suggestionMap['min'] ?? '';
+      _maxSalaryController.text = suggestionMap['max'] ?? '';
+      _isFetchingAi = false;
+    });
+  }
+
+  void _useCompanyLocation() {
+    if (_jobCompany == null) {
+      setState(() {
+        _locationError = 'Company location details are still loading.';
+        _formError = null;
+      });
+      return;
+    }
+
+    if (_jobCompany!.latitude == null || _jobCompany!.longitude == null) {
+      setState(() {
+        _locationError = 'This company does not have a saved HQ location yet.';
+        _formError = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _selectedLat = _jobCompany!.latitude;
+      _selectedLng = _jobCompany!.longitude;
+      _selectedLocationName = _jobCompany!.companyAddress ??
+          'Coordinates: ${_jobCompany!.latitude!.toStringAsFixed(4)}, ${_jobCompany!.longitude!.toStringAsFixed(4)}';
+      _locationError = null;
+      _formError = null;
+    });
+  }
+
+  Future<void> _openLocationPicker() async {
+    final LatLng? pickedLocation = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CompanyMapPickerScreen(
+          initialLat: _selectedLat,
+          initialLng: _selectedLng,
+        ),
       ),
     );
+
+    if (pickedLocation != null) {
+      setState(() {
+        _selectedLat = pickedLocation.latitude;
+        _selectedLng = pickedLocation.longitude;
+        _selectedLocationName = 'Translating map coordinates...';
+        _locationError = null;
+        _formError = null;
+      });
+
+      try {
+        final placemarks = await placemarkFromCoordinates(
+          pickedLocation.latitude,
+          pickedLocation.longitude,
+        );
+
+        String readableAddress = 'Unknown Location';
+        if (placemarks.isNotEmpty) {
+          final place = placemarks.first;
+          readableAddress =
+              '${place.street}, ${place.subLocality ?? place.locality}, ${place.administrativeArea}';
+          readableAddress = readableAddress
+              .replaceAll(RegExp(r'^, |, $'), '')
+              .replaceAll(', ,', ',');
+        }
+
+        if (!mounted) return;
+
+        setState(() {
+          _selectedLat = pickedLocation.latitude;
+          _selectedLng = pickedLocation.longitude;
+          _selectedLocationName = readableAddress;
+        });
+      } catch (_) {
+        if (!mounted) return;
+
+        setState(() {
+          _selectedLat = pickedLocation.latitude;
+          _selectedLng = pickedLocation.longitude;
+          _selectedLocationName =
+              'Coordinates: ${pickedLocation.latitude.toStringAsFixed(4)}, ${pickedLocation.longitude.toStringAsFixed(4)}';
+        });
+      }
+    }
   }
 
   Future<void> _updateJob() async {
-    if (_titleController.text.trim().isEmpty ||
-        _descriptionController.text.trim().isEmpty ||
-        _selectedLat == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please fill all required fields and set a location.'),
-        ),
-      );
-      return;
+    setState(() {
+      _formError = null;
+      _titleError = null;
+      _descriptionError = null;
+      _locationError = null;
+      _salaryError = null;
+      _minSalaryError = null;
+      _maxSalaryError = null;
+      _experienceError = null;
+      _workingPeriodError = null;
+    });
+
+    final title = _titleController.text.trim();
+    final description = _descriptionController.text.trim();
+    final experienceText = _experienceController.text.trim();
+    final workingPeriodText = _workingPeriodController.text.trim();
+
+    bool hasError = false;
+
+    if (title.isEmpty) {
+      _titleError = 'Please enter the job title.';
+      hasError = true;
+    }
+
+    if (workingPeriodText.isEmpty) {
+      _workingPeriodError = 'Please specify the working period / schedule.';
+      hasError = true;
+    }
+
+    if (description.isEmpty) {
+      _descriptionError = 'Please provide a job description.';
+      hasError = true;
+    }
+
+    if (_selectedLat == null || _selectedLng == null) {
+      _locationError = 'Please choose a work location.';
+      hasError = true;
+    }
+
+    if (experienceText.isNotEmpty && int.tryParse(experienceText) == null) {
+      _experienceError = 'Please enter a valid number of years.';
+      hasError = true;
     }
 
     final minStr = _minSalaryController.text.trim();
     final maxStr = _maxSalaryController.text.trim();
 
-    final int? minSalary = int.tryParse(minStr);
-    final int? maxSalary = int.tryParse(maxStr);
-    final int parsedExperience =
-        int.tryParse(_experienceController.text.trim()) ?? 0;
+    final int? minSalary = minStr.isEmpty ? null : int.tryParse(minStr);
+    final int? maxSalary = maxStr.isEmpty ? null : int.tryParse(maxStr);
 
-    // Validation
+    if (minStr.isNotEmpty && minSalary == null) {
+      _minSalaryError = 'Enter a valid amount.';
+      hasError = true;
+    }
+
+    if (_selectedJobType == 'Full-time' &&
+        maxStr.isNotEmpty &&
+        maxSalary == null) {
+      _maxSalaryError = 'Enter a valid amount.';
+      hasError = true;
+    }
+
     if (_selectedJobType == 'Full-time' &&
         minSalary != null &&
-        maxSalary != null) {
-      if (minSalary > maxSalary) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Minimum salary cannot be greater than maximum salary.',
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
+        maxSalary != null &&
+        minSalary > maxSalary) {
+      _salaryError = 'Minimum salary cannot be greater than maximum salary.';
+      hasError = true;
+    }
+
+    if (hasError) {
+      setState(() {
+        _formError = 'Please fix the highlighted fields before saving.';
+      });
+      return;
     }
 
     setState(() => _isSubmitting = true);
 
-    // Rebuild the salary string
-    String? finalSalaryRange;
+    final int parsedExperience = int.tryParse(experienceText) ?? 0;
+
+    String finalSalaryRange;
     if (_selectedJobType == 'Part-time') {
       if (minSalary != null) {
         finalSalaryRange = 'RM $minSalary / hr';
       } else {
         finalSalaryRange = '';
       }
-      ;
     } else {
       if (minSalary != null && maxSalary != null) {
         finalSalaryRange = 'RM $minSalary - RM $maxSalary';
@@ -144,47 +439,46 @@ class _EditJobScreenState extends State<EditJobScreen> {
       }
     }
 
-    // Create the updated model (preserving the unchangeable IDs)
+    final DateTime? finalExpiresAt =
+        _updateExpiryDate ? _calculatedExpiryDate : widget.job.expiresAt;
+
     final updatedJob = JobModel(
       jobID: widget.job.jobID,
-      // Ensure we pass the ID so the DB knows which row to update
       companyID: widget.job.companyID,
       employerID: widget.job.employerID,
       status: widget.job.status,
-      // Keep current status
-      title: _titleController.text.trim(),
-      description: _descriptionController.text.trim(),
+      title: title,
+      description: description,
       salaryRange: finalSalaryRange,
       latitude: _selectedLat,
       longitude: _selectedLng,
       minExperienceYears: parsedExperience,
       jobType: _selectedJobType,
-      locationName: widget.job.locationName,
-      expiresAt: widget.job.expiresAt,
-      workplaceType: widget.job.workplaceType,
-      workingPeriod: widget.job.workingPeriod,
-      qualification: widget.job.qualification,
+      locationName: _selectedLocationName,
+      expiresAt: finalExpiresAt,
+      workplaceType: _selectedWorkplaceType,
+      workingPeriod: workingPeriodText,
+      qualification: _selectedQualification,
     );
 
     final success = await _employerService.updateJobPosting(updatedJob);
 
+    if (!mounted) return;
+
     setState(() => _isSubmitting = false);
 
-    if (success && mounted) {
+    if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Job Updated Successfully!'),
           backgroundColor: Colors.green,
         ),
       );
-      // Pass the updated job back to the detail screen so it refreshes immediately!
       Navigator.pop(context, updatedJob);
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to update job. Please try again.'),
-        ),
-      );
+    } else {
+      setState(() {
+        _formError = 'Failed to update job. Please try again.';
+      });
     }
   }
 
@@ -195,6 +489,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
     _minSalaryController.dispose();
     _maxSalaryController.dispose();
     _experienceController.dispose();
+    _workingPeriodController.dispose();
     super.dispose();
   }
 
@@ -212,52 +507,30 @@ class _EditJobScreenState extends State<EditJobScreen> {
                   const SizedBox(height: 16),
                   _buildHeroCard(),
                   const SizedBox(height: 24),
-                  _buildSectionCard(
-                    title: 'Position Details',
-                    subtitle: 'Keep the role title, employment type, and experience requirement up to date.',
-                    child: Column(
-                      children: [
-                        _buildStyledField(
-                          controller: _titleController,
-                          label: 'Job Title',
-                          icon: Icons.work_outline_rounded,
-                        ),
-                        const SizedBox(height: 16),
-                        _buildJobTypeField(),
-                        const SizedBox(height: 16),
-                        _buildStyledField(
-                          controller: _experienceController,
-                          label: 'Minimum Working Experience (Years)',
-                          icon: Icons.workspace_premium_outlined,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                        ),
-                      ],
-                    ),
-                  ),
+                  _buildJobDetailsSection(),
+                  const SizedBox(height: 18),
+                  _buildJobExpirySection(),
+                  const SizedBox(height: 18),
+                  _buildSalarySection(),
                   const SizedBox(height: 18),
                   _buildSectionCard(
-                    title: 'Compensation',
-                    subtitle: _selectedJobType == 'Part-time'
-                        ? 'Set the hourly rate for this part-time role.'
-                        : 'Provide a monthly salary range for candidates.',
-                    child: _buildSalaryFields(),
-                  ),
-                  const SizedBox(height: 18),
-                  _buildSectionCard(
-                    title: 'Job Location',
-                    subtitle: 'Update the map location candidates will see for this role.',
-                    child: _buildLocationEditor(),
+                    title: 'Work Location',
+                    subtitle:
+                        'Update the work address and map pin candidates will see for this role.',
+                    child: _buildLocationPanel(),
                   ),
                   const SizedBox(height: 18),
                   _buildSectionCard(
                     title: 'Job Description',
-                    subtitle: 'Describe the responsibilities, requirements, and opportunities for this role.',
+                    subtitle:
+                        'Describe the responsibilities, requirements, and opportunities for this role.',
                     child: _buildStyledField(
                       controller: _descriptionController,
                       label: 'Full Job Description',
-                      icon: Icons.article_outlined,
-                      maxLines: 8,
+                      icon: Icons.description_rounded,
+                      maxLines: 6,
+                      errorText: _descriptionError,
+                      onChanged: (_) => _clearJobDetailsErrors(),
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -312,20 +585,53 @@ class _EditJobScreenState extends State<EditJobScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.14),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.edit_rounded, color: Colors.white, size: 16),
-                SizedBox(width: 8),
-                Text('Job Posting Update', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+          Row(
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.edit_rounded, color: Colors.white, size: 16),
+                    SizedBox(width: 8),
+                    Text(
+                      'Job Posting Update',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (_jobCompany != null) ...[
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.14),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      _jobCompany!.name,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
               ],
-            ),
+            ],
           ),
           const SizedBox(height: 20),
           Text(
@@ -339,8 +645,563 @@ class _EditJobScreenState extends State<EditJobScreen> {
           ),
           const SizedBox(height: 10),
           const Text(
-            'Refresh this posting so candidates see the latest role details, compensation, and location.',
+            'Refresh this posting so candidates see the latest role details, work arrangement, compensation, and location.',
             style: TextStyle(color: Colors.white70, fontSize: 15, height: 1.4),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildJobDetailsSection() {
+    return _buildSectionCard(
+      title: 'Job Details',
+      subtitle:
+          'Keep the role title, work arrangement, schedule, and requirements up to date.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildStyledField(
+            controller: _titleController,
+            label: 'Job Title',
+            icon: Icons.title_rounded,
+            errorText: _titleError,
+            onChanged: (_) => _clearJobDetailsErrors(),
+          ),
+          const SizedBox(height: 16),
+          _buildStyledDropdown(
+            value: _selectedJobType,
+            label: 'Job Type',
+            icon: Icons.schedule_rounded,
+            items: [
+              _buildDropdownItem(
+                value: 'Full-time',
+                label: 'Full-time',
+                isSelected: _selectedJobType == 'Full-time',
+              ),
+              _buildDropdownItem(
+                value: 'Part-time',
+                label: 'Part-time',
+                isSelected: _selectedJobType == 'Part-time',
+              ),
+            ],
+            onChanged: (val) {
+              if (val != null) {
+                setState(() {
+                  _selectedJobType = val;
+                  _salaryError = null;
+                  _formError = null;
+                  if (val == 'Part-time') {
+                    _maxSalaryController.clear();
+                  }
+                });
+              }
+            },
+          ),
+          const SizedBox(height: 16),
+          _buildStyledDropdown(
+            value: _selectedWorkplaceType,
+            label: 'Work Arrangement',
+            icon: Icons.maps_home_work_rounded,
+            items: [
+              _buildDropdownItem(
+                value: 'On-site',
+                label: 'On-site (Work at Company)',
+                isSelected: _selectedWorkplaceType == 'On-site',
+              ),
+              _buildDropdownItem(
+                value: 'Remote',
+                label: 'Remote (Work from Home)',
+                isSelected: _selectedWorkplaceType == 'Remote',
+              ),
+              _buildDropdownItem(
+                value: 'Hybrid',
+                label: 'Hybrid (Both Home & Company)',
+                isSelected: _selectedWorkplaceType == 'Hybrid',
+              ),
+            ],
+            onChanged: (val) {
+              if (val != null) {
+                setState(() {
+                  _selectedWorkplaceType = val;
+                  _formError = null;
+                });
+              }
+            },
+          ),
+          const SizedBox(height: 16),
+          _buildStyledField(
+            controller: _workingPeriodController,
+            label: 'Working Schedule / Period',
+            icon: Icons.access_time_filled_rounded,
+            errorText: _workingPeriodError,
+            onChanged: (_) => _clearJobDetailsErrors(),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _workingPeriodPresets.map((preset) {
+              final isSelected =
+                  _workingPeriodController.text.trim() == preset;
+              return InkWell(
+                onTap: () {
+                  setState(() {
+                    _workingPeriodController.text = preset;
+                    _workingPeriodError = null;
+                    _formError = null;
+                  });
+                },
+                borderRadius: BorderRadius.circular(999),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? const Color(0xFF163B65)
+                        : const Color(0xFFF1F5FA),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    preset,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color:
+                          isSelected ? Colors.white : const Color(0xFF4F5C6C),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 16),
+          _buildStyledDropdown(
+            value: _selectedQualification,
+            label: 'Minimum Qualification',
+            icon: Icons.school_rounded,
+            items: [
+              _buildDropdownItem(
+                value: 'No Minimum',
+                label: 'No Minimum Qualification',
+                isSelected: _selectedQualification == 'No Minimum',
+              ),
+              _buildDropdownItem(
+                value: 'SPM / O-Level',
+                label: 'SPM / O-Level',
+                isSelected: _selectedQualification == 'SPM / O-Level',
+              ),
+              _buildDropdownItem(
+                value: 'STPM / A-Level / Foundation',
+                label: 'STPM / A-Level / Foundation',
+                isSelected:
+                    _selectedQualification == 'STPM / A-Level / Foundation',
+              ),
+              _buildDropdownItem(
+                value: 'Certificate / SKM',
+                label: 'Certificate / SKM',
+                isSelected: _selectedQualification == 'Certificate / SKM',
+              ),
+              _buildDropdownItem(
+                value: 'Diploma',
+                label: 'Diploma',
+                isSelected: _selectedQualification == 'Diploma',
+              ),
+              _buildDropdownItem(
+                value: "Bachelor's Degree",
+                label: "Bachelor's Degree",
+                isSelected: _selectedQualification == "Bachelor's Degree",
+              ),
+              _buildDropdownItem(
+                value: "Master's Degree",
+                label: "Master's Degree",
+                isSelected: _selectedQualification == "Master's Degree",
+              ),
+              _buildDropdownItem(
+                value: 'Doctorate (PhD)',
+                label: 'Doctorate (PhD)',
+                isSelected: _selectedQualification == 'Doctorate (PhD)',
+              ),
+            ],
+            onChanged: (val) {
+              if (val != null) {
+                setState(() {
+                  _selectedQualification = val;
+                  _formError = null;
+                });
+              }
+            },
+          ),
+          const SizedBox(height: 16),
+          _buildStyledField(
+            controller: _experienceController,
+            label: 'Minimum Experience (Years)',
+            icon: Icons.history_edu_rounded,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            errorText: _experienceError,
+            onChanged: (_) => _clearJobDetailsErrors(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildJobExpirySection() {
+    final List<int> durationOptions = _expiryUnit == 'Weeks'
+        ? const [1, 2, 3, 4]
+        : const [1, 2, 3, 6, 12];
+    final currentExpiryText = widget.job.expiresAt != null
+        ? DateFormat('dd MMM yyyy').format(widget.job.expiresAt!.toLocal())
+        : 'Not set';
+    final formattedNewExpiry =
+        DateFormat('dd MMM yyyy').format(_calculatedExpiryDate);
+
+    return _buildSectionCard(
+      title: 'Job Expiry Duration',
+      subtitle:
+          'Keep the current expiry date or extend how long this job stays active.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFF7F9FC),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: SwitchListTile(
+              title: const Text(
+                'Update Expiry Duration',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                  color: Color(0xFF1B2433),
+                ),
+              ),
+              subtitle: Text(
+                'Current expiry: $currentExpiryText',
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF687588),
+                ),
+              ),
+              value: _updateExpiryDate,
+              activeColor: const Color(0xFF163B65),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              onChanged: (val) {
+                setState(() {
+                  _updateExpiryDate = val;
+                });
+              },
+            ),
+          ),
+          if (_updateExpiryDate) ...[
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStyledDropdown(
+                    value: _expiryDuration.toString(),
+                    label: 'Duration',
+                    icon: Icons.timelapse_rounded,
+                    items: durationOptions
+                        .map(
+                          (d) => _buildDropdownItem(
+                            value: d.toString(),
+                            label: '$d',
+                            isSelected: _expiryDuration == d,
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() {
+                          _expiryDuration = int.parse(val);
+                        });
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildStyledDropdown(
+                    value: _expiryUnit,
+                    label: 'Unit',
+                    icon: Icons.calendar_month_rounded,
+                    items: [
+                      _buildDropdownItem(
+                        value: 'Weeks',
+                        label: 'Week(s)',
+                        isSelected: _expiryUnit == 'Weeks',
+                      ),
+                      _buildDropdownItem(
+                        value: 'Months',
+                        label: 'Month(s)',
+                        isSelected: _expiryUnit == 'Months',
+                      ),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() {
+                          _expiryUnit = val;
+                          final validOptions = val == 'Weeks'
+                              ? const [1, 2, 3, 4]
+                              : const [1, 2, 3, 6, 12];
+                          if (!validOptions.contains(_expiryDuration)) {
+                            _expiryDuration = 1;
+                          }
+                        });
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF5FC),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFD3E3F8)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.event_available_rounded,
+                    color: Color(0xFF163B65),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'New expiry date: $formattedNewExpiry ($_expiryDuration ${_expiryUnit.toLowerCase()} from today).',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        height: 1.4,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF163B65),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSalarySection() {
+    final isPartTime = _selectedJobType == 'Part-time';
+    return _buildSectionCard(
+      title: 'Compensation',
+      subtitle: isPartTime
+          ? 'Set the hourly rate for this part-time role or ask AI for market rates.'
+          : 'Provide a monthly salary range or ask AI for market rates.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _buildStyledField(
+                  controller: _minSalaryController,
+                  label: isPartTime ? 'Hourly Rate' : 'Min Salary',
+                  icon: Icons.payments_rounded,
+                  keyboardType: TextInputType.number,
+                  prefixText: 'RM ',
+                  suffixText: isPartTime ? ' / hr' : null,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  errorText: _minSalaryError,
+                  onChanged: (_) => _clearSalaryError(),
+                ),
+              ),
+              if (!isPartTime) ...[
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildStyledField(
+                    controller: _maxSalaryController,
+                    label: 'Max Salary',
+                    icon: Icons.trending_up_rounded,
+                    keyboardType: TextInputType.number,
+                    prefixText: 'RM ',
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    errorText: _maxSalaryError,
+                    onChanged: (_) => _clearSalaryError(),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (_salaryError != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              _salaryError!,
+              style: const TextStyle(
+                color: Color(0xFFC24E4E),
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _isFetchingAi ? null : _suggestSalary,
+              icon: _isFetchingAi
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(
+                      _hasActiveSubscription ? Icons.auto_awesome : Icons.lock,
+                      color: Colors.amber.shade700,
+                    ),
+              label: Text(
+                _hasActiveSubscription
+                    ? 'Suggest Market Salary via AI'
+                    : 'AI Salary Suggestion (Premium)',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.amber.shade50,
+                foregroundColor: Colors.amber.shade900,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLocationPanel() {
+    final bool hasLocation = _selectedLat != null && _selectedLng != null;
+    final String locationLabel =
+        _selectedLocationName ?? 'No location selected yet.';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F9FC),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDCEBFB),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.location_on_rounded,
+                  color: Color(0xFF163B65),
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Work Address',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1B2433),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            locationLabel,
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.4,
+              color: hasLocation
+                  ? const Color(0xFF1B2433)
+                  : const Color(0xFF687588),
+            ),
+          ),
+          if (hasLocation) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Latitude: ${_selectedLat!.toStringAsFixed(4)}\nLongitude: ${_selectedLng!.toStringAsFixed(4)}',
+              style: const TextStyle(
+                fontSize: 12,
+                height: 1.4,
+                color: Color(0xFF687588),
+              ),
+            ),
+          ],
+          if (_locationError != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              _locationError!,
+              style: const TextStyle(
+                color: Color(0xFFC24E4E),
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _useCompanyLocation,
+              icon: const Icon(Icons.business_rounded),
+              label: const Text('Use Company HQ Address'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF163B65),
+                side: const BorderSide(color: Color(0xFF163B65)),
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _openLocationPicker,
+              icon: const Icon(Icons.map_rounded),
+              label: Text(
+                hasLocation
+                    ? 'Change Location on Map'
+                    : 'Search or Pick on Map',
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF163B65),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -354,108 +1215,39 @@ class _EditJobScreenState extends State<EditJobScreen> {
   }) {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1210243E),
+            blurRadius: 20,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1B2433))),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1B2433),
+            ),
+          ),
           const SizedBox(height: 6),
-          Text(subtitle, style: const TextStyle(fontSize: 13, height: 1.4, color: Color(0xFF687588))),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              fontSize: 13,
+              height: 1.4,
+              color: Color(0xFF687588),
+            ),
+          ),
           const SizedBox(height: 18),
           child,
-        ],
-      ),
-    );
-  }
-
-  Widget _buildJobTypeField() {
-    return DropdownButtonFormField<String>(
-      value: _selectedJobType,
-      decoration: _fieldDecoration('Job Type', Icons.schedule_rounded),
-      items: const [
-        DropdownMenuItem(value: 'Full-time', child: Text('Full-time')),
-        DropdownMenuItem(value: 'Part-time', child: Text('Part-time')),
-      ],
-      onChanged: (value) {
-        if (value == null) return;
-        setState(() {
-          _selectedJobType = value;
-          if (value == 'Part-time') _maxSalaryController.clear();
-        });
-      },
-    );
-  }
-
-  Widget _buildSalaryFields() {
-    final isPartTime = _selectedJobType == 'Part-time';
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: _buildStyledField(
-            controller: _minSalaryController,
-            label: isPartTime ? 'Hourly Rate' : 'Min Salary',
-            icon: Icons.payments_outlined,
-            prefixText: 'RM ',
-            suffixText: isPartTime ? ' / hr' : null,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          ),
-        ),
-        if (!isPartTime) ...[
-          const SizedBox(width: 12),
-          Expanded(
-            child: _buildStyledField(
-              controller: _maxSalaryController,
-              label: 'Max Salary',
-              icon: Icons.payments_outlined,
-              prefixText: 'RM ',
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildLocationEditor() {
-    final hasLocation = _selectedLat != null && _selectedLng != null;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF7F9FC),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.location_on_outlined, color: Color(0xFF163B65)),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  hasLocation
-                      ? 'Coordinates: ${_selectedLat!.toStringAsFixed(4)}, ${_selectedLng!.toStringAsFixed(4)}'
-                      : 'No location selected yet',
-                  style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF1B2433)),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            onPressed: _openLocationPicker,
-            icon: const Icon(Icons.map_outlined),
-            label: const Text('Update Location on Map'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF163B65),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              side: const BorderSide(color: Color(0xFF163B65)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            ),
-          ),
         ],
       ),
     );
@@ -470,34 +1262,158 @@ class _EditJobScreenState extends State<EditJobScreen> {
     List<TextInputFormatter>? inputFormatters,
     String? prefixText,
     String? suffixText,
+    String? errorText,
+    ValueChanged<String>? onChanged,
   }) {
     return TextField(
       controller: controller,
       maxLines: maxLines,
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
-      decoration: _fieldDecoration(label, icon, prefixText: prefixText, suffixText: suffixText),
+      onChanged: onChanged,
+      decoration: InputDecoration(
+        labelText: label,
+        errorText: errorText,
+        prefixIcon: Icon(icon, color: const Color(0xFF687588)),
+        prefixText: prefixText,
+        suffixText: suffixText,
+        filled: true,
+        fillColor: const Color(0xFFF7F9FC),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(
+            color: Color(0xFF163B65),
+            width: 1.4,
+          ),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: Color(0xFFC24E4E)),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(
+            color: Color(0xFFC24E4E),
+            width: 1.4,
+          ),
+        ),
+      ),
     );
   }
 
-  InputDecoration _fieldDecoration(
-    String label,
-    IconData icon, {
-    String? prefixText,
-    String? suffixText,
+  DropdownMenuItem<String> _buildDropdownItem({
+    required String value,
+    required String label,
+    bool isSelected = false,
   }) {
-    return InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(icon),
-      prefixText: prefixText,
-      suffixText: suffixText,
-      filled: true,
-      fillColor: const Color(0xFFF7F9FC),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: const BorderSide(color: Color(0xFF163B65), width: 1.4),
+    return DropdownMenuItem<String>(
+      value: value,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected
+                    ? const Color(0xFF163B65)
+                    : const Color(0xFF1B2433),
+              ),
+            ),
+          ),
+          if (isSelected)
+            const Icon(
+              Icons.check_rounded,
+              size: 18,
+              color: Color(0xFF163B65),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStyledDropdown({
+    required String? value,
+    required String label,
+    required IconData icon,
+    required List<DropdownMenuItem<String>> items,
+    required void Function(String?) onChanged,
+    String? errorText,
+  }) {
+    return DropdownButtonFormField<String>(
+      value: value,
+      items: items,
+      onChanged: onChanged,
+      isExpanded: true,
+      dropdownColor: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      elevation: 6,
+      menuMaxHeight: 340,
+      icon: const Icon(
+        Icons.keyboard_arrow_down_rounded,
+        color: Color(0xFF163B65),
+        size: 22,
+      ),
+      style: const TextStyle(
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+        color: Color(0xFF1B2433),
+      ),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(
+          color: Color(0xFF687588),
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+        floatingLabelStyle: const TextStyle(
+          color: Color(0xFF163B65),
+          fontWeight: FontWeight.w700,
+        ),
+        errorText: errorText,
+        prefixIcon: Icon(icon, color: const Color(0xFF163B65)),
+        filled: true,
+        fillColor: const Color(0xFFF7F9FC),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(
+            color: Color(0xFF163B65),
+            width: 1.6,
+          ),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: Color(0xFFC24E4E)),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(
+            color: Color(0xFFC24E4E),
+            width: 1.6,
+          ),
+        ),
       ),
     );
   }
@@ -505,15 +1421,57 @@ class _EditJobScreenState extends State<EditJobScreen> {
   Widget _buildSavePanel() {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1210243E),
+            blurRadius: 20,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Save your changes', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1B2433))),
+          if (_formError != null) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFDECEC),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFF3B8B8)),
+              ),
+              child: Text(
+                _formError!,
+                style: const TextStyle(
+                  color: Color(0xFFC24E4E),
+                  fontSize: 13,
+                  height: 1.4,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+          const Text(
+            'Save your changes',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1B2433),
+            ),
+          ),
           const SizedBox(height: 8),
           const Text(
             'These updates will be reflected in the job posting after saving.',
-            style: TextStyle(fontSize: 14, height: 1.4, color: Color(0xFF687588)),
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.4,
+              color: Color(0xFF687588),
+            ),
           ),
           const SizedBox(height: 18),
           SizedBox(
@@ -524,9 +1482,14 @@ class _EditJobScreenState extends State<EditJobScreen> {
                 backgroundColor: const Color(0xFF163B65),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 17),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
               ),
-              child: const Text('Save Changes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              child: const Text(
+                'Save Changes',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
             ),
           ),
         ],
