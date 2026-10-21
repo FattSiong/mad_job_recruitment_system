@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../models/company_model.dart';
 import '../../../models/job_model.dart';
 import '../../../services/employer_service.dart';
@@ -10,8 +11,13 @@ import 'company_map_picker.dart';
 
 class EditJobScreen extends StatefulWidget {
   final JobModel job;
+  final int? initialApplicantCount;
 
-  const EditJobScreen({super.key, required this.job});
+  const EditJobScreen({
+    super.key,
+    required this.job,
+    this.initialApplicantCount,
+  });
 
   @override
   State<EditJobScreen> createState() => _EditJobScreenState();
@@ -28,10 +34,17 @@ class _EditJobScreenState extends State<EditJobScreen> {
   final _employerService = EmployerService();
 
   CompanyModel? _jobCompany;
+  int _applicantCount = 0;
+  bool _isLoadingContext = true;
 
   late String _selectedJobType;
   late String _selectedWorkplaceType;
   late String _selectedQualification;
+
+  late String _originalJobType;
+  late String _originalWorkplaceType;
+  late String _originalQualification;
+  int? _originalMinSalary;
 
   bool _updateExpiryDate = false;
   String _expiryUnit = 'Months'; // 'Weeks' or 'Months'
@@ -72,6 +85,17 @@ class _EditJobScreenState extends State<EditJobScreen> {
     'Doctorate (PhD)',
   ];
 
+  bool get _isJobOwner {
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    return currentUserId != null && widget.job.employerID == currentUserId;
+  }
+
+  bool get _isDeleted => widget.job.status.toLowerCase() == 'deleted';
+
+  bool get _isInactive => widget.job.status.toLowerCase() == 'inactive';
+
+  bool get _hasApplicants => _applicantCount > 0;
+
   DateTime get _calculatedExpiryDate {
     final now = DateTime.now();
     if (_expiryUnit == 'Weeks') {
@@ -96,15 +120,26 @@ class _EditJobScreenState extends State<EditJobScreen> {
   @override
   void initState() {
     super.initState();
+    _applicantCount = widget.initialApplicantCount ?? 0;
     _initializeData();
-    _loadCompanyDetails();
+    _loadContextDetails();
   }
 
-  Future<void> _loadCompanyDetails() async {
-    final company = await _employerService.getCompanyById(widget.job.companyID);
+  Future<void> _loadContextDetails() async {
+    final companyFuture =
+        _employerService.getCompanyById(widget.job.companyID);
+    final applicantsFuture = widget.job.jobID != null
+        ? _employerService.getJobApplicants(widget.job.jobID!)
+        : Future.value(<Map<String, dynamic>>[]);
+
+    final results = await Future.wait([companyFuture, applicantsFuture]);
     if (!mounted) return;
+
     setState(() {
-      _jobCompany = company;
+      _jobCompany = results[0] as CompanyModel?;
+      final applicants = results[1] as List<Map<String, dynamic>>;
+      _applicantCount = applicants.length;
+      _isLoadingContext = false;
     });
   }
 
@@ -128,6 +163,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
             : (job.jobType == 'Part-time' || job.jobType == 'Full-time')
                 ? job.jobType
                 : 'Full-time';
+    _originalJobType = _selectedJobType;
 
     // Normalize Workplace Type
     const validWorkplaces = ['On-site', 'Remote', 'Hybrid'];
@@ -135,6 +171,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
     _selectedWorkplaceType = validWorkplaces.contains(rawWorkplace)
         ? rawWorkplace
         : 'On-site';
+    _originalWorkplaceType = _selectedWorkplaceType;
 
     // Normalize Qualification
     final rawQual = job.qualification.trim();
@@ -143,6 +180,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
       orElse: () => 'No Minimum',
     );
     _selectedQualification = matchedQual;
+    _originalQualification = _selectedQualification;
 
     // If the job had no expiry date set previously, enable setting one by default
     _updateExpiryDate = job.expiresAt == null;
@@ -163,16 +201,22 @@ class _EditJobScreenState extends State<EditJobScreen> {
           .replaceAll(',', '');
 
       if (_selectedJobType == 'Part-time') {
-        _minSalaryController.text = rawSalary.replaceAll(' / hr', '').trim();
+        final cleanedMin = rawSalary.replaceAll(' / hr', '').trim();
+        _minSalaryController.text = cleanedMin;
+        _originalMinSalary = int.tryParse(cleanedMin);
       } else {
         if (rawSalary.contains('-')) {
           final parts = rawSalary.split('-');
           if (parts.length == 2) {
-            _minSalaryController.text = parts[0].trim();
+            final cleanedMin = parts[0].trim();
+            _minSalaryController.text = cleanedMin;
             _maxSalaryController.text = parts[1].trim();
+            _originalMinSalary = int.tryParse(cleanedMin);
           }
         } else {
-          _minSalaryController.text = rawSalary.trim();
+          final cleanedMin = rawSalary.trim();
+          _minSalaryController.text = cleanedMin;
+          _originalMinSalary = int.tryParse(cleanedMin);
         }
       }
     }
@@ -251,7 +295,16 @@ class _EditJobScreenState extends State<EditJobScreen> {
     if (!mounted) return;
 
     setState(() {
-      _minSalaryController.text = suggestionMap['min'] ?? '';
+      final suggestedMin = int.tryParse(suggestionMap['min'] ?? '');
+      // Respect the salary floor if applicants have already applied
+      if (_hasApplicants &&
+          _originalMinSalary != null &&
+          suggestedMin != null &&
+          suggestedMin < _originalMinSalary!) {
+        _minSalaryController.text = _originalMinSalary.toString();
+      } else {
+        _minSalaryController.text = suggestionMap['min'] ?? '';
+      }
       _maxSalaryController.text = suggestionMap['max'] ?? '';
       _isFetchingAi = false;
     });
@@ -341,6 +394,21 @@ class _EditJobScreenState extends State<EditJobScreen> {
   }
 
   Future<void> _updateJob() async {
+    if (_isDeleted) {
+      setState(() {
+        _formError = 'This job was deleted by an admin and cannot be modified.';
+      });
+      return;
+    }
+
+    if (!_isJobOwner) {
+      setState(() {
+        _formError =
+            'Only the employer who created this job posting can modify it.';
+      });
+      return;
+    }
+
     setState(() {
       _formError = null;
       _titleError = null;
@@ -353,10 +421,20 @@ class _EditJobScreenState extends State<EditJobScreen> {
       _workingPeriodError = null;
     });
 
-    final title = _titleController.text.trim();
+    final title = _hasApplicants
+        ? widget.job.title.trim()
+        : _titleController.text.trim();
     final description = _descriptionController.text.trim();
-    final experienceText = _experienceController.text.trim();
+    final experienceText = _hasApplicants
+        ? widget.job.minExperienceYears.toString()
+        : _experienceController.text.trim();
     final workingPeriodText = _workingPeriodController.text.trim();
+    final effectiveJobType =
+        _hasApplicants ? _originalJobType : _selectedJobType;
+    final effectiveWorkplaceType =
+        _hasApplicants ? _originalWorkplaceType : _selectedWorkplaceType;
+    final effectiveQualification =
+        _hasApplicants ? _originalQualification : _selectedQualification;
 
     bool hasError = false;
 
@@ -396,19 +474,28 @@ class _EditJobScreenState extends State<EditJobScreen> {
       hasError = true;
     }
 
-    if (_selectedJobType == 'Full-time' &&
+    if (effectiveJobType == 'Full-time' &&
         maxStr.isNotEmpty &&
         maxSalary == null) {
       _maxSalaryError = 'Enter a valid amount.';
       hasError = true;
     }
 
-    if (_selectedJobType == 'Full-time' &&
+    if (effectiveJobType == 'Full-time' &&
         minSalary != null &&
         maxSalary != null &&
         minSalary > maxSalary) {
       _salaryError = 'Minimum salary cannot be greater than maximum salary.';
       hasError = true;
+    }
+
+    // Applicant-based restriction: prevent lowering or removing minimum salary
+    if (_hasApplicants && _originalMinSalary != null) {
+      if (minSalary == null || minSalary < _originalMinSalary!) {
+        _salaryError =
+            'Cannot lower salary below RM $_originalMinSalary once candidates have applied.';
+        hasError = true;
+      }
     }
 
     if (hasError) {
@@ -423,7 +510,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
     final int parsedExperience = int.tryParse(experienceText) ?? 0;
 
     String finalSalaryRange;
-    if (_selectedJobType == 'Part-time') {
+    if (effectiveJobType == 'Part-time') {
       if (minSalary != null) {
         finalSalaryRange = 'RM $minSalary / hr';
       } else {
@@ -453,12 +540,12 @@ class _EditJobScreenState extends State<EditJobScreen> {
       latitude: _selectedLat,
       longitude: _selectedLng,
       minExperienceYears: parsedExperience,
-      jobType: _selectedJobType,
+      jobType: effectiveJobType,
       locationName: _selectedLocationName,
       expiresAt: finalExpiresAt,
-      workplaceType: _selectedWorkplaceType,
+      workplaceType: effectiveWorkplaceType,
       workingPeriod: workingPeriodText,
-      qualification: _selectedQualification,
+      qualification: effectiveQualification,
     );
 
     final success = await _employerService.updateJobPosting(updatedJob);
@@ -495,10 +582,12 @@ class _EditJobScreenState extends State<EditJobScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isBlocked = _isDeleted || !_isJobOwner;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FB),
       body: SafeArea(
-        child: _isSubmitting
+        child: (_isSubmitting || _isLoadingContext)
             ? const Center(child: CircularProgressIndicator())
             : ListView(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
@@ -506,37 +595,196 @@ class _EditJobScreenState extends State<EditJobScreen> {
                   _buildTopBar(context),
                   const SizedBox(height: 16),
                   _buildHeroCard(),
-                  const SizedBox(height: 24),
-                  _buildJobDetailsSection(),
-                  const SizedBox(height: 18),
-                  _buildJobExpirySection(),
-                  const SizedBox(height: 18),
-                  _buildSalarySection(),
-                  const SizedBox(height: 18),
-                  _buildSectionCard(
-                    title: 'Work Location',
-                    subtitle:
-                        'Update the work address and map pin candidates will see for this role.',
-                    child: _buildLocationPanel(),
-                  ),
-                  const SizedBox(height: 18),
-                  _buildSectionCard(
-                    title: 'Job Description',
-                    subtitle:
-                        'Describe the responsibilities, requirements, and opportunities for this role.',
-                    child: _buildStyledField(
-                      controller: _descriptionController,
-                      label: 'Full Job Description',
-                      icon: Icons.description_rounded,
-                      maxLines: 6,
-                      errorText: _descriptionError,
-                      onChanged: (_) => _clearJobDetailsErrors(),
+                  const SizedBox(height: 20),
+                  if (isBlocked)
+                    _buildBlockedRestrictionCard()
+                  else ...[
+                    if (_isInactive) ...[
+                      _buildInactiveNoticeBanner(),
+                      const SizedBox(height: 16),
+                    ],
+                    if (_hasApplicants) ...[
+                      _buildApplicantRestrictionBanner(),
+                      const SizedBox(height: 16),
+                    ],
+                    _buildJobDetailsSection(),
+                    const SizedBox(height: 18),
+                    _buildJobExpirySection(),
+                    const SizedBox(height: 18),
+                    _buildSalarySection(),
+                    const SizedBox(height: 18),
+                    _buildSectionCard(
+                      title: 'Work Location',
+                      subtitle:
+                          'Update the work address and map pin candidates will see for this role.',
+                      child: _buildLocationPanel(),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  _buildSavePanel(),
+                    const SizedBox(height: 18),
+                    _buildSectionCard(
+                      title: 'Job Description',
+                      subtitle:
+                          'Describe the responsibilities, requirements, and opportunities for this role.',
+                      child: _buildStyledField(
+                        controller: _descriptionController,
+                        label: 'Full Job Description',
+                        icon: Icons.description_rounded,
+                        maxLines: 6,
+                        errorText: _descriptionError,
+                        onChanged: (_) => _clearJobDetailsErrors(),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildSavePanel(),
+                  ],
                 ],
               ),
+      ),
+    );
+  }
+
+  Widget _buildBlockedRestrictionCard() {
+    final String title = _isDeleted
+        ? 'Job Posting Deleted'
+        : 'Editing Restricted to Job Creator';
+    final String message = _isDeleted
+        ? 'This job posting has been deleted by an administrator and can no longer be edited.'
+        : 'Only the employer who originally created this job posting is allowed to modify its details.';
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFF3B8B8)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFDECEC),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const Icon(
+              Icons.lock_person_rounded,
+              color: Color(0xFFC24E4E),
+              size: 28,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1B2433),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 14,
+              height: 1.5,
+              color: Color(0xFF687588),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInactiveNoticeBanner() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF5FC),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFD3E3F8)),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.info_outline_rounded,
+            color: Color(0xFF163B65),
+            size: 22,
+          ),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Editing an Inactive Job',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF163B65),
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'You can update these details while the job is inactive, then activate it from the Job Details screen when ready.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.4,
+                    color: Color(0xFF335D8A),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildApplicantRestrictionBanner() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF6E6),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFF5D491)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.lock_clock_rounded,
+            color: Color(0xFFB47814),
+            size: 22,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Core Requirements Locked ($_applicantCount ${_applicantCount == 1 ? 'Applicant' : 'Applicants'})',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF8C5B08),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Because candidates have already applied to this job, Job Title, Job Type, Work Arrangement, Minimum Qualification, and Experience are locked to keep applications fair.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.4,
+                    color: Color(0xFF8C5B08),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -654,10 +902,13 @@ class _EditJobScreenState extends State<EditJobScreen> {
   }
 
   Widget _buildJobDetailsSection() {
+    final bool lockCoreFields = _hasApplicants;
+
     return _buildSectionCard(
       title: 'Job Details',
-      subtitle:
-          'Keep the role title, work arrangement, schedule, and requirements up to date.',
+      subtitle: lockCoreFields
+          ? 'Core requirements are locked because candidates have already applied. Working schedule remains editable.'
+          : 'Keep the role title, work arrangement, schedule, and requirements up to date.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -665,6 +916,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
             controller: _titleController,
             label: 'Job Title',
             icon: Icons.title_rounded,
+            enabled: !lockCoreFields,
             errorText: _titleError,
             onChanged: (_) => _clearJobDetailsErrors(),
           ),
@@ -673,6 +925,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
             value: _selectedJobType,
             label: 'Job Type',
             icon: Icons.schedule_rounded,
+            enabled: !lockCoreFields,
             items: [
               _buildDropdownItem(
                 value: 'Full-time',
@@ -703,6 +956,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
             value: _selectedWorkplaceType,
             label: 'Work Arrangement',
             icon: Icons.maps_home_work_rounded,
+            enabled: !lockCoreFields,
             items: [
               _buildDropdownItem(
                 value: 'On-site',
@@ -782,6 +1036,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
             value: _selectedQualification,
             label: 'Minimum Qualification',
             icon: Icons.school_rounded,
+            enabled: !lockCoreFields,
             items: [
               _buildDropdownItem(
                 value: 'No Minimum',
@@ -839,6 +1094,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
             controller: _experienceController,
             label: 'Minimum Experience (Years)',
             icon: Icons.history_edu_rounded,
+            enabled: !lockCoreFields,
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             errorText: _experienceError,
@@ -1009,6 +1265,38 @@ class _EditJobScreenState extends State<EditJobScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (_hasApplicants && _originalMinSalary != null) ...[
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7F9FC),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.shield_outlined,
+                    size: 18,
+                    color: Color(0xFF163B65),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Minimum rate cannot be lowered below RM $_originalMinSalary${isPartTime ? ' / hr' : ''} while applicants exist.',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF4F5C6C),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           Row(
             children: [
               Expanded(
@@ -1258,6 +1546,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
     required String label,
     required IconData icon,
     int maxLines = 1,
+    bool enabled = true,
     TextInputType? keyboardType,
     List<TextInputFormatter>? inputFormatters,
     String? prefixText,
@@ -1267,18 +1556,34 @@ class _EditJobScreenState extends State<EditJobScreen> {
   }) {
     return TextField(
       controller: controller,
+      enabled: enabled,
       maxLines: maxLines,
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
       onChanged: onChanged,
+      style: TextStyle(
+        color: enabled ? const Color(0xFF1B2433) : const Color(0xFF687588),
+        fontWeight: enabled ? FontWeight.w500 : FontWeight.w600,
+      ),
       decoration: InputDecoration(
         labelText: label,
         errorText: errorText,
-        prefixIcon: Icon(icon, color: const Color(0xFF687588)),
+        prefixIcon: Icon(
+          icon,
+          color: enabled ? const Color(0xFF687588) : const Color(0xFF9AA5B5),
+        ),
+        suffixIcon: !enabled
+            ? const Icon(
+                Icons.lock_outline_rounded,
+                size: 18,
+                color: Color(0xFF9AA5B5),
+              )
+            : null,
         prefixText: prefixText,
         suffixText: suffixText,
         filled: true,
-        fillColor: const Color(0xFFF7F9FC),
+        fillColor:
+            enabled ? const Color(0xFFF7F9FC) : const Color(0xFFEEF2F7),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide.none,
@@ -1286,6 +1591,10 @@ class _EditJobScreenState extends State<EditJobScreen> {
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide.none,
+        ),
+        disabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
@@ -1348,26 +1657,27 @@ class _EditJobScreenState extends State<EditJobScreen> {
     required IconData icon,
     required List<DropdownMenuItem<String>> items,
     required void Function(String?) onChanged,
+    bool enabled = true,
     String? errorText,
   }) {
     return DropdownButtonFormField<String>(
       value: value,
       items: items,
-      onChanged: onChanged,
+      onChanged: enabled ? onChanged : null,
       isExpanded: true,
       dropdownColor: Colors.white,
       borderRadius: BorderRadius.circular(20),
       elevation: 6,
       menuMaxHeight: 340,
-      icon: const Icon(
-        Icons.keyboard_arrow_down_rounded,
-        color: Color(0xFF163B65),
-        size: 22,
+      icon: Icon(
+        enabled ? Icons.keyboard_arrow_down_rounded : Icons.lock_outline_rounded,
+        color: enabled ? const Color(0xFF163B65) : const Color(0xFF9AA5B5),
+        size: enabled ? 22 : 18,
       ),
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 15,
         fontWeight: FontWeight.w600,
-        color: Color(0xFF1B2433),
+        color: enabled ? const Color(0xFF1B2433) : const Color(0xFF687588),
       ),
       decoration: InputDecoration(
         labelText: label,
@@ -1376,14 +1686,18 @@ class _EditJobScreenState extends State<EditJobScreen> {
           fontSize: 14,
           fontWeight: FontWeight.w500,
         ),
-        floatingLabelStyle: const TextStyle(
-          color: Color(0xFF163B65),
+        floatingLabelStyle: TextStyle(
+          color: enabled ? const Color(0xFF163B65) : const Color(0xFF687588),
           fontWeight: FontWeight.w700,
         ),
         errorText: errorText,
-        prefixIcon: Icon(icon, color: const Color(0xFF163B65)),
+        prefixIcon: Icon(
+          icon,
+          color: enabled ? const Color(0xFF163B65) : const Color(0xFF9AA5B5),
+        ),
         filled: true,
-        fillColor: const Color(0xFFF7F9FC),
+        fillColor:
+            enabled ? const Color(0xFFF7F9FC) : const Color(0xFFEEF2F7),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 16,
@@ -1393,6 +1707,10 @@ class _EditJobScreenState extends State<EditJobScreen> {
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+        ),
+        disabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
           borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
         ),

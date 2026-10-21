@@ -441,13 +441,20 @@ Example: {"min": "4000", "max": "5200"}
   /// Updates an existing job posting in the database.
   Future<bool> updateJobPosting(JobModel updatedJob) async {
     try {
-      // Safety check to ensure we know which row to update
+      final currentUser = _supabase.auth.currentUser;
+      if (currentUser == null) return false;
+
+      // Safety checks: must have jobID, must be the job owner, and must not be deleted
       if (updatedJob.jobID == null) return false;
+      if (updatedJob.employerID != currentUser.id) return false;
+      if (updatedJob.status.toLowerCase() == 'deleted') return false;
 
       await _supabase
-          .from('Job') // Use TableConstants.job if you implemented it
+          .from(TableConstants.job)
           .update(updatedJob.toJson())
-          .eq('jobID', updatedJob.jobID!);
+          .eq('jobID', updatedJob.jobID!)
+          .eq('employerID', currentUser.id)
+          .neq('status', 'deleted');
 
       return true;
     } catch (e) {

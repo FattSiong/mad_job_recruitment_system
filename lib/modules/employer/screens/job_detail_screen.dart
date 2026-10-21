@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../models/job_model.dart';
 import '../../../services/employer_service.dart';
@@ -127,8 +128,14 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     );
   }
 
+  bool get _isJobOwner {
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    return currentUserId != null && _currentJob.employerID == currentUserId;
+  }
+
   Widget _buildTopBar(BuildContext context) {
     final isDeleted = _currentJob.status.toLowerCase() == 'deleted';
+    final canEdit = !isDeleted && _isJobOwner;
 
     return Row(
       children: [
@@ -161,29 +168,42 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
           child: InkWell(
             onTap: isDeleted
                 ? null
-                : () async {
-                    final updatedJob = await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => EditJobScreen(job: _currentJob),
-                      ),
-                    );
+                : !_isJobOwner
+                    ? () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Only the employer who created this job posting can edit it.',
+                            ),
+                          ),
+                        );
+                      }
+                    : () async {
+                        final updatedJob = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => EditJobScreen(
+                              job: _currentJob,
+                              initialApplicantCount: _applicants.length,
+                            ),
+                          ),
+                        );
 
-                    if (updatedJob != null && updatedJob is JobModel) {
-                      setState(() {
-                        _currentJob = updatedJob;
-                      });
-                      await _loadApplicants();
-                    }
-                  },
+                        if (updatedJob != null && updatedJob is JobModel) {
+                          setState(() {
+                            _currentJob = updatedJob;
+                          });
+                          await _loadApplicants();
+                        }
+                      },
             borderRadius: BorderRadius.circular(16),
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Icon(
-                Icons.edit_rounded,
-                color: isDeleted
-                    ? const Color(0xFF9AA5B5)
-                    : const Color(0xFF163B65),
+                canEdit ? Icons.edit_rounded : Icons.lock_outline_rounded,
+                color: canEdit
+                    ? const Color(0xFF163B65)
+                    : const Color(0xFF9AA5B5),
               ),
             ),
           ),
