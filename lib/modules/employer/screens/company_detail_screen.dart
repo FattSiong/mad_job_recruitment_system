@@ -21,6 +21,7 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
   List<Map<String, dynamic>> _members = [];
   bool _isLoading = true;
   bool _isOwner = false;
+  bool _isActiveMember = false;
 
   @override
   void initState() {
@@ -37,11 +38,18 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
     if (mounted) {
       setState(() {
         _members = members;
+        _isOwner = false;
+        _isActiveMember = false;
 
         if (_currentUser != null) {
           final myRecord = members.where((m) => m['employerID'] == _currentUser.id).toList();
-          if (myRecord.isNotEmpty && myRecord.first['companyRole'] == 'owner') {
-            _isOwner = true;
+          if (myRecord.isNotEmpty) {
+            final status = (myRecord.first['status'] ?? '').toString().toLowerCase();
+            final role = (myRecord.first['companyRole'] ?? '').toString().toLowerCase();
+            _isActiveMember = status == 'active';
+            if (role == 'owner' && _isActiveMember) {
+              _isOwner = true;
+            }
           }
         }
 
@@ -314,7 +322,7 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
                 ],
               ),
             ),
-            if (isApproved) ...[
+            if (isApproved && _isActiveMember) ...[
               const SizedBox(height: 18),
               _buildSectionCard(
                 title: 'Team Members',
