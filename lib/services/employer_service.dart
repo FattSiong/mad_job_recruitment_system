@@ -530,7 +530,7 @@ Example: {"min": "4000", "max": "5200"}
 
       final response = await _supabase
           .from('CompanyMember')
-          .select('*, Company(name)')
+          .select('*, Company(*)')
           .eq('employerID', currentUser.id)
           .eq('status', 'pending');
 
@@ -841,32 +841,76 @@ CRITICAL INSTRUCTION: Output ONLY the question/request text itself. Do not use q
       final endStr =
           '${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}:00';
 
-      // 1. Insert into the InterviewSchedule table AND return the new row
-      // We need .select().single() so we can grab the auto-generated scheduleID!
-      final scheduleResponse = await _supabase
+      // 1. Check if an InterviewSchedule already exists for this applicant (e.g. rescheduling)
+      final existingList = await _supabase
           .from('InterviewSchedule')
-          .insert({
-            'applicantID': applicantId,
-            'date': date.toIso8601String().split('T')[0], // YYYY-MM-DD
-            'startTime': startStr,
-            'endTime': endStr,
-            'meetingMethod': meetingMethod,
-            'meetingLink': meetingLink,
-          })
           .select('scheduleID')
-          .single();
+          .eq('applicantID', applicantId)
+          .limit(1);
 
-      final generatedScheduleId = scheduleResponse['scheduleID'];
+      String generatedScheduleId;
 
-      // 2. 👉 NEW: If it's an internal meeting, create the Waiting Room!
+      if (existingList.isNotEmpty) {
+        generatedScheduleId = existingList.first['scheduleID'].toString();
+        await _supabase
+            .from('InterviewSchedule')
+            .update({
+              'date': date.toIso8601String().split('T')[0],
+              'startTime': startStr,
+              'endTime': endStr,
+              'meetingMethod': meetingMethod,
+              'meetingLink': meetingLink,
+              'candidateStatus': 'pending',
+              'rejectionReason': null,
+              'preferredTime': null,
+            })
+            .eq('scheduleID', generatedScheduleId);
+      } else {
+        final scheduleResponse = await _supabase
+            .from('InterviewSchedule')
+            .insert({
+              'applicantID': applicantId,
+              'date': date.toIso8601String().split('T')[0], // YYYY-MM-DD
+              'startTime': startStr,
+              'endTime': endStr,
+              'meetingMethod': meetingMethod,
+              'meetingLink': meetingLink,
+              'candidateStatus': 'pending',
+              'rejectionReason': null,
+              'preferredTime': null,
+            })
+            .select('scheduleID')
+            .single();
+
+        generatedScheduleId = scheduleResponse['scheduleID'].toString();
+      }
+
+      // 2. If it's an internal meeting, ensure the Waiting Room exists!
       if (meetingMethod == 'internal') {
-        await _supabase.from('InterviewRoom').insert({
-          'scheduleID': generatedScheduleId,
-          'employerID': currentUser.id,
-          'seekerID': seekerId,
-          'status': 'pending',
-          // roomCode, startedAt, and endedAt will naturally be null upon creation
-        });
+        final existingRooms = await _supabase
+            .from('InterviewRoom')
+            .select('roomID')
+            .eq('scheduleID', generatedScheduleId)
+            .limit(1);
+
+        if (existingRooms.isEmpty) {
+          await _supabase.from('InterviewRoom').insert({
+            'scheduleID': generatedScheduleId,
+            'employerID': currentUser.id,
+            'seekerID': seekerId,
+            'status': 'pending',
+          });
+        } else {
+          await _supabase
+              .from('InterviewRoom')
+              .update({
+                'status': 'pending',
+                'roomCode': null,
+                'employerHasLeft': false,
+                'seekerHasLeft': false,
+              })
+              .eq('scheduleID', generatedScheduleId);
+        }
       }
 
       // 3. Update the JobApplicant status to 'scheduled'
@@ -882,15 +926,13 @@ CRITICAL INSTRUCTION: Output ONLY the question/request text itself. Do not use q
   // 👉 NEW: Fetch all scheduled interviews with candidate & job details
   Future<List<Map<String, dynamic>>> getScheduledInterviews() async {
     try {
-      // Note: This assumes your Supabase Foreign Keys are set up correctly between
-      // InterviewSchedule -> JobApplicant -> JobSeeker & JobPost.
-      // If your RLS policies are set correctly, this will only return the employer's interviews.
       final response = await _supabase
           .from('InterviewSchedule')
           .select('''
             *,
             JobApplicant (
               applicantID,
+              seekerID,
               applicationStatus,
               JobSeeker (fullName, email),
               Job (title, status)

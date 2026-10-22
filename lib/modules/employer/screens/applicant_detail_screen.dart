@@ -37,6 +37,9 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
 
   late String _currentStatus;
   bool _hasBeenScheduled = false;
+  String _scheduleCandidateStatus = 'pending';
+  String? _scheduleRejectionReason;
+  String? _schedulePreferredTime;
 
   bool get _isJobDeleted => widget.jobStatus.toLowerCase() == 'deleted';
 
@@ -52,13 +55,18 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
     try {
       final response = await Supabase.instance.client
           .from('InterviewSchedule')
-          .select('scheduleID')
+          .select('scheduleID, candidateStatus, rejectionReason, preferredTime')
           .eq('applicantID', widget.applicantData['applicantID'])
           .limit(1);
 
       if (response.isNotEmpty && mounted) {
+        final row = response.first;
         setState(() {
           _hasBeenScheduled = true;
+          _scheduleCandidateStatus =
+              (row['candidateStatus'] ?? 'pending').toString().toLowerCase();
+          _scheduleRejectionReason = row['rejectionReason']?.toString();
+          _schedulePreferredTime = row['preferredTime']?.toString();
         });
       }
     } catch (e) {
@@ -410,6 +418,8 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
             applicantId: widget.applicantData['applicantID'],
             applicantName: seeker['fullName'] ?? 'Applicant',
             seekerId: widget.applicantData['seekerID'],
+            initialPreferredTime: _schedulePreferredTime,
+            rejectionReason: _scheduleRejectionReason,
           ),
         ),
       );
@@ -418,7 +428,11 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
         setState(() {
           _currentStatus = 'scheduled';
           _hasBeenScheduled = true;
+          _scheduleCandidateStatus = 'pending';
+          _scheduleRejectionReason = null;
+          _schedulePreferredTime = null;
         });
+        await _checkIfScheduled();
       }
     }
   }
@@ -799,7 +813,11 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
                   setState(() {
                     _currentStatus = 'scheduled';
                     _hasBeenScheduled = true;
+                    _scheduleCandidateStatus = 'pending';
+                    _scheduleRejectionReason = null;
+                    _schedulePreferredTime = null;
                   });
+                  await _checkIfScheduled();
                 }
               },
               icon: const Icon(Icons.calendar_month_rounded),
@@ -845,12 +863,62 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
     }
 
     if (normalizedStatus == 'scheduled') {
-      return _buildStateMessageCard(
-        color: const Color(0xFF4A7BB7),
-        icon: Icons.event_available_rounded,
-        title: 'Interview Scheduled',
-        description:
-            'Please manage this interview from your Scheduled Interviews workspace.',
+      final isSlotRejected = _scheduleCandidateStatus == 'rejected';
+      final isSlotAccepted = _scheduleCandidateStatus == 'accepted';
+
+      return Column(
+        children: [
+          _buildStateMessageCard(
+            color: isSlotRejected
+                ? const Color(0xFFC24E4E)
+                : isSlotAccepted
+                    ? const Color(0xFF2D8A5D)
+                    : const Color(0xFF4A7BB7),
+            icon: isSlotRejected
+                ? Icons.event_busy_rounded
+                : isSlotAccepted
+                    ? Icons.check_circle_rounded
+                    : Icons.hourglass_top_rounded,
+            title: isSlotRejected
+                ? 'Candidate Declined Interview Time'
+                : isSlotAccepted
+                    ? 'Candidate Accepted Interview'
+                    : 'Waiting for Candidate Confirmation',
+            description: isSlotRejected
+                ? [
+                    if (_scheduleRejectionReason != null &&
+                        _scheduleRejectionReason!.trim().isNotEmpty)
+                      'Reason: "${_scheduleRejectionReason!.trim()}"'
+                    else
+                      'The candidate declined the proposed interview slot.',
+                    if (_schedulePreferredTime != null &&
+                        _schedulePreferredTime!.trim().isNotEmpty)
+                      'Preferred Time: ${_schedulePreferredTime!.trim()}',
+                  ].join('\n')
+                : isSlotAccepted
+                    ? 'The candidate confirmed the interview slot. Manage this session from Scheduled Interviews.'
+                    : 'Interview invitation sent. Waiting for the candidate to accept or decline the proposed slot.',
+          ),
+          if (isSlotRejected) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _showRescheduleConfirmation(seeker),
+                icon: const Icon(Icons.calendar_today_rounded),
+                label: const Text('Reschedule Interview'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF163B65),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
       );
     }
 

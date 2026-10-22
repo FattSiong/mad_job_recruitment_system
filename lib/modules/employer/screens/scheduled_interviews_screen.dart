@@ -4,6 +4,7 @@ import '../../../models/interveiw_schedule_model.dart';
 import '../../../services/employer_service.dart';
 import '../../../services/interview_service.dart';
 import '../../community/screens/interview_lobby_screen.dart';
+import 'interview_scheduling_screen.dart';
 
 class ScheduledInterviewsScreen extends StatefulWidget {
   const ScheduledInterviewsScreen({super.key});
@@ -30,8 +31,6 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
 
     if (mounted) {
       setState(() {
-        // 👉 NEW: Filter the list so we ONLY show applicants who are still 'scheduled'
-        // Once they are marked as 'interviewed', they will disappear from this screen!
         _interviews = data.where((item) {
           final applicant = item['JobApplicant'] ?? {};
           final job = applicant['Job'] ?? {};
@@ -96,12 +95,13 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
           );
         }
       } else {
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Error: Could not find interview room.'),
             ),
           );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -113,7 +113,40 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
     }
   }
 
-  // 👉 NEW: Confirmation Dialog & Logic to Mark as Completed
+  Future<void> _openReschedule({
+    required String applicantId,
+    required String candidateName,
+    required String seekerId,
+    String? preferredTime,
+    String? rejectionReason,
+  }) async {
+    if (seekerId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not identify candidate profile for rescheduling.'),
+        ),
+      );
+      return;
+    }
+
+    final didSchedule = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => InterviewSchedulingScreen(
+          applicantId: applicantId,
+          applicantName: candidateName,
+          seekerId: seekerId,
+          initialPreferredTime: preferredTime,
+          rejectionReason: rejectionReason,
+        ),
+      ),
+    );
+
+    if (didSchedule == true && mounted) {
+      await _loadInterviews();
+    }
+  }
+
   Future<void> _markAsCompleted(String applicantId, String? scheduleId) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -153,7 +186,7 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        _loadInterviews(); // Refresh the list to remove the completed item
+        _loadInterviews();
       } else {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -207,7 +240,10 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
                       final schedule = InterviewScheduleModel.fromJson(data);
 
                       final applicant = data['JobApplicant'] ?? {};
-                      final applicantId = applicant['applicantID'];
+                      final applicantId =
+                          (applicant['applicantID'] ?? '').toString();
+                      final seekerId =
+                          (applicant['seekerID'] ?? '').toString();
                       final seeker = applicant['JobSeeker'] ?? {};
                       final jobPost = applicant['Job'] ?? {};
 
@@ -227,12 +263,13 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
                           candidateName: candidateName,
                           jobTitle: jobTitle,
                           applicantId: applicantId,
+                          seekerId: seekerId,
                           timeString: timeString,
                           isOnline: isOnline,
                           isInternal: isInternal,
                         ),
                       );
-                    }).toList(),
+                    }),
                   ],
                 ],
               ),
@@ -335,7 +372,7 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
           ),
           const SizedBox(height: 10),
           const Text(
-            'Stay on top of candidate meetings, launch calls quickly, and mark sessions as completed when done.',
+            'Track candidate confirmations, review reschedule requests, and launch accepted calls.',
             style: TextStyle(color: Colors.white70, fontSize: 15, height: 1.4),
           ),
         ],
@@ -357,7 +394,7 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
         ),
         SizedBox(height: 6),
         Text(
-          'Open a meeting, review timing, and complete the interview workflow from here.',
+          'Check whether the candidate has accepted the proposed time before starting the interview.',
           style: TextStyle(fontSize: 13, height: 1.4, color: Color(0xFF687588)),
         ),
       ],
@@ -412,16 +449,72 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
     );
   }
 
+  Widget _buildCandidateResponseBadge(String status) {
+    final normalized = status.toLowerCase();
+    final Color bg;
+    final Color fg;
+    final String label;
+    final IconData icon;
+
+    switch (normalized) {
+      case 'accepted':
+        bg = const Color(0xFFE5F6ED);
+        fg = const Color(0xFF2D8A5D);
+        label = 'Accepted';
+        icon = Icons.check_circle_rounded;
+        break;
+      case 'rejected':
+        bg = const Color(0xFFFDECEC);
+        fg = const Color(0xFFC24E4E);
+        label = 'Declined';
+        icon = Icons.cancel_rounded;
+        break;
+      default:
+        bg = const Color(0xFFFEF3DC);
+        fg = const Color(0xFFC28A22);
+        label = 'Awaiting Candidate';
+        icon = Icons.hourglass_top_rounded;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: fg),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              color: fg,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildInterviewCard({
     required InterviewScheduleModel schedule,
     required String candidateName,
     required String jobTitle,
     required String applicantId,
+    required String seekerId,
     required String timeString,
     required bool isOnline,
     required bool isInternal,
   }) {
     final String month = _getMonthAbbr(schedule.date.month);
+    final String candidateStatus = schedule.candidateStatus.toLowerCase();
+    final bool isAccepted = candidateStatus == 'accepted';
+    final bool isRejected = candidateStatus == 'rejected';
+    final bool isPending = !isAccepted && !isRejected;
 
     return Container(
       decoration: BoxDecoration(
@@ -434,6 +527,7 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
                   width: 72,
@@ -485,6 +579,8 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
                           color: Color(0xFF687588),
                         ),
                       ),
+                      const SizedBox(height: 8),
+                      _buildCandidateResponseBadge(candidateStatus),
                     ],
                   ),
                 ),
@@ -500,39 +596,160 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
               icon: isInternal
                   ? Icons.video_camera_front_rounded
                   : (isOnline
-                        ? Icons.videocam_rounded
-                        : Icons.location_on_rounded),
+                      ? Icons.videocam_rounded
+                      : Icons.location_on_rounded),
               text: isInternal
                   ? 'App Internal Interview'
                   : (schedule.meetingLink ?? 'No link provided'),
             ),
-            const SizedBox(height: 20),
-            if (isOnline &&
-                schedule.meetingLink != null &&
-                schedule.meetingLink!.isNotEmpty)
+            if (isPending) ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF6E6),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFF5D491)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(
+                      Icons.hourglass_top_rounded,
+                      size: 18,
+                      color: Color(0xFFB47814),
+                    ),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Waiting for the candidate to accept this interview schedule before the session can start.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          height: 1.4,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF8C5B08),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () => _launchURL(schedule.meetingLink!),
-                  icon: const Icon(Icons.link_rounded, size: 18),
-                  label: const Text('Join External Meeting'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF163B65),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 15),
+                child: OutlinedButton.icon(
+                  onPressed: () => _openReschedule(
+                    applicantId: applicantId,
+                    candidateName: candidateName,
+                    seekerId: seekerId,
+                  ),
+                  icon: const Icon(Icons.edit_calendar_rounded, size: 18),
+                  label: const Text('Change Proposed Time'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF163B65),
+                    side: const BorderSide(color: Color(0xFF163B65)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
                 ),
-              )
-            else if (isInternal)
+              ),
+            ] else if (isRejected) ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFDECEC),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFF3B8B8)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(
+                          Icons.event_busy_rounded,
+                          size: 18,
+                          color: Color(0xFFC24E4E),
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          'Candidate Declined This Slot',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFFC24E4E),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      (schedule.rejectionReason != null &&
+                              schedule.rejectionReason!.trim().isNotEmpty)
+                          ? 'Reason: "${schedule.rejectionReason!.trim()}"'
+                          : 'No specific reason provided.',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        height: 1.4,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF7A2C2C),
+                      ),
+                    ),
+                    if (schedule.preferredTime != null &&
+                        schedule.preferredTime!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.78),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.event_available_rounded,
+                              size: 16,
+                              color: Color(0xFF163B65),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Preferred Time: ${schedule.preferredTime!.trim()}',
+                                style: const TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF163B65),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () => _startInternalInterview(schedule.scheduleID),
-                  icon: const Icon(Icons.video_camera_front_rounded),
-                  label: const Text('Start Video Call'),
+                  onPressed: () => _openReschedule(
+                    applicantId: applicantId,
+                    candidateName: candidateName,
+                    seekerId: seekerId,
+                    preferredTime: schedule.preferredTime,
+                    rejectionReason: schedule.rejectionReason,
+                  ),
+                  icon: const Icon(Icons.calendar_month_rounded),
+                  label: const Text('Reschedule Interview'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF163B65),
                     foregroundColor: Colors.white,
@@ -543,24 +760,64 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
                   ),
                 ),
               ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () =>
-                    _markAsCompleted(applicantId, schedule.scheduleID),
-                icon: const Icon(Icons.task_alt_rounded),
-                label: const Text('Mark as Interviewed'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF2D8A5D),
-                  side: const BorderSide(color: Color(0xFFCDE9D8)),
-                  padding: const EdgeInsets.symmetric(vertical: 15),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+            ] else if (isAccepted) ...[
+              const SizedBox(height: 20),
+              if (isOnline &&
+                  schedule.meetingLink != null &&
+                  schedule.meetingLink!.isNotEmpty)
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _launchURL(schedule.meetingLink!),
+                    icon: const Icon(Icons.link_rounded, size: 18),
+                    label: const Text('Join External Meeting'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF163B65),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  ),
+                )
+              else if (isInternal)
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () =>
+                        _startInternalInterview(schedule.scheduleID),
+                    icon: const Icon(Icons.video_camera_front_rounded),
+                    label: const Text('Start Video Call'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF163B65),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () =>
+                      _markAsCompleted(applicantId, schedule.scheduleID),
+                  icon: const Icon(Icons.task_alt_rounded),
+                  label: const Text('Mark as Interviewed'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF2D8A5D),
+                    side: const BorderSide(color: Color(0xFFCDE9D8)),
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
                 ),
               ),
-            ),
+            ],
           ],
         ),
       ),
