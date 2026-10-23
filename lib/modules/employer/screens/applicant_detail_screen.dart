@@ -541,6 +541,14 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
               ),
             ),
             const SizedBox(height: 18),
+            if (aiScore != null ||
+                (widget.applicantData['aiFeedback'] ?? '')
+                    .toString()
+                    .trim()
+                    .isNotEmpty) ...[
+              _buildAiAnalysisCard(aiScore),
+              const SizedBox(height: 18),
+            ],
             _buildSectionCard(
               title: 'Application Status',
               subtitle:
@@ -721,6 +729,123 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAiAnalysisCard(dynamic aiScore) {
+    final int? scoreInt = (aiScore as num?)?.round();
+    final String feedback =
+        (widget.applicantData['aiFeedback'] ?? '').toString().trim();
+
+    Color badgeFg = const Color(0xFFC28A22);
+    Color badgeBg = const Color(0xFFFEF3DC);
+    if (scoreInt != null) {
+      if (scoreInt >= 75) {
+        badgeFg = const Color(0xFF2D8A5D);
+        badgeBg = const Color(0xFFE5F6ED);
+      } else if (scoreInt < 50) {
+        badgeFg = const Color(0xFFC24E4E);
+        badgeBg = const Color(0xFFFDECEC);
+      }
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFEEF4FF), Color(0xFFF8F5FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFD8E4F5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF163B65),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.auto_awesome_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'AI Smart Match Analysis',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF1B2433),
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Resume & requirements evaluation',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: Color(0xFF687588),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (scoreInt != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: badgeBg,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '$scoreInt% Match',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                      color: badgeFg,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          if (feedback.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text(
+                feedback,
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  height: 1.5,
+                  color: Color(0xFF334155),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

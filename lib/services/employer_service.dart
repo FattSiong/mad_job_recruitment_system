@@ -1,14 +1,15 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/company_model.dart';
 import '../models/job_model.dart';
 import '../models/company_member_model.dart';
 import 'dart:io';
+import 'dart:typed_data';
 import '../core/constants/table_constants.dart';
 import 'dart:convert';
 import 'package:google_generative_ai/google_generative_ai.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
+import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 class EmployerService {
   // Get the single instance of our Supabase client
@@ -771,18 +772,266 @@ CRITICAL INSTRUCTION: Output ONLY the question/request text itself. Do not use q
   // 1. Fetch all applicants for a specific job
   Future<List<Map<String, dynamic>>> getJobApplicants(String jobId) async {
     try {
-      // We use a JOIN to grab the applicant's data AND their JobSeeker profile (for their name)
-      final response = await _supabase
-          .from('JobApplicant')
-          .select('*, JobSeeker(*)')
-          .eq('jobID', jobId)
-          .order('appliedAt', ascending: false);
+      dynamic response;
+      try {
+        response = await _supabase
+            .from('JobApplicant')
+            .select('*, JobSeeker(*, WorkExperience(*), Education(*))')
+            .eq('jobID', jobId)
+            .order('appliedAt', ascending: false);
+      } catch (_) {
+        response = await _supabase
+            .from('JobApplicant')
+            .select('*, JobSeeker(*)')
+            .eq('jobID', jobId)
+            .order('appliedAt', ascending: false);
+      }
 
-      return List<Map<String, dynamic>>.from(response);
+      final list = List<Map<String, dynamic>>.from(response);
+
+      // Sort ranked applicants by highest AI match score first; unranked stay below sorted by appliedAt
+      list.sort((a, b) {
+        final scoreA = (a['aiRankingScore'] as num?)?.toDouble();
+        final scoreB = (b['aiRankingScore'] as num?)?.toDouble();
+
+        if (scoreA != null && scoreB != null) {
+          final cmp = scoreB.compareTo(scoreA);
+          if (cmp != 0) return cmp;
+        } else if (scoreA != null) {
+          return -1;
+        } else if (scoreB != null) {
+          return 1;
+        }
+
+        final dateA = DateTime.tryParse((a['appliedAt'] ?? '').toString());
+        final dateB = DateTime.tryParse((b['appliedAt'] ?? '').toString());
+        if (dateA != null && dateB != null) {
+          return dateB.compareTo(dateA);
+        }
+        return 0;
+      });
+
+      return list;
     } catch (e) {
       print('Fetch applicants error: $e');
       return [];
     }
+  }
+
+  /// Extracts text from PDF bytes using Syncfusion PDF as supplementary context.
+  String _extractPdfTextFallback(Uint8List bytes) {
+    try {
+      final document = PdfDocument(inputBytes: bytes);
+      final text = PdfTextExtractor(document).extractText();
+      document.dispose();
+      return text.trim();
+    } catch (_) {
+      return '';
+    }
+  }
+
+  /// Evaluates a single applicant against the job requirements using Gemini AI
+  /// and saves `aiRankingScore` + `aiFeedback` into `JobApplicant`.
+  Future<bool> rankApplicantWithAI({
+    required JobModel job,
+    required Map<String, dynamic> applicantData,
+  }) async {
+    try {
+      final applicantId = (applicantData['applicantID'] ?? '').toString();
+      if (applicantId.isEmpty) return false;
+
+      const apiKey = 'AIzaSyCPF5BiUdWIoroAWm42IhiUfxDMkQzFJ6U';
+      final model = GenerativeModel(
+        model: 'gemini-3-flash-preview',
+        apiKey: apiKey,
+      );
+
+      final seeker =
+          (applicantData['JobSeeker'] as Map<String, dynamic>?) ?? {};
+      final fullName = (seeker['fullName'] ?? 'Candidate').toString();
+      final bio = (seeker['bio'] ?? '').toString().trim();
+      final seekerLocation = (seeker['location'] ?? '').toString().trim();
+
+      // Format structured WorkExperience & Education from profile if available
+      final experiences = (seeker['WorkExperience'] as List?) ?? const [];
+      final educations = (seeker['Education'] as List?) ?? const [];
+
+      final expLines = experiences.map((e) {
+        if (e is! Map) return '';
+        final role = e['jobTitle'] ?? '';
+        final company = e['companyName'] ?? '';
+        final start = e['startDate'] ?? '';
+        final end = (e['isCurrent'] == true) ? 'Present' : (e['endDate'] ?? '');
+        final desc = (e['description'] ?? '').toString().trim();
+        return '- $role at $company ($start to $end)${desc.isNotEmpty ? ': $desc' : ''}';
+      }).where((s) => s.isNotEmpty).join('\n');
+
+      final eduLines = educations.map((e) {
+        if (e is! Map) return '';
+        final degree = e['degree'] ?? '';
+        final field = e['fieldOfStudy'] ?? '';
+        final inst = e['institutionName'] ?? '';
+        final start = e['startDate'] ?? '';
+        final end = (e['isCurrent'] == true) ? 'Present' : (e['endDate'] ?? '');
+        return '- $degree ${field.toString().isNotEmpty ? 'in $field ' : ''}at $inst ($start to $end)';
+      }).where((s) => s.isNotEmpty).join('\n');
+
+      // Fetch pre-screening answers
+      final answers = await getApplicantAnswers(applicantId);
+      final answerLines = answers.map((ans) {
+        final q = ans['PreScreeningQuestion'] ?? {};
+        final qText = (q['questionText'] ?? 'Question').toString();
+        final qType = (q['questionType'] ?? 'Text').toString();
+        final aText = (ans['answerText'] ?? '').toString().trim();
+        final hasFile =
+            (ans['answerFileURL'] ?? '').toString().trim().isNotEmpty;
+        final responseDesc = qType == 'File'
+            ? (hasFile ? '[Uploaded supporting document]' : '[No file uploaded]')
+            : (aText.isNotEmpty ? aText : '[No answer provided]');
+        return '- Q: $qText\n  A: $responseDesc';
+      }).join('\n');
+
+      // Download submitted resume PDF if available
+      final resumeUrl =
+          (applicantData['submittedResumeURL'] ?? '').toString().trim();
+      Uint8List? resumePdfBytes;
+      String extractedResumeText = '';
+
+      if (resumeUrl.isNotEmpty && resumeUrl.startsWith('http')) {
+        try {
+          final response = await http
+              .get(Uri.parse(resumeUrl))
+              .timeout(const Duration(seconds: 15));
+          if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+            resumePdfBytes = response.bodyBytes;
+            extractedResumeText = _extractPdfTextFallback(resumePdfBytes);
+          }
+        } catch (e) {
+          print('Resume download warning for $applicantId: $e');
+        }
+      }
+
+      final jobLocation = (job.locationName ?? '').trim().isNotEmpty
+          ? job.locationName!.trim()
+          : 'Not specified';
+      final workingPeriod = (job.workingPeriod ?? '').trim().isNotEmpty
+          ? job.workingPeriod!.trim()
+          : 'Not specified';
+
+      final promptText = '''
+You are an expert AI Technical Recruiter and Talent Evaluator.
+Compare the following Job Requirements against the Candidate's Resume, Profile, and Pre-Screening Answers, then calculate an objective Match Score (0 to 100) and concise recruiter feedback.
+
+=== JOB DETAILS & REQUIREMENTS ===
+- Job Title: ${job.title}
+- Employment Type: ${job.jobType}
+- Work Arrangement: ${job.workplaceType}
+- Working Schedule: $workingPeriod
+- Minimum Qualification: ${job.qualification}
+- Minimum Experience Required: ${job.minExperienceYears} year(s)
+- Job Location: $jobLocation
+- Offered Salary Range: ${job.salaryRange}
+- Full Job Description:
+${job.description}
+
+=== CANDIDATE INFORMATION ===
+- Candidate Name: $fullName
+- Candidate Location: ${seekerLocation.isEmpty ? 'Not specified' : seekerLocation}
+- Profile Summary / Bio: ${bio.isEmpty ? 'Not provided' : bio}
+- Profile Education:
+${eduLines.isEmpty ? 'None listed in profile (check attached resume)' : eduLines}
+- Profile Work Experience:
+${expLines.isEmpty ? 'None listed in profile (check attached resume)' : expLines}
+- Pre-Screening Question Responses:
+${answerLines.isEmpty ? 'No pre-screening questions for this job' : answerLines}
+${extractedResumeText.isNotEmpty ? '\n=== EXTRACTED RESUME TEXT ===\n$extractedResumeText' : ''}
+
+=== SCORING RUBRIC ===
+Evaluate across:
+1. Skills & Technical/Role Alignment with the Job Title and Description (40%)
+2. Relevant Work Experience vs. Minimum Experience Required (${job.minExperienceYears} yrs) (30%)
+3. Education / Qualification vs. Minimum Qualification (${job.qualification}) (15%)
+4. Pre-Screening Answers & Overall Profile Completeness (15%)
+
+Return ONLY a valid JSON object with the exact following keys (no markdown fences, no extra commentary):
+{
+  "score": <number from 0 to 100>,
+  "feedback": "<2 to 3 concise sentences highlighting key matching strengths and any missing requirements or gaps>"
+}
+''';
+
+      final List<Part> parts = [TextPart(promptText)];
+      if (resumePdfBytes != null &&
+          resumeUrl.toLowerCase().split('?').first.endsWith('.pdf')) {
+        parts.add(DataPart('application/pdf', resumePdfBytes));
+      }
+
+      final aiResponse = await model.generateContent([Content.multi(parts)]);
+      final rawText = aiResponse.text?.trim() ?? '';
+      if (rawText.isEmpty) return false;
+
+      // Clean potential markdown code fences around JSON
+      String cleanedJson = rawText
+          .replaceAll(RegExp(r'^```json\s*', multiLine: true), '')
+          .replaceAll(RegExp(r'^```\s*', multiLine: true), '')
+          .replaceAll(RegExp(r'\s*```$', multiLine: true), '')
+          .trim();
+
+      final startBrace = cleanedJson.indexOf('{');
+      final endBrace = cleanedJson.lastIndexOf('}');
+      if (startBrace != -1 && endBrace != -1 && endBrace > startBrace) {
+        cleanedJson = cleanedJson.substring(startBrace, endBrace + 1);
+      }
+
+      final decoded = jsonDecode(cleanedJson) as Map<String, dynamic>;
+      final rawScore = (decoded['score'] as num?)?.toDouble() ?? 0.0;
+      final clampedScore = rawScore.clamp(0.0, 100.0).roundToDouble();
+      final feedback = (decoded['feedback'] ?? '').toString().trim();
+
+      await _supabase
+          .from('JobApplicant')
+          .update({
+            'aiRankingScore': clampedScore,
+            'aiFeedback': feedback.isEmpty ? null : feedback,
+          })
+          .eq('applicantID', applicantId);
+
+      return true;
+    } catch (e) {
+      print('AI Ranking Error for applicant: $e');
+      return false;
+    }
+  }
+
+  /// Ranks all (or only unranked) candidates for a job and invokes [onProgress]
+  /// after each candidate is processed. Returns the number of successfully ranked candidates.
+  Future<int> rankJobCandidatesWithAI({
+    required JobModel job,
+    required List<Map<String, dynamic>> applicants,
+    bool onlyUnranked = false,
+    void Function(int completed, int total)? onProgress,
+  }) async {
+    final targets = onlyUnranked
+        ? applicants.where((a) => a['aiRankingScore'] == null).toList()
+        : applicants;
+
+    final total = targets.length;
+    if (total == 0) return 0;
+
+    int successCount = 0;
+    int completed = 0;
+
+    for (final applicant in targets) {
+      final ok = await rankApplicantWithAI(
+        job: job,
+        applicantData: applicant,
+      );
+      if (ok) successCount++;
+      completed++;
+      onProgress?.call(completed, total);
+    }
+
+    return successCount;
   }
 
   // 2. Fetch the pre-screening answers for a specific applicant

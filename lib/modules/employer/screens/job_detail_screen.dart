@@ -26,6 +26,9 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
 
   bool _isStatusUpdating = false;
   bool _isApplicantsLoading = true;
+  bool _isRankingWithAi = false;
+  int _rankingCompletedCount = 0;
+  int _rankingTotalCount = 0;
 
   List<Map<String, dynamic>> _applicants = [];
 
@@ -57,6 +60,63 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
       _applicants = applicants;
       _isApplicantsLoading = false;
     });
+  }
+
+  Future<void> _rankCandidatesWithAi({bool onlyUnranked = false}) async {
+    if (_isRankingWithAi || _applicants.isEmpty) return;
+
+    final targets = onlyUnranked
+        ? _applicants.where((a) => a['aiRankingScore'] == null).toList()
+        : _applicants;
+
+    if (targets.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('All applicants already have AI match scores.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isRankingWithAi = true;
+      _rankingCompletedCount = 0;
+      _rankingTotalCount = targets.length;
+    });
+
+    final rankedCount = await _employerService.rankJobCandidatesWithAI(
+      job: _currentJob,
+      applicants: _applicants,
+      onlyUnranked: onlyUnranked,
+      onProgress: (completed, total) {
+        if (!mounted) return;
+        setState(() {
+          _rankingCompletedCount = completed;
+          _rankingTotalCount = total;
+        });
+      },
+    );
+
+    if (!mounted) return;
+
+    await _loadApplicants();
+
+    if (!mounted) return;
+
+    setState(() {
+      _isRankingWithAi = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          rankedCount > 0
+              ? 'AI ranked $rankedCount/${targets.length} candidate(s) and sorted by best match!'
+              : 'Could not generate AI rankings. Please check internet connection or resume access.',
+        ),
+        backgroundColor: rankedCount > 0 ? const Color(0xFF2D8A5D) : Colors.red,
+      ),
+    );
   }
 
   Future<void> _toggleJobStatus() async {
@@ -534,11 +594,13 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     );
   }
 
-  Widget _buildApplicantCard(Map<String, dynamic> data) {
+  Widget _buildApplicantCard(Map<String, dynamic> data, {int? rankNumber}) {
     final seeker = data['JobSeeker'] ?? {};
     final name = seeker['fullName'] ?? 'Unknown Applicant';
     final status = data['applicationStatus'] ?? 'pending';
-    final aiScore = data['aiRankingScore'];
+    final num? rawScore = data['aiRankingScore'] as num?;
+    final int? aiScore = rawScore?.round();
+    final String aiFeedback = (data['aiFeedback'] ?? '').toString().trim();
 
     final appliedAt = data['appliedAt'] != null
         ? DateTime.tryParse(data['appliedAt'].toString())
@@ -547,6 +609,18 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     final appliedDate = appliedAt != null
         ? appliedAt.toLocal().toString().split(' ')[0]
         : 'Unknown Date';
+
+    Color scoreFg = const Color(0xFFC28A22);
+    Color scoreBg = const Color(0xFFFEF3DC);
+    if (aiScore != null) {
+      if (aiScore >= 75) {
+        scoreFg = const Color(0xFF2D8A5D);
+        scoreBg = const Color(0xFFE5F6ED);
+      } else if (aiScore < 50) {
+        scoreFg = const Color(0xFFC24E4E);
+        scoreBg = const Color(0xFFFDECEC);
+      }
+    }
 
     return Material(
       color: const Color(0xFFF7F9FC),
@@ -569,6 +643,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
@@ -589,13 +664,45 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          name,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF1B2433),
-                          ),
+                        Row(
+                          children: [
+                            if (rankNumber != null && aiScore != null) ...[
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: rankNumber == 1
+                                      ? const Color(0xFF163B65)
+                                      : const Color(0xFFDCEBFB),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  '#$rankNumber',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    color: rankNumber == 1
+                                        ? Colors.white
+                                        : const Color(0xFF163B65),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                            ],
+                            Expanded(
+                              child: Text(
+                                name,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF1B2433),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -626,8 +733,8 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                     _buildApplicantsMetaChip(
                       icon: Icons.auto_awesome_rounded,
                       text: 'AI match $aiScore%',
-                      color: const Color(0xFFC28A22),
-                      backgroundColor: const Color(0xFFFEF3DC),
+                      color: scoreFg,
+                      backgroundColor: scoreBg,
                     ),
                   ] else ...[
                     const SizedBox(width: 10),
@@ -640,6 +747,42 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                   ],
                 ],
               ),
+              if (aiFeedback.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(
+                        Icons.psychology_alt_rounded,
+                        size: 16,
+                        color: Color(0xFF163B65),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          aiFeedback,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            height: 1.4,
+                            color: Color(0xFF4F5D70),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 14),
               const Row(
                 children: [
@@ -879,7 +1022,10 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                 separatorBuilder: (context, index) => const SizedBox(height: 12),
                 itemBuilder: (context, index) {
                   final data = _applicants[index];
-                  return _buildApplicantCard(data);
+                  return _buildApplicantCard(
+                    data,
+                    rankNumber: data['aiRankingScore'] != null ? index + 1 : null,
+                  );
                 },
               ),
             ],
@@ -890,6 +1036,12 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
   }
 
   Widget _buildAiRankingPanel() {
+    final totalCount = _applicants.length;
+    final rankedCount =
+        _applicants.where((a) => a['aiRankingScore'] != null).length;
+    final unrankedCount = totalCount - rankedCount;
+    final allRanked = totalCount > 0 && unrankedCount == 0;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -941,16 +1093,24 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                 ),
               ),
               _buildApplicantsMetaChip(
-                icon: Icons.schedule_rounded,
-                text: 'Coming soon',
-                color: const Color(0xFF6B4FD3),
-                backgroundColor: const Color(0xFFF0EAFF),
+                icon: allRanked
+                    ? Icons.verified_rounded
+                    : Icons.auto_awesome_rounded,
+                text: totalCount == 0
+                    ? 'No applicants'
+                    : '$rankedCount/$totalCount ranked',
+                color: allRanked
+                    ? const Color(0xFF2D8A5D)
+                    : const Color(0xFF163B65),
+                backgroundColor: allRanked
+                    ? const Color(0xFFE5F6ED)
+                    : const Color(0xFFDCEBFB),
               ),
             ],
           ),
           const SizedBox(height: 18),
           const Text(
-            'Rank applicants against this job’s requirements using their resumes, skills, and experience. AI match scores will appear on each candidate once ranking is available.',
+            'Compare each applicant’s uploaded resume, profile experience, education, and pre-screening answers against this job’s requirements using Gemini AI.',
             style: TextStyle(
               fontSize: 14,
               height: 1.45,
@@ -964,7 +1124,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
             children: [
               _buildApplicantsMetaChip(
                 icon: Icons.description_outlined,
-                text: 'Resume match',
+                text: 'PDF Resume analysis',
                 color: const Color(0xFF163B65),
                 backgroundColor: Colors.white,
               ),
@@ -974,31 +1134,118 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                 color: const Color(0xFF163B65),
                 backgroundColor: Colors.white,
               ),
+              _buildApplicantsMetaChip(
+                icon: Icons.quiz_outlined,
+                text: 'Screening answers',
+                color: const Color(0xFF163B65),
+                backgroundColor: Colors.white,
+              ),
             ],
           ),
           const SizedBox(height: 18),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('AI candidate ranking will be available soon.'),
+          if (_isRankingWithAi)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFD8E4F5)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      color: Color(0xFF163B65),
+                    ),
                   ),
-                );
-              },
-              icon: const Icon(Icons.auto_awesome_rounded),
-              label: const Text('Rank candidates with AI'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF163B65),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                side: const BorderSide(color: Color(0xFF163B65)),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+                  const SizedBox(width: 12),
+                  Flexible(
+                    child: Text(
+                      'Analyzing candidate ${_rankingCompletedCount + 1 > _rankingTotalCount ? _rankingTotalCount : _rankingCompletedCount + 1} of $_rankingTotalCount with Gemini AI...',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF163B65),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else if (totalCount > 0 && unrankedCount > 0 && rankedCount > 0)
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () =>
+                        _rankCandidatesWithAi(onlyUnranked: true),
+                    icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+                    label: Text('Rank New ($unrankedCount)'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF163B65),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () =>
+                        _rankCandidatesWithAi(onlyUnranked: false),
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: const Text('Re-rank All'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF163B65),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: const BorderSide(color: Color(0xFF163B65)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          else
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: totalCount == 0
+                    ? null
+                    : () => _rankCandidatesWithAi(onlyUnranked: false),
+                icon: Icon(
+                  allRanked
+                      ? Icons.refresh_rounded
+                      : Icons.auto_awesome_rounded,
+                ),
+                label: Text(
+                  allRanked
+                      ? 'Re-rank All Candidates with AI'
+                      : 'Rank Candidates with AI',
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF163B65),
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: const Color(0xFFD8E2EE),
+                  disabledForegroundColor: const Color(0xFF7B8798),
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
               ),
             ),
-          ),
         ],
       ),
     );
