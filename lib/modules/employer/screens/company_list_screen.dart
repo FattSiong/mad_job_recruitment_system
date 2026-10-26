@@ -99,20 +99,28 @@ class _CompanyListScreenState extends State<CompanyListScreen> {
     final normalized = status.toLowerCase();
     late final Color badgeColor;
     late final Color backgroundColor;
+    late final String label;
+    late final IconData icon;
 
     switch (normalized) {
       case 'approved':
       case 'verified':
         badgeColor = const Color(0xFF2D8A5D);
         backgroundColor = const Color(0xFFE5F6ED);
+        label = 'Verified';
+        icon = Icons.verified_rounded;
         break;
       case 'rejected':
         badgeColor = const Color(0xFFC24E4E);
         backgroundColor = const Color(0xFFFCE9E9);
+        label = 'Rejected';
+        icon = Icons.cancel_outlined;
         break;
       default:
         badgeColor = const Color(0xFFC28A22);
         backgroundColor = const Color(0xFFFEF3DC);
+        label = 'Pending';
+        icon = Icons.schedule_rounded;
     }
 
     return Container(
@@ -121,14 +129,21 @@ class _CompanyListScreenState extends State<CompanyListScreen> {
         color: backgroundColor,
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(
-        status.toUpperCase(),
-        style: TextStyle(
-          color: badgeColor,
-          fontWeight: FontWeight.w700,
-          fontSize: 11,
-          letterSpacing: 0.2,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: badgeColor),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: badgeColor,
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -138,19 +153,27 @@ class _CompanyListScreenState extends State<CompanyListScreen> {
 
     late final Color color;
     late final Color backgroundColor;
+    late final String label;
+    late final IconData icon;
 
     switch (normalized) {
       case 'MONTHLY':
         color = const Color(0xFF1E8F8B);
         backgroundColor = const Color(0xFFE2F6F5);
+        label = 'PREMIUM MONTHLY';
+        icon = Icons.workspace_premium_rounded;
         break;
       case 'ANNUALLY':
         color = const Color(0xFF6B4FD3);
         backgroundColor = const Color(0xFFEEE8FF);
+        label = 'PREMIUM ANNUAL';
+        icon = Icons.workspace_premium_rounded;
         break;
-      default: // FREE
+      default: // FREE in database
         color = const Color(0xFF687588);
         backgroundColor = const Color(0xFFEFF3F8);
+        label = 'STANDARD PLAN';
+        icon = Icons.layers_outlined;
     }
 
     return Container(
@@ -159,13 +182,21 @@ class _CompanyListScreenState extends State<CompanyListScreen> {
         color: backgroundColor,
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(
-        normalized,
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w700,
-          fontSize: 11,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w700,
+              fontSize: 11,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -209,21 +240,23 @@ class _CompanyListScreenState extends State<CompanyListScreen> {
                   padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
                   child: Row(
                     children: [
-                      const Expanded(
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Company Directory',
-                              style: TextStyle(
+                              _isAdmin
+                                  ? 'Submitted Companies'
+                                  : 'Company List',
+                              style: const TextStyle(
                                 fontSize: 22,
                                 fontWeight: FontWeight.w800,
                                 color: Color(0xFF1B2433),
                               ),
                             ),
-                            SizedBox(height: 6),
-                            Text(
-                              'Open a company to review its profile, status, and workspace details.',
+                            const SizedBox(height: 6),
+                            const Text(
+                              'Select a company to view its profile, verification status, and subscription plan.',
                               style: TextStyle(
                                 fontSize: 14,
                                 height: 1.4,
@@ -307,10 +340,10 @@ class _CompanyListScreenState extends State<CompanyListScreen> {
           ),
         ),
         const SizedBox(width: 12),
-        const Expanded(
+        Expanded(
           child: Text(
-            'Company Directory',
-            style: TextStyle(
+            _isAdmin ? 'Company Directory' : 'My Companies',
+            style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w800,
               color: Color(0xFF1B2433),
@@ -357,7 +390,7 @@ class _CompanyListScreenState extends State<CompanyListScreen> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      _isAdmin ? 'Admin Directory' : 'Employer Companies',
+                      _isAdmin ? 'Admin Review Portal' : 'Employer Workspace',
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
@@ -367,9 +400,9 @@ class _CompanyListScreenState extends State<CompanyListScreen> {
                 ),
               ),
               const Spacer(),
-              const Text(
-                'Directory',
-                style: TextStyle(
+              Text(
+                '${_companies.length} ${_companies.length == 1 ? 'Company' : 'Companies'}',
+                style: const TextStyle(
                   color: Colors.white70,
                   fontWeight: FontWeight.w600,
                 ),
@@ -404,20 +437,20 @@ class _CompanyListScreenState extends State<CompanyListScreen> {
             children: [
               _buildHeaderChip(
                 Icons.business_center_rounded,
-                '${_companies.length} total',
+                '${_companies.length} Total',
               ),
               _buildHeaderChip(
                 Icons.verified_rounded,
-                '$_verifiedCount verified',
+                '$_verifiedCount Verified',
               ),
               _buildHeaderChip(
                 Icons.hourglass_top_rounded,
-                '$_pendingCount pending',
+                '$_pendingCount Pending Review',
               ),
               if (_rejectedCount > 0)
                 _buildHeaderChip(
                   Icons.report_gmailerrorred_rounded,
-                  '$_rejectedCount rejected',
+                  '$_rejectedCount Rejected',
                 ),
             ],
           ),
@@ -541,7 +574,7 @@ class _CompanyListScreenState extends State<CompanyListScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Container(
                     width: 60,
@@ -575,62 +608,42 @@ class _CompanyListScreenState extends State<CompanyListScreen> {
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(
-                          company.name,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF1B2433),
-                          ),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                company.name,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF1B2433),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(
+                              Icons.arrow_forward_ios_rounded,
+                              size: 16,
+                              color: isVerified
+                                  ? const Color(0xFF163B65)
+                                  : const Color(0xFF9AA5B5),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'SSM: ${company.registrationNumber}',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Color(0xFF687588),
-                          ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          children: [
+                            _buildStatusBadge(company.verificationStatus),
+                            _buildPlanBadge(company.currentPlanType),
+                          ],
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Icon(
-                    Icons.arrow_forward_ios_rounded,
-                    size: 16,
-                    color: isVerified
-                        ? const Color(0xFF163B65)
-                        : const Color(0xFF9AA5B5),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _buildStatusBadge(company.verificationStatus),
-                  _buildPlanBadge(company.currentPlanType),
-                  if (isVerified)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE5F6ED),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: const Text(
-                        'LIVE',
-                        style: TextStyle(
-                          color: Color(0xFF2D8A5D),
-                          fontWeight: FontWeight.w700,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ),
                 ],
               ),
               const SizedBox(height: 14),

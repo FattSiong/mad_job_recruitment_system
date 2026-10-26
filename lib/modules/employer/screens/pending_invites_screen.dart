@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../../models/company_model.dart';
 import '../../../services/employer_service.dart';
+import 'company_detail_screen.dart';
 
 class PendingInvitationsScreen extends StatefulWidget {
   const PendingInvitationsScreen({super.key});
@@ -59,6 +61,50 @@ class _PendingInvitationsScreenState extends State<PendingInvitationsScreen> {
     }
   }
 
+  CompanyModel? _extractCompanyModel(Map<String, dynamic> invite) {
+    final rawCompany = invite['Company'];
+    if (rawCompany is Map<String, dynamic>) {
+      try {
+        return CompanyModel.fromJson(rawCompany);
+      } catch (_) {}
+    } else if (rawCompany is Map) {
+      try {
+        return CompanyModel.fromJson(Map<String, dynamic>.from(rawCompany));
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  Future<void> _openCompanyProfile({
+    required String companyId,
+    CompanyModel? companyModel,
+  }) async {
+    CompanyModel? targetCompany = companyModel;
+
+    if (targetCompany == null || targetCompany.companyID == null) {
+      targetCompany = await _employerService.getCompanyById(companyId);
+    }
+
+    if (!mounted) return;
+
+    if (targetCompany == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not load company profile details.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CompanyDetailScreen(company: targetCompany!),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -79,18 +125,21 @@ class _PendingInvitationsScreenState extends State<PendingInvitationsScreen> {
                     _buildSectionHeader(),
                     const SizedBox(height: 16),
                     ..._invitations.map((invite) {
-                      final companyName =
-                          invite['Company']?['name'] ?? 'Unknown Company';
-                      final companyId = invite['companyID'];
+                      final companyModel = _extractCompanyModel(invite);
+                      final companyName = companyModel?.name ??
+                          invite['Company']?['name'] ??
+                          'Unknown Company';
+                      final companyId = invite['companyID']?.toString() ?? '';
 
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 14),
                         child: _buildInviteCard(
                           companyName: companyName,
                           companyId: companyId,
+                          company: companyModel,
                         ),
                       );
-                    }).toList(),
+                    }),
                   ],
                 ],
               ),
@@ -189,7 +238,7 @@ class _PendingInvitationsScreenState extends State<PendingInvitationsScreen> {
           ),
           const SizedBox(height: 10),
           const Text(
-            'Review each invitation carefully before joining a company workspace.',
+            'Inspect each company profile carefully before joining a company workspace.',
             style: TextStyle(color: Colors.white70, fontSize: 15, height: 1.4),
           ),
         ],
@@ -211,7 +260,7 @@ class _PendingInvitationsScreenState extends State<PendingInvitationsScreen> {
         ),
         SizedBox(height: 6),
         Text(
-          'Accept an invite to join a company, or decline if it is not relevant.',
+          'View the company profile to learn more, then accept or decline the invitation.',
           style: TextStyle(fontSize: 13, height: 1.4, color: Color(0xFF687588)),
         ),
       ],
@@ -269,69 +318,184 @@ class _PendingInvitationsScreenState extends State<PendingInvitationsScreen> {
   Widget _buildInviteCard({
     required String companyName,
     required String companyId,
+    CompanyModel? company,
   }) {
+    final bool hasLogo = company?.companyLogoURL != null &&
+        company!.companyLogoURL!.trim().isNotEmpty;
+    final bool isVerified = company != null &&
+        (company.isVerified ||
+            company.verificationStatus.toLowerCase() == 'verified' ||
+            company.verificationStatus.toLowerCase() == 'approved');
+    final String? address =
+        (company?.companyAddress != null &&
+                company!.companyAddress!.trim().isNotEmpty)
+            ? company.companyAddress!.trim()
+            : null;
+    final String? description =
+        (company != null && company.description.trim().isNotEmpty)
+            ? company.description.trim()
+            : null;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0D10243E),
+            blurRadius: 16,
+            offset: Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFDCEBFB),
-                  borderRadius: BorderRadius.circular(16),
+          InkWell(
+            onTap: () => _openCompanyProfile(
+              companyId: companyId,
+              companyModel: company,
+            ),
+            borderRadius: BorderRadius.circular(18),
+            child: Row(
+              children: [
+                Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDCEBFB),
+                    borderRadius: BorderRadius.circular(16),
+                    image: hasLogo
+                        ? DecorationImage(
+                            image: NetworkImage(company!.companyLogoURL!),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
+                  ),
+                  child: !hasLogo
+                      ? Center(
+                          child: Text(
+                            companyName.isNotEmpty
+                                ? companyName.substring(0, 1).toUpperCase()
+                                : 'C',
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF163B65),
+                            ),
+                          ),
+                        )
+                      : null,
                 ),
-                child: Center(
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Invitation to join',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF687588),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              companyName,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF1B2433),
+                              ),
+                            ),
+                          ),
+                          if (isVerified) ...[
+                            const SizedBox(width: 6),
+                            const Icon(
+                              Icons.verified_rounded,
+                              size: 18,
+                              color: Color(0xFF2D8A5D),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: Color(0xFF687588),
+                ),
+              ],
+            ),
+          ),
+          if (address != null) ...[
+            const SizedBox(height: 14),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.location_on_outlined,
+                  size: 16,
+                  color: Color(0xFF687588),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
                   child: Text(
-                    companyName.substring(0, 1).toUpperCase(),
+                    address,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF163B65),
+                      fontSize: 13,
+                      color: Color(0xFF4F5C6C),
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Invitation to join',
-                      style: TextStyle(fontSize: 13, color: Color(0xFF687588)),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      companyName,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF1B2433),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          const Text(
-            'Joining this company will give you access to its employer workspace and hiring tools.',
-            style: TextStyle(
+              ],
+            ),
+          ],
+          const SizedBox(height: 12),
+          Text(
+            description ??
+                'Joining this company will give you access to its employer workspace and hiring tools.',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
               fontSize: 14,
               height: 1.45,
               color: Color(0xFF687588),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton.icon(
+              onPressed: () => _openCompanyProfile(
+                companyId: companyId,
+                companyModel: company,
+              ),
+              icon: const Icon(Icons.business_rounded, size: 18),
+              label: const Text(
+                'View Company Profile',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              style: TextButton.styleFrom(
+                backgroundColor: const Color(0xFFF1F5FA),
+                foregroundColor: const Color(0xFF163B65),
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(

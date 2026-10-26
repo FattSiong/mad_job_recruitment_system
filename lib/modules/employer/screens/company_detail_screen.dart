@@ -21,6 +21,7 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
   List<Map<String, dynamic>> _members = [];
   bool _isLoading = true;
   bool _isOwner = false;
+  bool _isActiveMember = false;
 
   @override
   void initState() {
@@ -37,11 +38,18 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
     if (mounted) {
       setState(() {
         _members = members;
+        _isOwner = false;
+        _isActiveMember = false;
 
         if (_currentUser != null) {
           final myRecord = members.where((m) => m['employerID'] == _currentUser.id).toList();
-          if (myRecord.isNotEmpty && myRecord.first['companyRole'] == 'owner') {
-            _isOwner = true;
+          if (myRecord.isNotEmpty) {
+            final status = (myRecord.first['status'] ?? '').toString().toLowerCase();
+            final role = (myRecord.first['companyRole'] ?? '').toString().toLowerCase();
+            _isActiveMember = status == 'active';
+            if (role == 'owner' && _isActiveMember) {
+              _isOwner = true;
+            }
           }
         }
 
@@ -291,7 +299,7 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
                 children: [
                   _buildInfoRow(
                     icon: Icons.badge_rounded,
-                    label: 'SSM Number',
+                    label: 'Registration No. (SSM)',
                     value: company.registrationNumber,
                   ),
                   const SizedBox(height: 14),
@@ -314,7 +322,7 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
                 ],
               ),
             ),
-            if (isApproved) ...[
+            if (isApproved && _isActiveMember) ...[
               const SizedBox(height: 18),
               _buildSectionCard(
                 title: 'Team Members',
@@ -485,14 +493,6 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'SSM: ${company.registrationNumber}',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -504,30 +504,43 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
             runSpacing: 8,
             children: [
               _buildHeroBadge(
-                isApproved
-                    ? 'VERIFIED'
+                label: isApproved
+                    ? 'Verified'
                     : isRejected
-                    ? 'REJECTED'
-                    : company.verificationStatus.toUpperCase(),
-                isApproved
+                    ? 'Rejected'
+                    : 'Pending Verification',
+                icon: isApproved
+                    ? Icons.verified_rounded
+                    : isRejected
+                    ? Icons.cancel_outlined
+                    : Icons.schedule_rounded,
+                bg: isApproved
                     ? const Color(0xFFE5F6ED)
                     : isRejected
                     ? const Color(0xFFFCE9E9)
                     : const Color(0xFFFEF3DC),
-                isApproved
+                fg: isApproved
                     ? const Color(0xFF2D8A5D)
                     : isRejected
                     ? const Color(0xFFC24E4E)
                     : const Color(0xFFC28A22),
               ),
               _buildHeroBadge(
-                company.currentPlanType.toUpperCase(),
-                company.currentPlanType.toUpperCase() == 'ANNUALLY'
+                label: company.currentPlanType.toUpperCase() == 'ANNUALLY'
+                    ? 'PREMIUM ANNUAL'
+                    : company.currentPlanType.toUpperCase() == 'MONTHLY'
+                    ? 'PREMIUM MONTHLY'
+                    : 'STANDARD PLAN',
+                icon: (company.currentPlanType.toUpperCase() == 'ANNUALLY' ||
+                        company.currentPlanType.toUpperCase() == 'MONTHLY')
+                    ? Icons.workspace_premium_rounded
+                    : Icons.layers_outlined,
+                bg: company.currentPlanType.toUpperCase() == 'ANNUALLY'
                     ? const Color(0xFFEEE8FF)
                     : company.currentPlanType.toUpperCase() == 'MONTHLY'
                     ? const Color(0xFFE2F6F5)
                     : const Color(0xFFEFF3F8),
-                company.currentPlanType.toUpperCase() == 'ANNUALLY'
+                fg: company.currentPlanType.toUpperCase() == 'ANNUALLY'
                     ? const Color(0xFF6B4FD3)
                     : company.currentPlanType.toUpperCase() == 'MONTHLY'
                     ? const Color(0xFF1E8F8B)
@@ -739,7 +752,9 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
           ),
           const SizedBox(width: 12),
           _buildRoleChip(
-            isPending ? 'PENDING' : role.toUpperCase(),
+            isPending
+                ? 'Pending Invite'
+                : (isOwner ? 'Owner' : 'Member'),
             accentColor,
           ),
         ],
@@ -747,20 +762,33 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
     );
   }
 
-  Widget _buildHeroBadge(String text, Color bg, Color fg) {
+  Widget _buildHeroBadge({
+    required String label,
+    required IconData icon,
+    required Color bg,
+    required Color fg,
+  }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: fg,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: fg),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: fg,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
       ),
     );
   }

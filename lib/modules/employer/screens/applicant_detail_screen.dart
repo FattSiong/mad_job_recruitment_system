@@ -37,6 +37,9 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
 
   late String _currentStatus;
   bool _hasBeenScheduled = false;
+  String _scheduleCandidateStatus = 'pending';
+  String? _scheduleRejectionReason;
+  String? _schedulePreferredTime;
 
   bool get _isJobDeleted => widget.jobStatus.toLowerCase() == 'deleted';
 
@@ -52,13 +55,18 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
     try {
       final response = await Supabase.instance.client
           .from('InterviewSchedule')
-          .select('scheduleID')
+          .select('scheduleID, candidateStatus, rejectionReason, preferredTime')
           .eq('applicantID', widget.applicantData['applicantID'])
           .limit(1);
 
       if (response.isNotEmpty && mounted) {
+        final row = response.first;
         setState(() {
           _hasBeenScheduled = true;
+          _scheduleCandidateStatus =
+              (row['candidateStatus'] ?? 'pending').toString().toLowerCase();
+          _scheduleRejectionReason = row['rejectionReason']?.toString();
+          _schedulePreferredTime = row['preferredTime']?.toString();
         });
       }
     } catch (e) {
@@ -410,6 +418,8 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
             applicantId: widget.applicantData['applicantID'],
             applicantName: seeker['fullName'] ?? 'Applicant',
             seekerId: widget.applicantData['seekerID'],
+            initialPreferredTime: _schedulePreferredTime,
+            rejectionReason: _scheduleRejectionReason,
           ),
         ),
       );
@@ -418,7 +428,11 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
         setState(() {
           _currentStatus = 'scheduled';
           _hasBeenScheduled = true;
+          _scheduleCandidateStatus = 'pending';
+          _scheduleRejectionReason = null;
+          _schedulePreferredTime = null;
         });
+        await _checkIfScheduled();
       }
     }
   }
@@ -527,6 +541,14 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
               ),
             ),
             const SizedBox(height: 18),
+            if (aiScore != null ||
+                (widget.applicantData['aiFeedback'] ?? '')
+                    .toString()
+                    .trim()
+                    .isNotEmpty) ...[
+              _buildAiAnalysisCard(aiScore),
+              const SizedBox(height: 18),
+            ],
             _buildSectionCard(
               title: 'Application Status',
               subtitle:
@@ -712,6 +734,123 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
     );
   }
 
+  Widget _buildAiAnalysisCard(dynamic aiScore) {
+    final int? scoreInt = (aiScore as num?)?.round();
+    final String feedback =
+        (widget.applicantData['aiFeedback'] ?? '').toString().trim();
+
+    Color badgeFg = const Color(0xFFC28A22);
+    Color badgeBg = const Color(0xFFFEF3DC);
+    if (scoreInt != null) {
+      if (scoreInt >= 75) {
+        badgeFg = const Color(0xFF2D8A5D);
+        badgeBg = const Color(0xFFE5F6ED);
+      } else if (scoreInt < 50) {
+        badgeFg = const Color(0xFFC24E4E);
+        badgeBg = const Color(0xFFFDECEC);
+      }
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFEEF4FF), Color(0xFFF8F5FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFD8E4F5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF163B65),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.auto_awesome_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'AI Smart Match Analysis',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF1B2433),
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Resume & requirements evaluation',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: Color(0xFF687588),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (scoreInt != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: badgeBg,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '$scoreInt% Match',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                      color: badgeFg,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          if (feedback.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text(
+                feedback,
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  height: 1.5,
+                  color: Color(0xFF334155),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildCurrentStatusBanner() {
     final color = _getStatusColor(_currentStatus);
 
@@ -799,7 +938,11 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
                   setState(() {
                     _currentStatus = 'scheduled';
                     _hasBeenScheduled = true;
+                    _scheduleCandidateStatus = 'pending';
+                    _scheduleRejectionReason = null;
+                    _schedulePreferredTime = null;
                   });
+                  await _checkIfScheduled();
                 }
               },
               icon: const Icon(Icons.calendar_month_rounded),
@@ -845,12 +988,62 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
     }
 
     if (normalizedStatus == 'scheduled') {
-      return _buildStateMessageCard(
-        color: const Color(0xFF4A7BB7),
-        icon: Icons.event_available_rounded,
-        title: 'Interview Scheduled',
-        description:
-            'Please manage this interview from your Scheduled Interviews workspace.',
+      final isSlotRejected = _scheduleCandidateStatus == 'rejected';
+      final isSlotAccepted = _scheduleCandidateStatus == 'accepted';
+
+      return Column(
+        children: [
+          _buildStateMessageCard(
+            color: isSlotRejected
+                ? const Color(0xFFC24E4E)
+                : isSlotAccepted
+                    ? const Color(0xFF2D8A5D)
+                    : const Color(0xFF4A7BB7),
+            icon: isSlotRejected
+                ? Icons.event_busy_rounded
+                : isSlotAccepted
+                    ? Icons.check_circle_rounded
+                    : Icons.hourglass_top_rounded,
+            title: isSlotRejected
+                ? 'Candidate Declined Interview Time'
+                : isSlotAccepted
+                    ? 'Candidate Accepted Interview'
+                    : 'Waiting for Candidate Confirmation',
+            description: isSlotRejected
+                ? [
+                    if (_scheduleRejectionReason != null &&
+                        _scheduleRejectionReason!.trim().isNotEmpty)
+                      'Reason: "${_scheduleRejectionReason!.trim()}"'
+                    else
+                      'The candidate declined the proposed interview slot.',
+                    if (_schedulePreferredTime != null &&
+                        _schedulePreferredTime!.trim().isNotEmpty)
+                      'Preferred Time: ${_schedulePreferredTime!.trim()}',
+                  ].join('\n')
+                : isSlotAccepted
+                    ? 'The candidate confirmed the interview slot. Manage this session from Scheduled Interviews.'
+                    : 'Interview invitation sent. Waiting for the candidate to accept or decline the proposed slot.',
+          ),
+          if (isSlotRejected) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _showRescheduleConfirmation(seeker),
+                icon: const Icon(Icons.calendar_today_rounded),
+                label: const Text('Reschedule Interview'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF163B65),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
       );
     }
 

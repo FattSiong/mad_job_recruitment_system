@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../models/job_model.dart';
 import '../../../services/employer_service.dart';
@@ -24,6 +26,9 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
 
   bool _isStatusUpdating = false;
   bool _isApplicantsLoading = true;
+  bool _isRankingWithAi = false;
+  int _rankingCompletedCount = 0;
+  int _rankingTotalCount = 0;
 
   List<Map<String, dynamic>> _applicants = [];
 
@@ -57,6 +62,63 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     });
   }
 
+  Future<void> _rankCandidatesWithAi({bool onlyUnranked = false}) async {
+    if (_isRankingWithAi || _applicants.isEmpty) return;
+
+    final targets = onlyUnranked
+        ? _applicants.where((a) => a['aiRankingScore'] == null).toList()
+        : _applicants;
+
+    if (targets.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('All applicants already have AI match scores.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isRankingWithAi = true;
+      _rankingCompletedCount = 0;
+      _rankingTotalCount = targets.length;
+    });
+
+    final rankedCount = await _employerService.rankJobCandidatesWithAI(
+      job: _currentJob,
+      applicants: _applicants,
+      onlyUnranked: onlyUnranked,
+      onProgress: (completed, total) {
+        if (!mounted) return;
+        setState(() {
+          _rankingCompletedCount = completed;
+          _rankingTotalCount = total;
+        });
+      },
+    );
+
+    if (!mounted) return;
+
+    await _loadApplicants();
+
+    if (!mounted) return;
+
+    setState(() {
+      _isRankingWithAi = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          rankedCount > 0
+              ? 'AI ranked $rankedCount/${targets.length} candidate(s) and sorted by best match!'
+              : 'Could not generate AI rankings. Please check internet connection or resume access.',
+        ),
+        backgroundColor: rankedCount > 0 ? const Color(0xFF2D8A5D) : Colors.red,
+      ),
+    );
+  }
+
   Future<void> _toggleJobStatus() async {
     if (_currentJob.status.toLowerCase() == 'deleted') return;
 
@@ -65,33 +127,37 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     setState(() => _isStatusUpdating = true);
 
     final currentStatus = _currentJob.status.toLowerCase();
-    final newStatus = currentStatus == 'active' ? 'inactive' : 'active';
+    final isActivating = currentStatus != 'active';
+    final newStatus = isActivating ? 'active' : 'inactive';
+
+    DateTime? newExpiresAt;
+    if (isActivating) {
+      final now = DateTime.now();
+      newExpiresAt = DateTime(now.year, now.month + 1, now.day, 23, 59, 59);
+    }
 
     final success = await _employerService.updateJobStatus(
       _currentJob.jobID!,
       newStatus,
+      expiresAt: newExpiresAt,
     );
 
     if (!mounted) return;
 
     if (success) {
       setState(() {
-        _currentJob = JobModel(
-          jobID: _currentJob.jobID,
-          companyID: _currentJob.companyID,
-          employerID: _currentJob.employerID,
-          title: _currentJob.title,
-          description: _currentJob.description,
-          latitude: _currentJob.latitude,
-          longitude: _currentJob.longitude,
-          salaryRange: _currentJob.salaryRange,
-          minExperienceYears: _currentJob.minExperienceYears,
+        _currentJob = _currentJob.copyWith(
           status: newStatus,
+          expiresAt: newExpiresAt,
         );
       });
 
+      final message = isActivating
+          ? 'Job activated! Expiry date set to ${DateFormat('dd MMM yyyy').format(newExpiresAt!)}.'
+          : 'Job marked as INACTIVE.';
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Job marked as ${newStatus.toUpperCase()}')),
+        SnackBar(content: Text(message)),
       );
     }
 
@@ -122,8 +188,14 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     );
   }
 
+  bool get _isJobOwner {
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    return currentUserId != null && _currentJob.employerID == currentUserId;
+  }
+
   Widget _buildTopBar(BuildContext context) {
     final isDeleted = _currentJob.status.toLowerCase() == 'deleted';
+    final canEdit = !isDeleted && _isJobOwner;
 
     return Row(
       children: [
@@ -156,29 +228,42 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
           child: InkWell(
             onTap: isDeleted
                 ? null
-                : () async {
-                    final updatedJob = await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => EditJobScreen(job: _currentJob),
-                      ),
-                    );
+                : !_isJobOwner
+                    ? () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Only the employer who created this job posting can edit it.',
+                            ),
+                          ),
+                        );
+                      }
+                    : () async {
+                        final updatedJob = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => EditJobScreen(
+                              job: _currentJob,
+                              initialApplicantCount: _applicants.length,
+                            ),
+                          ),
+                        );
 
-                    if (updatedJob != null && updatedJob is JobModel) {
-                      setState(() {
-                        _currentJob = updatedJob;
-                      });
-                      await _loadApplicants();
-                    }
-                  },
+                        if (updatedJob != null && updatedJob is JobModel) {
+                          setState(() {
+                            _currentJob = updatedJob;
+                          });
+                          await _loadApplicants();
+                        }
+                      },
             borderRadius: BorderRadius.circular(16),
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Icon(
-                Icons.edit_rounded,
-                color: isDeleted
-                    ? const Color(0xFF9AA5B5)
-                    : const Color(0xFF163B65),
+                canEdit ? Icons.edit_rounded : Icons.lock_outline_rounded,
+                color: canEdit
+                    ? const Color(0xFF163B65)
+                    : const Color(0xFF9AA5B5),
               ),
             ),
           ),
@@ -248,6 +333,14 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                 '${_applicants.length} applicants',
               ),
               _buildHeroMetric(
+                Icons.schedule_rounded,
+                _currentJob.jobType,
+              ),
+              _buildHeroMetric(
+                Icons.maps_home_work_rounded,
+                _currentJob.workplaceType,
+              ),
+              _buildHeroMetric(
                 Icons.work_history_rounded,
                 _currentJob.minExperienceYears == 0
                     ? 'Entry level'
@@ -255,7 +348,9 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
               ),
               _buildHeroMetric(
                 Icons.monetization_on_rounded,
-                _currentJob.salaryRange ?? 'Salary not set',
+                _currentJob.salaryRange.isNotEmpty
+                    ? _currentJob.salaryRange
+                    : 'Salary not set',
               ),
             ],
           ),
@@ -303,7 +398,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                           ? Icons.visibility_off_rounded
                           : Icons.visibility_rounded,
                     ),
-                    label: Text(isActive ? 'Close Job' : 'Reopen Job'),
+                    label: Text(isActive ? 'Inactivate Job' : 'Activate Job'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
                       foregroundColor: const Color(0xFF163B65),
@@ -376,19 +471,78 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     );
   }
 
+  String _formatWorkplaceLabel(String workplaceType) {
+    switch (workplaceType.trim().toLowerCase()) {
+      case 'remote':
+        return 'Remote (Work from Home)';
+      case 'hybrid':
+        return 'Hybrid (Both Home & Company)';
+      case 'on-site':
+      default:
+        return 'On-site (Work at Company)';
+    }
+  }
+
+  String _formatExpiryLabel() {
+    if (_currentJob.expiresAt == null) {
+      return 'No expiry date set';
+    }
+    final formatted = DateFormat('dd MMM yyyy').format(
+      _currentJob.expiresAt!.toLocal(),
+    );
+    if (_currentJob.isExpired) {
+      return 'Expired on $formatted (Inactive)';
+    }
+    if (_currentJob.status.toLowerCase() != 'active') {
+      return 'Inactive (Will reset to 1 month upon activation)';
+    }
+    return 'Active until $formatted';
+  }
+
   Widget _buildOverviewSection() {
+    final locationDisplay =
+        (_currentJob.locationName != null &&
+                _currentJob.locationName!.trim().isNotEmpty)
+            ? _currentJob.locationName!.trim()
+            : (_currentJob.latitude != null && _currentJob.longitude != null)
+                ? 'Map coordinates set (${_currentJob.latitude!.toStringAsFixed(4)}, ${_currentJob.longitude!.toStringAsFixed(4)})'
+                : 'No location provided';
+
     return Column(
       children: [
         _buildSectionCard(
-          title: 'Job Requirements',
+          title: 'Job Requirements & Details',
           subtitle:
-              'Core information employers and applicants care about first.',
+              'Core information, work arrangement, schedule, and qualifications.',
           child: Column(
             children: [
               _buildInfoRow(
-                Icons.monetization_on_rounded,
-                'Salary',
-                _currentJob.salaryRange ?? 'Not specified',
+                Icons.schedule_rounded,
+                'Job Type',
+                _currentJob.jobType,
+              ),
+              const SizedBox(height: 14),
+              _buildInfoRow(
+                Icons.maps_home_work_rounded,
+                'Work Arrangement',
+                _formatWorkplaceLabel(_currentJob.workplaceType),
+              ),
+              const SizedBox(height: 14),
+              _buildInfoRow(
+                Icons.access_time_filled_rounded,
+                'Working Period / Schedule',
+                (_currentJob.workingPeriod != null &&
+                        _currentJob.workingPeriod!.trim().isNotEmpty)
+                    ? _currentJob.workingPeriod!.trim()
+                    : 'Not specified',
+              ),
+              const SizedBox(height: 14),
+              _buildInfoRow(
+                Icons.school_rounded,
+                'Minimum Qualification',
+                _currentJob.qualification == 'No Minimum'
+                    ? 'No Minimum Qualification'
+                    : _currentJob.qualification,
               ),
               const SizedBox(height: 14),
               _buildInfoRow(
@@ -400,11 +554,23 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
               ),
               const SizedBox(height: 14),
               _buildInfoRow(
+                Icons.monetization_on_rounded,
+                'Salary',
+                _currentJob.salaryRange.isNotEmpty
+                    ? _currentJob.salaryRange
+                    : 'Not specified',
+              ),
+              const SizedBox(height: 14),
+              _buildInfoRow(
                 Icons.location_on_rounded,
                 'Location',
-                (_currentJob.latitude != null && _currentJob.longitude != null)
-                    ? 'Map coordinates set'
-                    : 'No location provided',
+                locationDisplay,
+              ),
+              const SizedBox(height: 14),
+              _buildInfoRow(
+                Icons.event_available_rounded,
+                'Job Expiry Date',
+                _formatExpiryLabel(),
               ),
             ],
           ),
@@ -428,11 +594,13 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     );
   }
 
-  Widget _buildApplicantCard(Map<String, dynamic> data) {
+  Widget _buildApplicantCard(Map<String, dynamic> data, {int? rankNumber}) {
     final seeker = data['JobSeeker'] ?? {};
     final name = seeker['fullName'] ?? 'Unknown Applicant';
     final status = data['applicationStatus'] ?? 'pending';
-    final aiScore = data['aiRankingScore'];
+    final num? rawScore = data['aiRankingScore'] as num?;
+    final int? aiScore = rawScore?.round();
+    final String aiFeedback = (data['aiFeedback'] ?? '').toString().trim();
 
     final appliedAt = data['appliedAt'] != null
         ? DateTime.tryParse(data['appliedAt'].toString())
@@ -441,6 +609,18 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     final appliedDate = appliedAt != null
         ? appliedAt.toLocal().toString().split(' ')[0]
         : 'Unknown Date';
+
+    Color scoreFg = const Color(0xFFC28A22);
+    Color scoreBg = const Color(0xFFFEF3DC);
+    if (aiScore != null) {
+      if (aiScore >= 75) {
+        scoreFg = const Color(0xFF2D8A5D);
+        scoreBg = const Color(0xFFE5F6ED);
+      } else if (aiScore < 50) {
+        scoreFg = const Color(0xFFC24E4E);
+        scoreBg = const Color(0xFFFDECEC);
+      }
+    }
 
     return Material(
       color: const Color(0xFFF7F9FC),
@@ -463,6 +643,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
@@ -483,13 +664,45 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          name,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF1B2433),
-                          ),
+                        Row(
+                          children: [
+                            if (rankNumber != null && aiScore != null) ...[
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: rankNumber == 1
+                                      ? const Color(0xFF163B65)
+                                      : const Color(0xFFDCEBFB),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  '#$rankNumber',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    color: rankNumber == 1
+                                        ? Colors.white
+                                        : const Color(0xFF163B65),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                            ],
+                            Expanded(
+                              child: Text(
+                                name,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF1B2433),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -519,13 +732,57 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                     const SizedBox(width: 10),
                     _buildApplicantsMetaChip(
                       icon: Icons.auto_awesome_rounded,
-                      text: '$aiScore%',
-                      color: const Color(0xFFC28A22),
-                      backgroundColor: const Color(0xFFFEF3DC),
+                      text: 'AI match $aiScore%',
+                      color: scoreFg,
+                      backgroundColor: scoreBg,
+                    ),
+                  ] else ...[
+                    const SizedBox(width: 10),
+                    _buildApplicantsMetaChip(
+                      icon: Icons.auto_awesome_outlined,
+                      text: 'AI match pending',
+                      color: const Color(0xFF687588),
+                      backgroundColor: const Color(0xFFEFF3F8),
                     ),
                   ],
                 ],
               ),
+              if (aiFeedback.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(
+                        Icons.psychology_alt_rounded,
+                        size: 16,
+                        color: Color(0xFF163B65),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          aiFeedback,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            height: 1.4,
+                            color: Color(0xFF4F5D70),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 14),
               const Row(
                 children: [
@@ -663,49 +920,55 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     }
 
     if (_applicants.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(28),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Column(
-          children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: const Color(0xFFDCEBFB),
-                borderRadius: BorderRadius.circular(22),
-              ),
-              child: const Icon(
-                Icons.people_outline_rounded,
-                size: 36,
-                color: Color(0xFF163B65),
-              ),
+      return Column(
+        children: [
+          _buildAiRankingPanel(),
+          const SizedBox(height: 18),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
             ),
-            const SizedBox(height: 18),
-            const Text(
-              'No applicants yet',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF1B2433),
-              ),
+            child: Column(
+              children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDCEBFB),
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                  child: const Icon(
+                    Icons.people_outline_rounded,
+                    size: 36,
+                    color: Color(0xFF163B65),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  'No applicants yet',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF1B2433),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'When candidates apply for this role, they will appear here for review.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    height: 1.45,
+                    color: Color(0xFF687588),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 10),
-            const Text(
-              'When candidates apply for this role, they will appear here for review.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                height: 1.45,
-                color: Color(0xFF687588),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       );
     }
 
@@ -717,47 +980,272 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
       return (item['applicationStatus'] ?? '').toString().toLowerCase() == 'scheduled';
     }).length;
 
-    return _buildSectionCard(
-      title: 'Applicants',
-      subtitle: 'Review candidate progress and open each application in detail.',
+    return Column(
+      children: [
+        _buildAiRankingPanel(),
+        const SizedBox(height: 18),
+        _buildSectionCard(
+          title: 'Applicants',
+          subtitle: 'Review candidate progress and open each application in detail.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _buildApplicantsMetaChip(
+                    icon: Icons.groups_rounded,
+                    text: '${_applicants.length} total',
+                    color: const Color(0xFF163B65),
+                    backgroundColor: const Color(0xFFDCEBFB),
+                  ),
+                  _buildApplicantsMetaChip(
+                    icon: Icons.access_time_outlined,
+                    text: '$pendingCount pending',
+                    color: const Color(0xFFB28600),
+                    backgroundColor: const Color(0xFFFFF8E1),
+                  ),
+                  _buildApplicantsMetaChip(
+                    icon: Icons.event_available_rounded,
+                    text: '$scheduledCount scheduled',
+                    color: const Color(0xFF6B4FD3),
+                    backgroundColor: const Color(0xFFF3ECFF),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _applicants.length,
+                separatorBuilder: (context, index) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final data = _applicants[index];
+                  return _buildApplicantCard(
+                    data,
+                    rankNumber: data['aiRankingScore'] != null ? index + 1 : null,
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAiRankingPanel() {
+    final totalCount = _applicants.length;
+    final rankedCount =
+        _applicants.where((a) => a['aiRankingScore'] != null).length;
+    final unrankedCount = totalCount - rankedCount;
+    final allRanked = totalCount > 0 && unrankedCount == 0;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFEEF4FF), Color(0xFFF8F5FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFD8E4F5)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
+          Row(
             children: [
-              _buildApplicantsMetaChip(
-                icon: Icons.groups_rounded,
-                text: '${_applicants.length} total',
-                color: const Color(0xFF163B65),
-                backgroundColor: const Color(0xFFDCEBFB),
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF163B65),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.auto_awesome_rounded,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'AI Candidate Ranking',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF1B2433),
+                      ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      'Find the strongest matches faster',
+                      style: TextStyle(fontSize: 13, color: Color(0xFF687588)),
+                    ),
+                  ],
+                ),
               ),
               _buildApplicantsMetaChip(
-                icon: Icons.access_time_outlined,
-                text: '$pendingCount pending',
-                color: const Color(0xFFB28600),
-                backgroundColor: const Color(0xFFFFF8E1),
-              ),
-              _buildApplicantsMetaChip(
-                icon: Icons.event_available_rounded,
-                text: '$scheduledCount scheduled',
-                color: const Color(0xFF6B4FD3),
-                backgroundColor: const Color(0xFFF3ECFF),
+                icon: allRanked
+                    ? Icons.verified_rounded
+                    : Icons.auto_awesome_rounded,
+                text: totalCount == 0
+                    ? 'No applicants'
+                    : '$rankedCount/$totalCount ranked',
+                color: allRanked
+                    ? const Color(0xFF2D8A5D)
+                    : const Color(0xFF163B65),
+                backgroundColor: allRanked
+                    ? const Color(0xFFE5F6ED)
+                    : const Color(0xFFDCEBFB),
               ),
             ],
           ),
           const SizedBox(height: 18),
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _applicants.length,
-            separatorBuilder: (context, index) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final data = _applicants[index];
-              return _buildApplicantCard(data);
-            },
+          const Text(
+            'Compare each applicant’s uploaded resume, profile experience, education, and pre-screening answers against this job’s requirements using Gemini AI.',
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.45,
+              color: Color(0xFF4F5D70),
+            ),
           ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildApplicantsMetaChip(
+                icon: Icons.description_outlined,
+                text: 'PDF Resume analysis',
+                color: const Color(0xFF163B65),
+                backgroundColor: Colors.white,
+              ),
+              _buildApplicantsMetaChip(
+                icon: Icons.psychology_outlined,
+                text: 'Skills & experience',
+                color: const Color(0xFF163B65),
+                backgroundColor: Colors.white,
+              ),
+              _buildApplicantsMetaChip(
+                icon: Icons.quiz_outlined,
+                text: 'Screening answers',
+                color: const Color(0xFF163B65),
+                backgroundColor: Colors.white,
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          if (_isRankingWithAi)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFD8E4F5)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      color: Color(0xFF163B65),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Flexible(
+                    child: Text(
+                      'Analyzing candidate ${_rankingCompletedCount + 1 > _rankingTotalCount ? _rankingTotalCount : _rankingCompletedCount + 1} of $_rankingTotalCount with Gemini AI...',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF163B65),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else if (totalCount > 0 && unrankedCount > 0 && rankedCount > 0)
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () =>
+                        _rankCandidatesWithAi(onlyUnranked: true),
+                    icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+                    label: Text('Rank New ($unrankedCount)'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF163B65),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () =>
+                        _rankCandidatesWithAi(onlyUnranked: false),
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: const Text('Re-rank All'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF163B65),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: const BorderSide(color: Color(0xFF163B65)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          else
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: totalCount == 0
+                    ? null
+                    : () => _rankCandidatesWithAi(onlyUnranked: false),
+                icon: Icon(
+                  allRanked
+                      ? Icons.refresh_rounded
+                      : Icons.auto_awesome_rounded,
+                ),
+                label: Text(
+                  allRanked
+                      ? 'Re-rank All Candidates with AI'
+                      : 'Rank Candidates with AI',
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF163B65),
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: const Color(0xFFD8E2EE),
+                  disabledForegroundColor: const Color(0xFF7B8798),
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
