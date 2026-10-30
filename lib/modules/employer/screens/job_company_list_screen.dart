@@ -71,7 +71,12 @@ class _ManageJobsCompanyListScreenState
             createdAt: job.createdAt,
             minExperienceYears: job.minExperienceYears,
             jobType: job.jobType,
+            locationName: job.locationName,
             companyName: job.companyName ?? company.name,
+            expiresAt: job.expiresAt,
+            workplaceType: job.workplaceType,
+            workingPeriod: job.workingPeriod,
+            qualification: job.qualification,
           ),
         );
       }
@@ -768,8 +773,6 @@ class _ManageJobsCompanyListScreenState
     final normalizedStatus = job.status.toLowerCase();
     final isActive = normalizedStatus == 'active';
     final isDeleted = normalizedStatus == 'deleted';
-    final isMine =
-        _currentEmployerId != null && job.employerID == _currentEmployerId;
     final companyName = _resolveCompanyName(job);
 
     final Color statusBg;
@@ -866,15 +869,6 @@ class _ManageJobsCompanyListScreenState
                     label: job.status.toUpperCase(),
                     backgroundColor: statusBg,
                     textColor: statusText,
-                  ),
-                  _buildPill(
-                    label: isMine ? 'POSTED BY ME' : 'TEAM POST',
-                    backgroundColor: isMine
-                        ? const Color(0xFFDCEBFB)
-                        : const Color(0xFFF3ECFF),
-                    textColor: isMine
-                        ? const Color(0xFF163B65)
-                        : const Color(0xFF6B4FD3),
                   ),
                 ],
               ),

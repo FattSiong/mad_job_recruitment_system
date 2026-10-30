@@ -130,4 +130,27 @@ class InterviewService {
       print('Error resetting interview: $e');
     }
   }
+
+  /// Allows a candidate (JobSeeker) to accept or reject a scheduled interview.
+  Future<bool> respondToInterviewSchedule({
+    required String scheduleID,
+    required bool accept,
+    String? rejectionReason,
+    String? preferredTime,
+  }) async {
+    try {
+      await _supabase
+          .from('InterviewSchedule')
+          .update({
+            'candidateStatus': accept ? 'accepted' : 'rejected',
+            'rejectionReason': accept ? null : rejectionReason?.trim(),
+            'preferredTime': accept ? null : preferredTime?.trim(),
+          })
+          .eq('scheduleID', scheduleID);
+      return true;
+    } catch (e) {
+      print('Error responding to interview schedule: $e');
+      return false;
+    }
+  }
 }

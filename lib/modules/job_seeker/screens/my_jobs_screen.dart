@@ -630,6 +630,515 @@ class _InterviewsTabState extends State<InterviewsTab> {
     }
   }
 
+  Future<void> _respondToInterview({
+    required String scheduleID,
+    required bool accept,
+    String? rejectionReason,
+    String? preferredTime,
+  }) async {
+    final success = await InterviewService().respondToInterviewSchedule(
+      scheduleID: scheduleID,
+      accept: accept,
+      rejectionReason: rejectionReason,
+      preferredTime: preferredTime,
+    );
+
+    if (!mounted) return;
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            accept
+                ? 'Interview confirmed! You can now join at the scheduled time.'
+                : 'Interview declined. Your reason and preferred time have been sent to the employer.',
+          ),
+          backgroundColor: accept ? Colors.green : const Color(0xFF687588),
+        ),
+      );
+      await _fetchInterviews();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to submit your response. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  String _formatDateLabel(DateTime date) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${date.day.toString().padLeft(2, '0')} ${months[date.month - 1]} ${date.year}';
+  }
+
+  String _format24Hour(TimeOfDay time) {
+    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _showRejectDialog(String scheduleID) async {
+    final reasonController = TextEditingController();
+    DateTime? preferredDate;
+    TimeOfDay? preferredStart;
+    TimeOfDay? preferredEnd;
+    String? reasonError;
+    String? timeError;
+
+    final Map<String, String>? result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            Future<void> pickPreferredDate() async {
+              final picked = await showDatePicker(
+                context: dialogContext,
+                initialDate:
+                    preferredDate ?? DateTime.now().add(const Duration(days: 1)),
+                firstDate: DateTime.now(),
+                lastDate: DateTime.now().add(const Duration(days: 365)),
+              );
+              if (picked != null) {
+                setDialogState(() {
+                  preferredDate = picked;
+                  timeError = null;
+                });
+              }
+            }
+
+            Future<void> pickPreferredTime({required bool isStart}) async {
+              final picked = await showTimePicker(
+                context: dialogContext,
+                initialTime: isStart
+                    ? (preferredStart ?? const TimeOfDay(hour: 10, minute: 0))
+                    : (preferredEnd ?? const TimeOfDay(hour: 11, minute: 0)),
+              );
+              if (picked != null) {
+                setDialogState(() {
+                  if (isStart) {
+                    preferredStart = picked;
+                  } else {
+                    preferredEnd = picked;
+                  }
+                  timeError = null;
+                });
+              }
+            }
+
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              child: SingleChildScrollView(
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(28),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 46,
+                            height: 46,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFDECEC),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: const Icon(
+                              Icons.event_busy_rounded,
+                              color: Color(0xFFC24E4E),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Text(
+                              'Decline & Propose Time',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF1B2433),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      const Text(
+                        'Please share why this slot does not work for you and select your preferred date and time for rescheduling.',
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          height: 1.45,
+                          color: Color(0xFF687588),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      TextField(
+                        controller: reasonController,
+                        maxLines: 3,
+                        onChanged: (_) {
+                          if (reasonError != null) {
+                            setDialogState(() => reasonError = null);
+                          }
+                        },
+                        decoration: InputDecoration(
+                          labelText: 'Reason for Declining',
+                          hintText:
+                              'e.g. I have a scheduled lecture / prior commitment at this time.',
+                          alignLabelWithHint: true,
+                          errorText: reasonError,
+                          filled: true,
+                          fillColor: const Color(0xFFF7F9FC),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: BorderSide.none,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide:
+                                const BorderSide(color: Color(0xFFE2E8F0)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF163B65),
+                              width: 1.4,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      const Text(
+                        'Preferred Date & Time',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF1B2433),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Material(
+                        color: const Color(0xFFF7F9FC),
+                        borderRadius: BorderRadius.circular(16),
+                        child: InkWell(
+                          onTap: pickPreferredDate,
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 13,
+                            ),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16),
+                              border:
+                                  Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.calendar_today_rounded,
+                                  size: 18,
+                                  color: Color(0xFF163B65),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    preferredDate == null
+                                        ? 'Select Preferred Date'
+                                        : _formatDateLabel(preferredDate!),
+                                    style: TextStyle(
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: preferredDate == null
+                                          ? const Color(0xFF687588)
+                                          : const Color(0xFF1B2433),
+                                    ),
+                                  ),
+                                ),
+                                const Icon(
+                                  Icons.expand_more_rounded,
+                                  color: Color(0xFF9AA5B5),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Material(
+                              color: const Color(0xFFF7F9FC),
+                              borderRadius: BorderRadius.circular(16),
+                              child: InkWell(
+                                onTap: () => pickPreferredTime(isStart: true),
+                                borderRadius: BorderRadius.circular(16),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 13,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                        color: const Color(0xFFE2E8F0)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.schedule_rounded,
+                                        size: 17,
+                                        color: Color(0xFF163B65),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          preferredStart == null
+                                              ? 'Start Time'
+                                              : preferredStart!
+                                                  .format(dialogContext),
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                            color: preferredStart == null
+                                                ? const Color(0xFF687588)
+                                                : const Color(0xFF1B2433),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Material(
+                              color: const Color(0xFFF7F9FC),
+                              borderRadius: BorderRadius.circular(16),
+                              child: InkWell(
+                                onTap: () => pickPreferredTime(isStart: false),
+                                borderRadius: BorderRadius.circular(16),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 13,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                        color: const Color(0xFFE2E8F0)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.timelapse_rounded,
+                                        size: 17,
+                                        color: Color(0xFF163B65),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          preferredEnd == null
+                                              ? 'End Time'
+                                              : preferredEnd!
+                                                  .format(dialogContext),
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                            color: preferredEnd == null
+                                                ? const Color(0xFF687588)
+                                                : const Color(0xFF1B2433),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (timeError != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          timeError!,
+                          style: const TextStyle(
+                            color: Color(0xFFC24E4E),
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 22),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.pop(dialogContext),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF687588),
+                                side:
+                                    const BorderSide(color: Color(0xFFD6DEE8)),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 15),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                              child: const Text(
+                                'Cancel',
+                                style: TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () {
+                                final text = reasonController.text.trim();
+                                bool hasError = false;
+
+                                if (text.isEmpty) {
+                                  reasonError =
+                                      'Please provide a reason before declining.';
+                                  hasError = true;
+                                }
+
+                                if (preferredDate == null ||
+                                    preferredStart == null ||
+                                    preferredEnd == null) {
+                                  timeError =
+                                      'Please select your preferred date, start time, and end time.';
+                                  hasError = true;
+                                } else {
+                                  final startMinutes =
+                                      preferredStart!.hour * 60 +
+                                          preferredStart!.minute;
+                                  final endMinutes = preferredEnd!.hour * 60 +
+                                      preferredEnd!.minute;
+                                  if (endMinutes <= startMinutes) {
+                                    timeError =
+                                        'End time must be after start time.';
+                                    hasError = true;
+                                  }
+                                }
+
+                                if (hasError) {
+                                  setDialogState(() {});
+                                  return;
+                                }
+
+                                final dateIso = preferredDate!
+                                    .toIso8601String()
+                                    .split('T')[0];
+                                final formattedPreferred =
+                                    '$dateIso | ${_format24Hour(preferredStart!)} - ${_format24Hour(preferredEnd!)}';
+
+                                Navigator.pop(dialogContext, {
+                                  'reason': text,
+                                  'preferredTime': formattedPreferred,
+                                });
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFC24E4E),
+                                foregroundColor: Colors.white,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 15),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                              child: const Text(
+                                'Submit',
+                                style: TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (result != null && (result['reason'] ?? '').isNotEmpty) {
+      await _respondToInterview(
+        scheduleID: scheduleID,
+        accept: false,
+        rejectionReason: result['reason'],
+        preferredTime: result['preferredTime'],
+      );
+    }
+  }
+
+  Widget _buildCandidateStatusBadge(String status) {
+    final normalized = status.toLowerCase();
+    final Color bg;
+    final Color fg;
+    final String label;
+    final IconData icon;
+
+    switch (normalized) {
+      case 'accepted':
+        bg = const Color(0xFFE5F6ED);
+        fg = const Color(0xFF2D8A5D);
+        label = 'Accepted';
+        icon = Icons.check_circle_rounded;
+        break;
+      case 'rejected':
+        bg = const Color(0xFFFDECEC);
+        fg = const Color(0xFFC24E4E);
+        label = 'Declined';
+        icon = Icons.cancel_rounded;
+        break;
+      default:
+        bg = const Color(0xFFFEF3DC);
+        fg = const Color(0xFFC28A22);
+        label = 'Pending Confirmation';
+        icon = Icons.hourglass_top_rounded;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: fg),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              color: fg,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildInfoPill({
     required IconData icon,
     required String label,
@@ -705,12 +1214,30 @@ class _InterviewsTabState extends State<InterviewsTab> {
           final meetingValue =
               interview['meetingLink']?.toString().trim() ?? '';
 
-          final scheduleID = interview['scheduleID'] ?? interview['id'];
+          final scheduleID = (interview['scheduleID'] ?? interview['id'])?.toString();
+
+          final candidateStatus =
+              (interview['candidateStatus'] ??
+                      interview['candidatestatus'] ??
+                      'pending')
+                  .toString()
+                  .toLowerCase();
+          final rejectionReason =
+              (interview['rejectionReason'] ?? interview['rejectionreason'])
+                  ?.toString()
+                  .trim();
+          final preferredTime =
+              (interview['preferredTime'] ?? interview['preferredtime'])
+                  ?.toString()
+                  .trim();
+
+          final isPendingResponse = candidateStatus == 'pending';
+          final isAcceptedResponse = candidateStatus == 'accepted';
+          final isRejectedResponse = candidateStatus == 'rejected';
 
           final isInternal = meetingMethod == 'internal';
           final isOnline = meetingMethod == 'online';
           final isOffline = meetingMethod == 'offline';
-
 
           return Container(
             margin: const EdgeInsets.only(bottom: 14),
@@ -723,6 +1250,7 @@ class _InterviewsTabState extends State<InterviewsTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
                       width: 46,
@@ -761,6 +1289,8 @@ class _InterviewsTabState extends State<InterviewsTab> {
                         ],
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    _buildCandidateStatusBadge(candidateStatus),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -785,29 +1315,7 @@ class _InterviewsTabState extends State<InterviewsTab> {
                     ),
                   ],
                 ),
-                if (isInternal) ...[
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () => _joinInternalInterview(scheduleID),
-                      icon: const Icon(Icons.meeting_room_rounded),
-                      label: const Text(
-                        'Enter Interview Lobby',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF163B65),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                    ),
-                  ),
-                ] else if (isOnline && meetingValue.isNotEmpty) ...[
+                if (isOnline && meetingValue.isNotEmpty) ...[
                   const SizedBox(height: 14),
                   Container(
                     width: double.infinity,
@@ -924,6 +1432,197 @@ class _InterviewsTabState extends State<InterviewsTab> {
                               color: Color(0xFF687588),
                               height: 1.4,
                             ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                if (isPendingResponse && scheduleID != null) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF6E6),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: const Color(0xFFF5D491)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(
+                          Icons.notifications_active_outlined,
+                          size: 18,
+                          color: Color(0xFFB47814),
+                        ),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Please confirm whether you can attend this scheduled interview slot.',
+                            style: TextStyle(
+                              fontSize: 13,
+                              height: 1.4,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF8C5B08),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _showRejectDialog(scheduleID),
+                          icon: const Icon(Icons.close_rounded, size: 18),
+                          label: const Text(
+                            'Reject',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFC24E4E),
+                            side: const BorderSide(color: Color(0xFFF1C5C5)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () => _respondToInterview(
+                            scheduleID: scheduleID,
+                            accept: true,
+                          ),
+                          icon: const Icon(Icons.check_rounded, size: 18),
+                          label: const Text(
+                            'Accept',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2D8A5D),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ] else if (isAcceptedResponse && isInternal) ...[
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _joinInternalInterview(scheduleID),
+                      icon: const Icon(Icons.meeting_room_rounded),
+                      label: const Text(
+                        'Enter Interview Lobby',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF163B65),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                  ),
+                ] else if (isRejectedResponse) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFDECEC),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: const Color(0xFFF3B8B8)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(
+                              Icons.report_problem_outlined,
+                              size: 18,
+                              color: Color(0xFFC24E4E),
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'You Declined This Time Slot',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFFC24E4E),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (rejectionReason != null &&
+                            rejectionReason.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Your reason: "$rejectionReason"',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              height: 1.4,
+                              color: Color(0xFF7A2C2C),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                        if (preferredTime != null &&
+                            preferredTime.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.72),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.event_available_rounded,
+                                  size: 16,
+                                  color: Color(0xFF163B65),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Preferred time: $preferredTime',
+                                    style: const TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF163B65),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Waiting for the employer to propose a new interview time.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF7A2C2C),
                           ),
                         ),
                       ],

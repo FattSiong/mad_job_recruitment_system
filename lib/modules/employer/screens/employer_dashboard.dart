@@ -15,6 +15,8 @@ import 'pending_invites_screen.dart';
 import 'register_company_screen.dart';
 import 'scheduled_interviews_screen.dart';
 import 'subscription_screen.dart';
+import 'transaction_history_screen.dart';
+import 'post_interview_ai_report_draft_screen.dart';
 import '../../../models/company_model.dart';
 import '../../../models/job_model.dart';
 import '../../../services/employer_service.dart';
@@ -690,6 +692,10 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
         await _openScreen(const SubscriptionScreen());
         await _checkPremiumStatus();
       },
+      onOpenTransactionHistory: () =>
+          _openScreen(const TransactionHistoryScreen()),
+      onOpenPostInterviewAiReportDraft: () =>
+          _openScreen(const PostInterviewAiReportDraftScreen()),
       onOpenRegisterCompany: () =>
           _openScreen(const RegisterCompanyScreen()),
       onOpenManageCompanies: () =>

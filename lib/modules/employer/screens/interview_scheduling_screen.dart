@@ -6,12 +6,16 @@ class InterviewSchedulingScreen extends StatefulWidget {
   final String applicantId;
   final String applicantName;
   final String seekerId;
+  final String? initialPreferredTime;
+  final String? rejectionReason;
 
   const InterviewSchedulingScreen({
     super.key,
     required this.applicantId,
     required this.applicantName,
     required this.seekerId,
+    this.initialPreferredTime,
+    this.rejectionReason,
   });
 
   @override
@@ -33,6 +37,49 @@ class _InterviewSchedulingScreenState extends State<InterviewSchedulingScreen> {
   String? _formError;
   String? _scheduleError;
   String? _meetingDetailsError;
+
+  @override
+  void initState() {
+    super.initState();
+    _prefillFromPreferredTime();
+  }
+
+  void _prefillFromPreferredTime() {
+    final raw = widget.initialPreferredTime?.trim();
+    if (raw == null || raw.isEmpty) return;
+
+    try {
+      // Expected format: "YYYY-MM-DD | HH:mm - HH:mm"
+      final parts = raw.split('|');
+      if (parts.isNotEmpty) {
+        final parsedDate = DateTime.tryParse(parts[0].trim());
+        if (parsedDate != null) {
+          _selectedDate = parsedDate;
+        }
+      }
+
+      if (parts.length > 1) {
+        final timeRange = parts[1].trim().split('-');
+        TimeOfDay? parseTimeToken(String token) {
+          final hm = token.trim().split(':');
+          if (hm.length < 2) return null;
+          final h = int.tryParse(hm[0]);
+          final m = int.tryParse(hm[1]);
+          if (h == null || m == null) return null;
+          return TimeOfDay(hour: h, minute: m);
+        }
+
+        if (timeRange.isNotEmpty) {
+          _startTime = parseTimeToken(timeRange[0]);
+        }
+        if (timeRange.length > 1) {
+          _endTime = parseTimeToken(timeRange[1]);
+        }
+      }
+    } catch (_) {
+      // Ignore parsing errors and let employer pick manually
+    }
+  }
 
   Future<void> _pickDate() async {
     final date = await showDatePicker(
@@ -151,6 +198,66 @@ class _InterviewSchedulingScreenState extends State<InterviewSchedulingScreen> {
             _buildTopBar(context),
             const SizedBox(height: 16),
             _buildHeroCard(methodLabel),
+            if ((widget.initialPreferredTime ?? '').trim().isNotEmpty ||
+                (widget.rejectionReason ?? '').trim().isNotEmpty) ...[
+              const SizedBox(height: 18),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF3FF),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFBDD6F7)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(
+                          Icons.event_available_rounded,
+                          size: 18,
+                          color: Color(0xFF163B65),
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          'Candidate Reschedule Preference',
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF163B65),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if ((widget.initialPreferredTime ?? '')
+                        .trim()
+                        .isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Preferred Slot: ${widget.initialPreferredTime!.trim()} (pre-filled below)',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1B2433),
+                        ),
+                      ),
+                    ],
+                    if ((widget.rejectionReason ?? '').trim().isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Decline Reason: "${widget.rejectionReason!.trim()}"',
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          height: 1.4,
+                          color: Color(0xFF4F5C6C),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
             _buildSectionCard(
               title: 'Schedule Setup',

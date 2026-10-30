@@ -1,14 +1,15 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/company_model.dart';
 import '../models/job_model.dart';
 import '../models/company_member_model.dart';
 import 'dart:io';
+import 'dart:typed_data';
 import '../core/constants/table_constants.dart';
 import 'dart:convert';
 import 'package:google_generative_ai/google_generative_ai.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
+import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 class EmployerService {
   // Get the single instance of our Supabase client
@@ -188,6 +189,21 @@ class EmployerService {
     }
   }
 
+  Future<List<JobModel>> _syncExpiredJobs(List<JobModel> jobs) async {
+    final List<JobModel> updatedList = [];
+    for (final job in jobs) {
+      if (job.status.toLowerCase() == 'active' && job.isExpired) {
+        if (job.jobID != null) {
+          await updateJobStatus(job.jobID!, 'inactive');
+        }
+        updatedList.add(job.copyWith(status: 'inactive'));
+      } else {
+        updatedList.add(job);
+      }
+    }
+    return updatedList;
+  }
+
   Future<List<JobModel>> getEmployerJobs(
     String employerId, {
     bool includeDeleted = false,
@@ -204,7 +220,8 @@ class EmployerService {
 
       final response = await query.order('createdAt', ascending: false);
 
-      return (response as List).map((json) => JobModel.fromJson(json)).toList();
+      final jobs = (response as List).map((json) => JobModel.fromJson(json)).toList();
+      return await _syncExpiredJobs(jobs);
     } catch (e) {
       print('Error fetching jobs: $e');
       return [];
@@ -243,7 +260,8 @@ class EmployerService {
 
       final response = await query.order('createdAt', ascending: false);
 
-      return (response as List).map((json) => JobModel.fromJson(json)).toList();
+      final jobs = (response as List).map((json) => JobModel.fromJson(json)).toList();
+      return await _syncExpiredJobs(jobs);
     } catch (e) {
       print('Error fetching workspace jobs: $e');
       return [];
@@ -292,58 +310,87 @@ class EmployerService {
 
       final response = await query.order('createdAt', ascending: false);
 
-      return (response as List).map((json) => JobModel.fromJson(json)).toList();
+      final jobs = (response as List).map((json) => JobModel.fromJson(json)).toList();
+      return await _syncExpiredJobs(jobs);
     } catch (e) {
       print('Fetch jobs by company error: $e');
       return [];
     }
   }
 
-  /// Simulated AI Salary Suggestion
+  /// AI Salary Suggestion tailored to Malaysian job market and full job context
   Future<Map<String, String>> getAiSalarySuggestion(
     String jobTitle,
     String jobDescription,
     int minExperience,
-    String jobType,
-  ) async {
+    String jobType, {
+    String workplaceType = 'On-site',
+    String workingPeriod = 'Mon - Fri, 9:00 AM - 6:00 PM',
+    String qualification = 'No Minimum',
+    String? locationName,
+  }) async {
     try {
       // 1. Retrieve the hidden API key
-      final apiKey = 'AIzaSyCPF5BiUdWIoroAWm42IhiUfxDMkQzFJ6U';
+      const apiKey = 'AIzaSyCPF5BiUdWIoroAWm42IhiUfxDMkQzFJ6U';
 
-      // 2. Initialize the Flash model
+      // 2. Initialize the Flash model with JSON response mime type
       final model = GenerativeModel(
         model: 'gemini-3-flash-preview',
         apiKey: apiKey,
+        generationConfig: GenerationConfig(
+          responseMimeType: 'application/json',
+        ),
       );
+
+      final locationContext =
+          (locationName != null && locationName.trim().isNotEmpty)
+              ? locationName.trim()
+              : 'Malaysia';
+      final descContext =
+          jobDescription.trim().isEmpty ? 'Not provided' : jobDescription.trim();
 
       String prompt;
 
       if (jobType == 'Part-time') {
-        prompt =
-            '''
-        You are an expert HR recruiter in Malaysia. 
-        Analyze the following part-time job details and suggest a realistic HOURLY salary rate in RM.
-        
-        Job Title: "$jobTitle"
-        Minimum Experience Required: $minExperience years
-        Description: "$jobDescription"
-        
-        Return ONLY a valid JSON object with the "min" key containing the hourly rate, and the "max" key completely empty.
-        Example: {"min": "15", "max": ""}
-        ''';
+        prompt = '''
+You are a Senior Compensation & Benefits HR Specialist in Malaysia.
+Estimate a realistic HOURLY salary rate in Malaysian Ringgit (MYR / RM) based on the following part-time job details:
+
+- Job Title: "$jobTitle"
+- Employment Type: Part-time
+- Work Arrangement: $workplaceType
+- Working Schedule: $workingPeriod
+- Minimum Qualification: $qualification
+- Minimum Experience Required: $minExperience year(s)
+- Work Location: $locationContext
+- Job Description: "$descContext"
+
+Guidelines:
+1. Base your estimate on current Malaysian part-time market rates (accounting for location, qualification level, and experience).
+2. Suggest a realistic integer hourly rate in RM (e.g., 10 to 50) in the "min" key, and leave the "max" key as an empty string "".
+3. Return ONLY a valid JSON object with keys "min" and "max" containing numeric strings only (no "RM", commas, or text).
+Example: {"min": "15", "max": ""}
+''';
       } else {
-        prompt =
-            '''
-        You are an expert HR recruiter in Malaysia. 
-        Analyze the following full-time job details and suggest a realistic MONTHLY salary range in RM.
-        
-        Job Title: "$jobTitle"
-        Minimum Experience Required: $minExperience years
-        Description: "$jobDescription"
-        
-        Return ONLY a valid JSON object with exactly two keys: "min" and "max". 
-        Example: {"min": "4000", "max": "6000"}
-        ''';
+        prompt = '''
+You are a Senior Compensation & Benefits HR Specialist in Malaysia.
+Estimate a realistic MONTHLY salary range in Malaysian Ringgit (MYR / RM) based on the following full-time job details:
+
+- Job Title: "$jobTitle"
+- Employment Type: Full-time
+- Work Arrangement: $workplaceType
+- Working Schedule: $workingPeriod
+- Minimum Qualification: $qualification
+- Minimum Experience Required: $minExperience year(s)
+- Work Location: $locationContext
+- Job Description: "$descContext"
+
+Guidelines:
+1. Base your estimate on current Malaysian full-time job market benchmarks (accounting for location such as Klang Valley vs other states, qualification level, work arrangement, and experience).
+2. Respect Malaysia's minimum wage floor (at least RM 1700/month) and round both "min" and "max" to the nearest RM 100, with a realistic 15% to 30% spread between "min" and "max".
+3. Return ONLY a valid JSON object with keys "min" and "max" containing numeric strings only (no "RM", commas, or text).
+Example: {"min": "4000", "max": "5200"}
+''';
       }
 
       // 4. Send to Gemini
@@ -351,11 +398,13 @@ class EmployerService {
       final String? responseText = response.text;
 
       if (responseText != null && responseText.isNotEmpty) {
-        // Parse the JSON string into a Dart Map
-        final Map<String, dynamic> jsonMap = jsonDecode(responseText.trim());
+        final cleanedJson = responseText
+            .replaceAll(RegExp(r'```json|```'), '')
+            .trim();
+        final Map<String, dynamic> jsonMap = jsonDecode(cleanedJson);
         return {
-          'min': jsonMap['min'].toString(),
-          'max': jsonMap['max'].toString(),
+          'min': (jsonMap['min'] ?? '').toString().replaceAll(RegExp(r'[^0-9]'), ''),
+          'max': (jsonMap['max'] ?? '').toString().replaceAll(RegExp(r'[^0-9]'), ''),
         };
       }
     } catch (e) {
@@ -363,16 +412,25 @@ class EmployerService {
     }
 
     // 5. Fallback just in case the AI fails or the user has no internet
-    return {'min': '3000', 'max': '4500'};
+    return jobType == 'Part-time'
+        ? {'min': '15', 'max': ''}
+        : {'min': '3000', 'max': '4500'};
   }
 
-  Future<bool> updateJobStatus(String jobId, String newStatus) async {
+  Future<bool> updateJobStatus(
+    String jobId,
+    String newStatus, {
+    DateTime? expiresAt,
+  }) async {
     try {
+      final Map<String, dynamic> updateData = {'status': newStatus};
+      if (expiresAt != null) {
+        updateData['expiresAt'] = expiresAt.toUtc().toIso8601String();
+      }
+
       await _supabase
-          .from(
-            'Job',
-          ) // Or TableConstants.job if you are using your constants file
-          .update({'status': newStatus})
+          .from(TableConstants.job)
+          .update(updateData)
           .eq('jobID', jobId);
       return true;
     } catch (e) {
@@ -384,13 +442,20 @@ class EmployerService {
   /// Updates an existing job posting in the database.
   Future<bool> updateJobPosting(JobModel updatedJob) async {
     try {
-      // Safety check to ensure we know which row to update
+      final currentUser = _supabase.auth.currentUser;
+      if (currentUser == null) return false;
+
+      // Safety checks: must have jobID, must be the job owner, and must not be deleted
       if (updatedJob.jobID == null) return false;
+      if (updatedJob.employerID != currentUser.id) return false;
+      if (updatedJob.status.toLowerCase() == 'deleted') return false;
 
       await _supabase
-          .from('Job') // Use TableConstants.job if you implemented it
+          .from(TableConstants.job)
           .update(updatedJob.toJson())
-          .eq('jobID', updatedJob.jobID!);
+          .eq('jobID', updatedJob.jobID!)
+          .eq('employerID', currentUser.id)
+          .neq('status', 'deleted');
 
       return true;
     } catch (e) {
@@ -466,7 +531,7 @@ class EmployerService {
 
       final response = await _supabase
           .from('CompanyMember')
-          .select('*, Company(name)')
+          .select('*, Company(*)')
           .eq('employerID', currentUser.id)
           .eq('status', 'pending');
 
@@ -507,46 +572,72 @@ class EmployerService {
   Future<String> generateAiQuestion(
     String jobTitle,
     String jobDesc,
-    String questionType,
-  ) async {
+    String questionType, {
+    String jobType = 'Full-time',
+    String workplaceType = 'On-site',
+    String workingPeriod = 'Mon - Fri, 9:00 AM - 6:00 PM',
+    String qualification = 'No Minimum',
+    int minExperience = 0,
+    List<String> existingQuestions = const [],
+  }) async {
     try {
       // 1. Initialize the Model
-      // ⚠️ Note for FYP: Hardcoding the API key is fine for testing, but for production
-      // or public GitHub repos, it's best to hide this in a .env file using flutter_dotenv!
-      final apiKey = 'AIzaSyCPF5BiUdWIoroAWm42IhiUfxDMkQzFJ6U';
+      const apiKey = 'AIzaSyCPF5BiUdWIoroAWm42IhiUfxDMkQzFJ6U';
       final model = GenerativeModel(
         model: 'gemini-3-flash-preview',
         apiKey: apiKey,
       );
 
-      // 2. Build a highly specific Prompt
-      String prompt =
-          '''
-            You are an expert HR recruiter. You need to write ONE pre-screening interview question for a candidate applying for the role of "$jobTitle".
-          ''';
+      final descContext =
+          jobDesc.trim().isEmpty ? 'Not provided' : jobDesc.trim();
+      final seniorityNote = minExperience == 0
+          ? 'Entry-level / Fresh Graduate (0 years required — focus on foundational skills, projects, coursework, or adaptability rather than years of senior leadership).'
+          : 'Requires at least $minExperience year(s) of relevant experience.';
 
-      // Inject the job description only if the user typed one
-      if (jobDesc.isNotEmpty) {
-        prompt += 'Here is the job description for context: "$jobDesc"\n\n';
-      }
+      // 2. Build a rich, context-aware Prompt
+      String prompt = '''
+You are an expert HR Recruiter in Malaysia creating ONE pre-screening question for candidates applying for the following role:
+- Job Title: "$jobTitle"
+- Employment Type: $jobType ($workplaceType)
+- Working Schedule: $workingPeriod
+- Minimum Qualification: $qualification
+- Experience Level: $seniorityNote
+- Job Description: "$descContext"
+''';
 
-      // Change the AI's goal based on what the employer wants
       if (questionType == 'File') {
         prompt += '''
-          The candidate must answer this question by UPLOADING A FILE. 
-          Write a professional request asking them to upload a relevant portfolio, document, certificate, or code sample to prove their skills.
-        ''';
+
+Format Required: FILE UPLOAD
+Write a clear, professional request (1-2 sentences max) asking the candidate to upload ONE specific, realistic supporting document relevant to "$jobTitle" and their qualification/experience level (for example: a portfolio PDF, project sample, certification, transcript, or work sample).
+''';
       } else {
         prompt += '''
-          The candidate must answer this question by TYPING TEXT.
-          Write a professional interview question to test their experience, situational judgment, or technical knowledge.
-        ''';
+
+Format Required: TEXT ANSWER
+Write ONE concise, practical pre-screening question (1-2 sentences max) that a candidate can answer in a short paragraph on a mobile app. Focus on role-specific problem solving, hands-on competency, situational judgment, or readiness for the $workplaceType / $workingPeriod arrangement.
+''';
+      }
+
+      final nonEmptyExisting = existingQuestions
+          .map((q) => q.trim())
+          .where((q) => q.isNotEmpty)
+          .toList();
+      if (nonEmptyExisting.isNotEmpty) {
+        prompt += '''
+
+IMPORTANT — Avoid Duplicates:
+The form already contains the following pre-screening question(s):
+- ${nonEmptyExisting.join('\n- ')}
+You MUST generate a completely different question covering a distinct topic or competency.
+''';
       }
 
       // 3. The Constraint Rule (Stops the AI from saying "Here is your question:")
       prompt += '''
-          \nCRITICAL INSTRUCTION: Output ONLY the question/request itself. Do not use quotation marks, bullet points, introductory text, or conversational filler.
-        ''';
+
+CRITICAL INSTRUCTION: Output ONLY the question/request text itself. Do not use quotation marks, numbering, bullet points, or introductory filler.
+''';
 
       // 4. Send to Gemini
       final content = [Content.text(prompt)];
@@ -554,7 +645,6 @@ class EmployerService {
 
       // 5. Clean and return the result
       if (response.text != null && response.text!.isNotEmpty) {
-        // .trim() removes extra spaces/newlines, .replaceAll removes accidental quotes
         return response.text!.trim().replaceAll('"', '');
       }
 
@@ -682,18 +772,266 @@ class EmployerService {
   // 1. Fetch all applicants for a specific job
   Future<List<Map<String, dynamic>>> getJobApplicants(String jobId) async {
     try {
-      // We use a JOIN to grab the applicant's data AND their JobSeeker profile (for their name)
-      final response = await _supabase
-          .from('JobApplicant')
-          .select('*, JobSeeker(*)')
-          .eq('jobID', jobId)
-          .order('appliedAt', ascending: false);
+      dynamic response;
+      try {
+        response = await _supabase
+            .from('JobApplicant')
+            .select('*, JobSeeker(*, WorkExperience(*), Education(*))')
+            .eq('jobID', jobId)
+            .order('appliedAt', ascending: false);
+      } catch (_) {
+        response = await _supabase
+            .from('JobApplicant')
+            .select('*, JobSeeker(*)')
+            .eq('jobID', jobId)
+            .order('appliedAt', ascending: false);
+      }
 
-      return List<Map<String, dynamic>>.from(response);
+      final list = List<Map<String, dynamic>>.from(response);
+
+      // Sort ranked applicants by highest AI match score first; unranked stay below sorted by appliedAt
+      list.sort((a, b) {
+        final scoreA = (a['aiRankingScore'] as num?)?.toDouble();
+        final scoreB = (b['aiRankingScore'] as num?)?.toDouble();
+
+        if (scoreA != null && scoreB != null) {
+          final cmp = scoreB.compareTo(scoreA);
+          if (cmp != 0) return cmp;
+        } else if (scoreA != null) {
+          return -1;
+        } else if (scoreB != null) {
+          return 1;
+        }
+
+        final dateA = DateTime.tryParse((a['appliedAt'] ?? '').toString());
+        final dateB = DateTime.tryParse((b['appliedAt'] ?? '').toString());
+        if (dateA != null && dateB != null) {
+          return dateB.compareTo(dateA);
+        }
+        return 0;
+      });
+
+      return list;
     } catch (e) {
       print('Fetch applicants error: $e');
       return [];
     }
+  }
+
+  /// Extracts text from PDF bytes using Syncfusion PDF as supplementary context.
+  String _extractPdfTextFallback(Uint8List bytes) {
+    try {
+      final document = PdfDocument(inputBytes: bytes);
+      final text = PdfTextExtractor(document).extractText();
+      document.dispose();
+      return text.trim();
+    } catch (_) {
+      return '';
+    }
+  }
+
+  /// Evaluates a single applicant against the job requirements using Gemini AI
+  /// and saves `aiRankingScore` + `aiFeedback` into `JobApplicant`.
+  Future<bool> rankApplicantWithAI({
+    required JobModel job,
+    required Map<String, dynamic> applicantData,
+  }) async {
+    try {
+      final applicantId = (applicantData['applicantID'] ?? '').toString();
+      if (applicantId.isEmpty) return false;
+
+      const apiKey = 'AIzaSyCPF5BiUdWIoroAWm42IhiUfxDMkQzFJ6U';
+      final model = GenerativeModel(
+        model: 'gemini-3-flash-preview',
+        apiKey: apiKey,
+      );
+
+      final seeker =
+          (applicantData['JobSeeker'] as Map<String, dynamic>?) ?? {};
+      final fullName = (seeker['fullName'] ?? 'Candidate').toString();
+      final bio = (seeker['bio'] ?? '').toString().trim();
+      final seekerLocation = (seeker['location'] ?? '').toString().trim();
+
+      // Format structured WorkExperience & Education from profile if available
+      final experiences = (seeker['WorkExperience'] as List?) ?? const [];
+      final educations = (seeker['Education'] as List?) ?? const [];
+
+      final expLines = experiences.map((e) {
+        if (e is! Map) return '';
+        final role = e['jobTitle'] ?? '';
+        final company = e['companyName'] ?? '';
+        final start = e['startDate'] ?? '';
+        final end = (e['isCurrent'] == true) ? 'Present' : (e['endDate'] ?? '');
+        final desc = (e['description'] ?? '').toString().trim();
+        return '- $role at $company ($start to $end)${desc.isNotEmpty ? ': $desc' : ''}';
+      }).where((s) => s.isNotEmpty).join('\n');
+
+      final eduLines = educations.map((e) {
+        if (e is! Map) return '';
+        final degree = e['degree'] ?? '';
+        final field = e['fieldOfStudy'] ?? '';
+        final inst = e['institutionName'] ?? '';
+        final start = e['startDate'] ?? '';
+        final end = (e['isCurrent'] == true) ? 'Present' : (e['endDate'] ?? '');
+        return '- $degree ${field.toString().isNotEmpty ? 'in $field ' : ''}at $inst ($start to $end)';
+      }).where((s) => s.isNotEmpty).join('\n');
+
+      // Fetch pre-screening answers
+      final answers = await getApplicantAnswers(applicantId);
+      final answerLines = answers.map((ans) {
+        final q = ans['PreScreeningQuestion'] ?? {};
+        final qText = (q['questionText'] ?? 'Question').toString();
+        final qType = (q['questionType'] ?? 'Text').toString();
+        final aText = (ans['answerText'] ?? '').toString().trim();
+        final hasFile =
+            (ans['answerFileURL'] ?? '').toString().trim().isNotEmpty;
+        final responseDesc = qType == 'File'
+            ? (hasFile ? '[Uploaded supporting document]' : '[No file uploaded]')
+            : (aText.isNotEmpty ? aText : '[No answer provided]');
+        return '- Q: $qText\n  A: $responseDesc';
+      }).join('\n');
+
+      // Download submitted resume PDF if available
+      final resumeUrl =
+          (applicantData['submittedResumeURL'] ?? '').toString().trim();
+      Uint8List? resumePdfBytes;
+      String extractedResumeText = '';
+
+      if (resumeUrl.isNotEmpty && resumeUrl.startsWith('http')) {
+        try {
+          final response = await http
+              .get(Uri.parse(resumeUrl))
+              .timeout(const Duration(seconds: 15));
+          if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+            resumePdfBytes = response.bodyBytes;
+            extractedResumeText = _extractPdfTextFallback(resumePdfBytes);
+          }
+        } catch (e) {
+          print('Resume download warning for $applicantId: $e');
+        }
+      }
+
+      final jobLocation = (job.locationName ?? '').trim().isNotEmpty
+          ? job.locationName!.trim()
+          : 'Not specified';
+      final workingPeriod = (job.workingPeriod ?? '').trim().isNotEmpty
+          ? job.workingPeriod!.trim()
+          : 'Not specified';
+
+      final promptText = '''
+You are an expert AI Technical Recruiter and Talent Evaluator.
+Compare the following Job Requirements against the Candidate's Resume, Profile, and Pre-Screening Answers, then calculate an objective Match Score (0 to 100) and concise recruiter feedback.
+
+=== JOB DETAILS & REQUIREMENTS ===
+- Job Title: ${job.title}
+- Employment Type: ${job.jobType}
+- Work Arrangement: ${job.workplaceType}
+- Working Schedule: $workingPeriod
+- Minimum Qualification: ${job.qualification}
+- Minimum Experience Required: ${job.minExperienceYears} year(s)
+- Job Location: $jobLocation
+- Offered Salary Range: ${job.salaryRange}
+- Full Job Description:
+${job.description}
+
+=== CANDIDATE INFORMATION ===
+- Candidate Name: $fullName
+- Candidate Location: ${seekerLocation.isEmpty ? 'Not specified' : seekerLocation}
+- Profile Summary / Bio: ${bio.isEmpty ? 'Not provided' : bio}
+- Profile Education:
+${eduLines.isEmpty ? 'None listed in profile (check attached resume)' : eduLines}
+- Profile Work Experience:
+${expLines.isEmpty ? 'None listed in profile (check attached resume)' : expLines}
+- Pre-Screening Question Responses:
+${answerLines.isEmpty ? 'No pre-screening questions for this job' : answerLines}
+${extractedResumeText.isNotEmpty ? '\n=== EXTRACTED RESUME TEXT ===\n$extractedResumeText' : ''}
+
+=== SCORING RUBRIC ===
+Evaluate across:
+1. Skills & Technical/Role Alignment with the Job Title and Description (40%)
+2. Relevant Work Experience vs. Minimum Experience Required (${job.minExperienceYears} yrs) (30%)
+3. Education / Qualification vs. Minimum Qualification (${job.qualification}) (15%)
+4. Pre-Screening Answers & Overall Profile Completeness (15%)
+
+Return ONLY a valid JSON object with the exact following keys (no markdown fences, no extra commentary):
+{
+  "score": <number from 0 to 100>,
+  "feedback": "<2 to 3 concise sentences highlighting key matching strengths and any missing requirements or gaps>"
+}
+''';
+
+      final List<Part> parts = [TextPart(promptText)];
+      if (resumePdfBytes != null &&
+          resumeUrl.toLowerCase().split('?').first.endsWith('.pdf')) {
+        parts.add(DataPart('application/pdf', resumePdfBytes));
+      }
+
+      final aiResponse = await model.generateContent([Content.multi(parts)]);
+      final rawText = aiResponse.text?.trim() ?? '';
+      if (rawText.isEmpty) return false;
+
+      // Clean potential markdown code fences around JSON
+      String cleanedJson = rawText
+          .replaceAll(RegExp(r'^```json\s*', multiLine: true), '')
+          .replaceAll(RegExp(r'^```\s*', multiLine: true), '')
+          .replaceAll(RegExp(r'\s*```$', multiLine: true), '')
+          .trim();
+
+      final startBrace = cleanedJson.indexOf('{');
+      final endBrace = cleanedJson.lastIndexOf('}');
+      if (startBrace != -1 && endBrace != -1 && endBrace > startBrace) {
+        cleanedJson = cleanedJson.substring(startBrace, endBrace + 1);
+      }
+
+      final decoded = jsonDecode(cleanedJson) as Map<String, dynamic>;
+      final rawScore = (decoded['score'] as num?)?.toDouble() ?? 0.0;
+      final clampedScore = rawScore.clamp(0.0, 100.0).roundToDouble();
+      final feedback = (decoded['feedback'] ?? '').toString().trim();
+
+      await _supabase
+          .from('JobApplicant')
+          .update({
+            'aiRankingScore': clampedScore,
+            'aiFeedback': feedback.isEmpty ? null : feedback,
+          })
+          .eq('applicantID', applicantId);
+
+      return true;
+    } catch (e) {
+      print('AI Ranking Error for applicant: $e');
+      return false;
+    }
+  }
+
+  /// Ranks all (or only unranked) candidates for a job and invokes [onProgress]
+  /// after each candidate is processed. Returns the number of successfully ranked candidates.
+  Future<int> rankJobCandidatesWithAI({
+    required JobModel job,
+    required List<Map<String, dynamic>> applicants,
+    bool onlyUnranked = false,
+    void Function(int completed, int total)? onProgress,
+  }) async {
+    final targets = onlyUnranked
+        ? applicants.where((a) => a['aiRankingScore'] == null).toList()
+        : applicants;
+
+    final total = targets.length;
+    if (total == 0) return 0;
+
+    int successCount = 0;
+    int completed = 0;
+
+    for (final applicant in targets) {
+      final ok = await rankApplicantWithAI(
+        job: job,
+        applicantData: applicant,
+      );
+      if (ok) successCount++;
+      completed++;
+      onProgress?.call(completed, total);
+    }
+
+    return successCount;
   }
 
   // 2. Fetch the pre-screening answers for a specific applicant
@@ -752,32 +1090,76 @@ class EmployerService {
       final endStr =
           '${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}:00';
 
-      // 1. Insert into the InterviewSchedule table AND return the new row
-      // We need .select().single() so we can grab the auto-generated scheduleID!
-      final scheduleResponse = await _supabase
+      // 1. Check if an InterviewSchedule already exists for this applicant (e.g. rescheduling)
+      final existingList = await _supabase
           .from('InterviewSchedule')
-          .insert({
-            'applicantID': applicantId,
-            'date': date.toIso8601String().split('T')[0], // YYYY-MM-DD
-            'startTime': startStr,
-            'endTime': endStr,
-            'meetingMethod': meetingMethod,
-            'meetingLink': meetingLink,
-          })
           .select('scheduleID')
-          .single();
+          .eq('applicantID', applicantId)
+          .limit(1);
 
-      final generatedScheduleId = scheduleResponse['scheduleID'];
+      String generatedScheduleId;
 
-      // 2. 👉 NEW: If it's an internal meeting, create the Waiting Room!
+      if (existingList.isNotEmpty) {
+        generatedScheduleId = existingList.first['scheduleID'].toString();
+        await _supabase
+            .from('InterviewSchedule')
+            .update({
+              'date': date.toIso8601String().split('T')[0],
+              'startTime': startStr,
+              'endTime': endStr,
+              'meetingMethod': meetingMethod,
+              'meetingLink': meetingLink,
+              'candidateStatus': 'pending',
+              'rejectionReason': null,
+              'preferredTime': null,
+            })
+            .eq('scheduleID', generatedScheduleId);
+      } else {
+        final scheduleResponse = await _supabase
+            .from('InterviewSchedule')
+            .insert({
+              'applicantID': applicantId,
+              'date': date.toIso8601String().split('T')[0], // YYYY-MM-DD
+              'startTime': startStr,
+              'endTime': endStr,
+              'meetingMethod': meetingMethod,
+              'meetingLink': meetingLink,
+              'candidateStatus': 'pending',
+              'rejectionReason': null,
+              'preferredTime': null,
+            })
+            .select('scheduleID')
+            .single();
+
+        generatedScheduleId = scheduleResponse['scheduleID'].toString();
+      }
+
+      // 2. If it's an internal meeting, ensure the Waiting Room exists!
       if (meetingMethod == 'internal') {
-        await _supabase.from('InterviewRoom').insert({
-          'scheduleID': generatedScheduleId,
-          'employerID': currentUser.id,
-          'seekerID': seekerId,
-          'status': 'pending',
-          // roomCode, startedAt, and endedAt will naturally be null upon creation
-        });
+        final existingRooms = await _supabase
+            .from('InterviewRoom')
+            .select('roomID')
+            .eq('scheduleID', generatedScheduleId)
+            .limit(1);
+
+        if (existingRooms.isEmpty) {
+          await _supabase.from('InterviewRoom').insert({
+            'scheduleID': generatedScheduleId,
+            'employerID': currentUser.id,
+            'seekerID': seekerId,
+            'status': 'pending',
+          });
+        } else {
+          await _supabase
+              .from('InterviewRoom')
+              .update({
+                'status': 'pending',
+                'roomCode': null,
+                'employerHasLeft': false,
+                'seekerHasLeft': false,
+              })
+              .eq('scheduleID', generatedScheduleId);
+        }
       }
 
       // 3. Update the JobApplicant status to 'scheduled'
@@ -793,15 +1175,13 @@ class EmployerService {
   // 👉 NEW: Fetch all scheduled interviews with candidate & job details
   Future<List<Map<String, dynamic>>> getScheduledInterviews() async {
     try {
-      // Note: This assumes your Supabase Foreign Keys are set up correctly between
-      // InterviewSchedule -> JobApplicant -> JobSeeker & JobPost.
-      // If your RLS policies are set correctly, this will only return the employer's interviews.
       final response = await _supabase
           .from('InterviewSchedule')
           .select('''
             *,
             JobApplicant (
               applicantID,
+              seekerID,
               applicationStatus,
               JobSeeker (fullName, email),
               Job (title, status)
