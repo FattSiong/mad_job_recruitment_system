@@ -12,15 +12,18 @@ import '../../../core/utils/file_picker_helper.dart';
 import '../../../core/utils/file_preview_helper.dart';
 import '../../../models/education_model.dart';
 import '../../../models/job_seeker_model.dart';
+import '../../../models/skill_model.dart';
 import '../../../models/work_experience_model.dart';
 import '../../../services/auth_service.dart';
 import '../../../shared_widgets/login_screen.dart';
 import '../controllers/profile_controller.dart';
+import '../controllers/skill_controller.dart';
 import '../widgets/profile/add_education_sheet.dart';
 import '../widgets/profile/add_experience_sheet.dart';
 import '../widgets/profile/profile_qr_dialog.dart';
 import '../widgets/profile/profile_record_card.dart';
 import '../widgets/profile/profile_sheet_helpers.dart';
+import 'add_skill_screen.dart';
 import 'ai_career_advisor_screen.dart';
 import 'mock_interview_setup_screen.dart';
 import 'skill_gap_analysis_screen.dart';
@@ -44,10 +47,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   static const Color _border = AppColors.border;
 
   final ProfileController _controller = ProfileController();
+  final SkillController _skillController = SkillController();
 
   final GlobalKey<FormState> _profileFormKey = GlobalKey<FormState>();
 
   JobSeekerModel? _profile;
+  List<SkillModel> _skills = [];
   bool _isLoading = true;
   bool _isUploading = false;
   bool _isEditing = false;
@@ -82,7 +87,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadProfile() async {
     setState(() => _isLoading = true);
-    final profile = await _controller.fetchProfile();
+    final results = await Future.wait([
+      _controller.fetchProfile(),
+      _fetchSkillsSafely(),
+    ]);
+    final profile = results[0] as JobSeekerModel?;
+    _skills = results[1] as List<SkillModel>;
 
     if (mounted) {
       setState(() {
@@ -92,6 +102,61 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
       _populateControllers();
     }
+  }
+
+  /// Skills failing to load shouldn't stop the rest of the profile from showing.
+  Future<List<SkillModel>> _fetchSkillsSafely() async {
+    try {
+      return await _skillController.fetchMySkills();
+    } catch (_) {
+      return _skills;
+    }
+  }
+
+  Future<void> _openSkillsScreen() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AddSkillScreen()),
+    );
+    final skills = await _fetchSkillsSafely();
+    if (mounted) setState(() => _skills = skills);
+  }
+
+  Widget _buildSkillsSection() {
+    if (_skills.isEmpty) {
+      return _buildEmptyInfoCard('No skills added yet.');
+    }
+    return _buildSurfaceCard(
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: _skills.map((skill) {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            decoration: BoxDecoration(
+              color: _surfaceAlt,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: _border),
+            ),
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: skill.skillName,
+                    style: const TextStyle(fontWeight: FontWeight.w700, color: _textPrimary),
+                  ),
+                  if (skill.proficiency != null)
+                    TextSpan(
+                      text: '  ·  ${skill.proficiency}',
+                      style: const TextStyle(color: _textMuted, fontSize: 13),
+                    ),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
   }
 
   void _populateControllers() {
@@ -1221,6 +1286,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   icon: Icons.assignment_outlined,
                   type: CareerToolMockupType.guidanceReports,
                 ),
+
+                _buildSectionHeader(
+                  'Skills',
+                  onAddPressed: _openSkillsScreen,
+                ),
+                _buildSkillsSection(),
 
                 _buildSectionHeader(
                   'Work Experience',

@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/skill_gap_model.dart';
 import '../controllers/skill_gap_controller.dart';
+import 'add_skill_screen.dart';
 import 'skill_gap_result_screen.dart';
 
 /// Use Case 4.60: choose a target role and run the skill gap analysis.
@@ -388,9 +389,10 @@ class _SkillGapAnalysisScreenState extends State<SkillGapAnalysisScreen> {
           Icons.psychology_outlined,
           'Skills',
           r.skillCount > 0
-              ? '${r.skillCount} skill${r.skillCount == 1 ? '' : 's'} in your profile'
-              : 'None listed – skills will be detected from your resume and experience.',
+              ? '${r.skillCount} skill${r.skillCount == 1 ? '' : 's'} in your profile – tap to manage'
+              : 'None listed – tap to add, or they will be detected from your resume.',
           r.skillCount > 0,
+          onTap: _openSkillsScreen,
         ),
         _readinessTile(
           Icons.school_outlined,
@@ -430,8 +432,22 @@ class _SkillGapAnalysisScreenState extends State<SkillGapAnalysisScreen> {
     );
   }
 
-  Widget _readinessTile(IconData icon, String title, String subtitle, bool ok) {
-    return Container(
+  Future<void> _openSkillsScreen() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AddSkillScreen()),
+    );
+    if (mounted) _load();
+  }
+
+  Widget _readinessTile(
+    IconData icon,
+    String title,
+    String subtitle,
+    bool ok, {
+    VoidCallback? onTap,
+  }) {
+    final tile = Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -463,9 +479,16 @@ class _SkillGapAnalysisScreenState extends State<SkillGapAnalysisScreen> {
             color: ok ? AppColors.successGreen : _warning,
             size: 22,
           ),
+          if (onTap != null) ...[
+            const SizedBox(width: 4),
+            const Icon(Icons.chevron_right_rounded, color: _textMuted),
+          ],
         ],
       ),
     );
+
+    if (onTap == null) return tile;
+    return GestureDetector(onTap: onTap, behavior: HitTestBehavior.opaque, child: tile);
   }
 
   Widget _buildHistoryCard() {
