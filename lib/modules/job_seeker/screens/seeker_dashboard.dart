@@ -39,8 +39,14 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
   String? _loadError; // shown instead of "No jobs" when loading fails
   String? _fullName;
   bool _isFetchingMore = false;
+  bool _loadMoreFailed = false;
   int _currentIndex = 0;
-  int _visibleJobCount = 0;
+
+  // Real pagination: only one page is downloaded at a time
+  JobSearchFilters _activeFilters = const JobSearchFilters();
+  int _nextOffset = 0;
+  bool _hasMoreJobs = false;
+  int _requestId = 0; // ignores results from an older search that finishes late
 
   String _selectedJobType = 'All';
   String _selectedDatePosted = 'All time';
@@ -55,9 +61,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
           _selectedDatePosted != 'All time' ||
           _selectedSalary != 'Any';
 
-  List<JobModel> get _visibleJobs => _jobs.take(_visibleJobCount).toList();
-
-  bool get _hasMoreJobs => _visibleJobCount < _jobs.length;
+  List<JobModel> get _visibleJobs => _jobs;
 
   String get _firstName {
     final name = _fullName?.trim() ?? '';
@@ -108,81 +112,82 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     }
   }
 
+  /// Loads the next page from the database (no artificial delay).
   Future<void> _loadMoreJobs() async {
-    if (!_hasMoreJobs || _isFetchingMore) return;
+    if (!_hasMoreJobs || _isFetchingMore || _isLoading || _loadMoreFailed) return;
 
-    // 1. Tell the UI we are fetching more, which triggers the bottom CircularProgressIndicator
-    setState(() {
-      _isFetchingMore = true;
-    });
-
-    // 2. Add a slight artificial delay (e.g., 800 milliseconds) so the user actually sees the loading process
-    await Future.delayed(const Duration(milliseconds: 800));
-
-    if (!mounted) return;
-
-    // 3. Load the next 10 jobs and hide the spinner
-    setState(() {
-      final nextCount = _visibleJobCount + _pageSize;
-      _visibleJobCount = nextCount > _jobs.length ? _jobs.length : nextCount;
-      _isFetchingMore = false;
-    });
-  }
-
-  Future<void> _loadJobs() async {
-    setState(() {
-      _isLoading = true;
-      _loadError = null;
-    });
+    final requestId = _requestId;
+    setState(() => _isFetchingMore = true);
 
     try {
-      final fetchedJobs = await _controller.fetchActiveJobs();
-      if (!mounted) return;
-      _showJobs(fetchedJobs);
-    } on DataLoadException catch (e) {
-      if (!mounted) return;
-      _showLoadError(e.message);
+      final page = await _controller.fetchJobsPage(
+        filters: _activeFilters,
+        offset: _nextOffset,
+        pageSize: _pageSize,
+      );
+      if (!mounted || requestId != _requestId) return;
+      setState(() {
+        _jobs = [..._jobs, ...page.jobs];
+        _nextOffset = page.nextOffset;
+        _hasMoreJobs = page.hasMore;
+        _isFetchingMore = false;
+      });
+    } on DataLoadException {
+      if (!mounted || requestId != _requestId) return;
+      setState(() {
+        _isFetchingMore = false;
+        _loadMoreFailed = true; // footer shows "Tap to retry"
+      });
     }
   }
 
-  void _showJobs(List<JobModel> jobs) {
-    setState(() {
-      _jobs = jobs;
-      _visibleJobCount = jobs.length > _pageSize ? _pageSize : jobs.length;
-      _isLoading = false;
-    });
+  void _retryLoadMore() {
+    setState(() => _loadMoreFailed = false);
+    _loadMoreJobs();
   }
 
-  void _showLoadError(String message) {
+  /// Starts a new list (first page) for [filters].
+  Future<void> _startNewList(JobSearchFilters filters) async {
+    final requestId = ++_requestId;
     setState(() {
-      _jobs = [];
-      _visibleJobCount = 0;
-      _loadError = message;
-      _isLoading = false;
+      _isLoading = true;
+      _loadError = null;
+      _loadMoreFailed = false;
+      _isFetchingMore = false;
+      _activeFilters = filters;
     });
+
+    try {
+      final page = await _controller.fetchJobsPage(filters: filters, pageSize: _pageSize);
+      if (!mounted || requestId != _requestId) return;
+      setState(() {
+        _jobs = page.jobs;
+        _nextOffset = page.nextOffset;
+        _hasMoreJobs = page.hasMore;
+        _isLoading = false;
+      });
+    } on DataLoadException catch (e) {
+      if (!mounted || requestId != _requestId) return;
+      setState(() {
+        _jobs = [];
+        _hasMoreJobs = false;
+        _loadError = e.message;
+        _isLoading = false;
+      });
+    }
   }
+
+  Future<void> _loadJobs() => _startNewList(const JobSearchFilters());
 
   Future<void> _performSearch() async {
     FocusScope.of(context).unfocus();
-    setState(() {
-      _isLoading = true;
-      _loadError = null;
-    });
-
-    try {
-      final searchResults = await _controller.searchJobs(
-        query: _keywordController.text.trim(),
-        location: _locationController.text.trim(),
-        jobType: _selectedJobType,
-        datePosted: _selectedDatePosted,
-        salary: _selectedSalary,
-      );
-      if (!mounted) return;
-      _showJobs(searchResults);
-    } on DataLoadException catch (e) {
-      if (!mounted) return;
-      _showLoadError(e.message);
-    }
+    await _startNewList(JobSearchFilters(
+      query: _keywordController.text.trim(),
+      location: _locationController.text.trim(),
+      jobType: _selectedJobType,
+      datePosted: _selectedDatePosted,
+      salary: _selectedSalary,
+    ));
   }
 
   Future<void> _refreshJobs() async {
@@ -561,8 +566,22 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                         (context, index) {
                       // 👉 Check if we are at the very bottom slot
                       if (index == _visibleJobs.length) {
+                        if (_loadMoreFailed) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            child: Center(
+                              child: TextButton.icon(
+                                onPressed: _retryLoadMore,
+                                icon: const Icon(Icons.refresh_rounded),
+                                label: const Text("Couldn't load more jobs. Tap to retry"),
+                              ),
+                            ),
+                          );
+                        }
                         if (_hasMoreJobs) {
-                          // Show loading spinner if there are more jobs to fetch
+                          // The footer is visible, so fetch the next page
+                          // (also covers short lists that can't be scrolled)
+                          WidgetsBinding.instance.addPostFrameCallback((_) => _loadMoreJobs());
                           return const Padding(
                             padding: EdgeInsets.symmetric(vertical: 20),
                             child: Center(
@@ -877,7 +896,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                 child: Text(
                   _isLoading
                       ? 'Searching opportunities for you...'
-                      : '${_jobs.length} jobs available',
+                      : '${_jobs.length}${_hasMoreJobs ? '+' : ''} jobs available',
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,

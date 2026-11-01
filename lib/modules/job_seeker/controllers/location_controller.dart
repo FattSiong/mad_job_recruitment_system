@@ -1,4 +1,4 @@
-import 'dart:math' show asin, cos, sqrt;
+import 'dart:math' show asin, cos, sqrt, pi;
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/utils/data_load_exception.dart';
@@ -21,6 +21,29 @@ class LocationController {
         c(lat1 * p) * c(lat2 * p) * (1 - c((lon2 - lon1) * p)) / 2;
 
     return 12742 * asin(sqrt(a)) * 1000;
+  }
+
+  /// Smallest latitude/longitude box that contains the search circle, so the
+  /// database only returns jobs near the map centre (exact distance is still
+  /// checked afterwards with [_calculateDistance]).
+  ({double minLat, double maxLat, double minLng, double maxLng}) _boundingBox(
+    double lat,
+    double lng,
+    double radiusInMeters,
+  ) {
+    // Same Earth radius as _calculateDistance (6371 km), plus a 1% safety margin
+    const metersPerDegreeLat = 6371000 * pi / 180;
+    final paddedRadius = radiusInMeters * 1.01;
+    final latDelta = paddedRadius / metersPerDegreeLat;
+    final cosLat = cos(lat * pi / 180).abs();
+    // Near the poles cos() -> 0; fall back to the full longitude range
+    final lngDelta = cosLat < 1e-6 ? 180.0 : paddedRadius / (metersPerDegreeLat * cosLat);
+    return (
+      minLat: lat - latDelta,
+      maxLat: lat + latDelta,
+      minLng: lng - lngDelta,
+      maxLng: lng + lngDelta,
+    );
   }
 
   DateTime? _getFilterDate(String? datePosted) {
@@ -60,6 +83,14 @@ class LocationController {
           .eq('status', 'active')
           .not('latitude', 'is', null)
           .not('longitude', 'is', null);
+
+      // Only fetch jobs inside the search area (was: every job in the database)
+      final box = _boundingBox(centerLat, centerLng, radiusInMeters);
+      queryBuilder = queryBuilder
+          .gte('latitude', box.minLat)
+          .lte('latitude', box.maxLat)
+          .gte('longitude', box.minLng)
+          .lte('longitude', box.maxLng);
 
       // Characters like , ( ) . : would break the PostgREST "or" filter, so keep
       // only letters, numbers, spaces and a few safe symbols (fix #5).

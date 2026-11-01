@@ -209,6 +209,7 @@ class _BookmarkedJobsListState extends State<_BookmarkedJobsList> {
         return RefreshIndicator(
           color: AppColors.primaryBlue,
           onRefresh: () async {
+            await _bookmarkedController.ensureBookmarksLoaded(force: true);
             BookmarkedController.bookmarkNotifier.value =
             !BookmarkedController.bookmarkNotifier.value;
           },
