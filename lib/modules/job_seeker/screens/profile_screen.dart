@@ -20,6 +20,9 @@ import '../../../services/auth_service.dart';
 import '../../../shared_widgets/login_screen.dart';
 import '../controllers/profile_controller.dart';
 import 'ai_career_advisor_screen.dart';
+import 'mock_interview_setup_screen.dart';
+import 'skill_gap_analysis_screen.dart';
+import 'guidance_reports_screen.dart';
 import 'ai_resume_assistant_screen.dart';
 import 'build_resume_screen.dart';
 import 'career_tools_mockup_screen.dart';
@@ -1048,9 +1051,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               context,
               MaterialPageRoute(
                 builder: (context) =>
-                    type == CareerToolMockupType.aiCareerAdvisor
-                        ? const AiCareerAdvisorScreen()
-                        : CareerToolsMockupScreen(type: type),
+                    switch (type) {
+                      CareerToolMockupType.aiCareerAdvisor => const AiCareerAdvisorScreen(),
+                      CareerToolMockupType.mockInterview => const MockInterviewSetupScreen(),
+                      CareerToolMockupType.skillGapAnalysis => const SkillGapAnalysisScreen(),
+                      CareerToolMockupType.guidanceReports => const GuidanceReportsScreen(),
+                    },
               ),
             );
           },
