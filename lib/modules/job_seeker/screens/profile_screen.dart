@@ -10,6 +10,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../core/utils/file_picker_helper.dart';
 import '../../../core/utils/file_preview_helper.dart';
+import '../../../core/utils/session_helper.dart';
 import '../../../models/education_model.dart';
 import '../../../models/job_seeker_model.dart';
 import '../../../models/skill_model.dart';
@@ -964,6 +965,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _logout() async {
+    SessionHelper.markManualSignOut();
     await AuthService().signOut();
 
     if (!mounted) return;

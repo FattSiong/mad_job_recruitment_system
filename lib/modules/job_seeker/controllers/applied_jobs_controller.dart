@@ -4,10 +4,11 @@ import '../../../core/utils/data_load_exception.dart';
 import '../../../models/job_applicant_model.dart';
 import '../../../models/job_model.dart';
 import '../../../core/constants/table_constants.dart';
+import '../../../core/utils/session_helper.dart';
 
 class AppliedJobsController {
   final _supabase = Supabase.instance.client;
-  String get _currentSeekerID => Supabase.instance.client.auth.currentUser!.id;
+  String get _currentSeekerID => SessionHelper.requireUserId();
 
   /// Bump this to make the Applied and Interviews tabs reload
   /// (after applying for a job, or when the My Jobs tab is opened).

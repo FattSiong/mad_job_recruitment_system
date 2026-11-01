@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/table_constants.dart';
 import '../../../models/advisor_conversation_model.dart';
 import '../../../models/advisor_message_model.dart';
+import '../../../core/utils/session_helper.dart';
 
 /// Result of one successful question -> answer round trip.
 class AdvisorReplyResult {
@@ -31,7 +32,7 @@ class AdvisorException implements Exception {
 
 class CareerAdvisorController {
   final _supabase = Supabase.instance.client;
-  String get _currentSeekerID => _supabase.auth.currentUser!.id;
+  String get _currentSeekerID => SessionHelper.requireUserId();
 
   static const int maxMessageLength = 2000;
 

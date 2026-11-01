@@ -8,6 +8,7 @@ import '../../../core/utils/data_load_exception.dart';
 import '../../../models/education_model.dart';
 import '../../../models/job_seeker_model.dart';
 import '../../../models/work_experience_model.dart';
+import '../../../core/utils/session_helper.dart';
 
 class ProfileController {
   final _supabase = Supabase.instance.client;
@@ -15,7 +16,7 @@ class ProfileController {
 
   Future<JobSeekerModel?> fetchProfile() async {
     try {
-      final userId = _supabase.auth.currentUser!.id;
+      final userId = SessionHelper.requireUserId();
       final response = await _supabase
           .from(TableConstants.jobSeeker)
           .select('*, WorkExperience(*), Education(*)')
@@ -99,7 +100,7 @@ class ProfileController {
   // 👉 ADDED BACK: The missing uploadResume method
   Future<String?> uploadResume(File file) async {
     try {
-      final userId = _supabase.auth.currentUser!.id;
+      final userId = SessionHelper.requireUserId();
       final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.path.split('/').last}';
       final filePath = '$userId/$fileName';
 
@@ -124,7 +125,7 @@ class ProfileController {
 
   Future<String?> uploadProfilePicture(File file) async {
     try {
-      final userId = _supabase.auth.currentUser!.id;
+      final userId = SessionHelper.requireUserId();
       final fileExt = file.path.split('.').last.toLowerCase();
       final fileName =
           'profile_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
@@ -211,7 +212,7 @@ class ProfileController {
           .from(TableConstants.workExperience)
           .update(data)
           .eq('experienceID', experience.experienceID!)
-          .eq('seekerID', _supabase.auth.currentUser!.id); // only your own records
+          .eq('seekerID', SessionHelper.requireUserId()); // only your own records
       return true;
     } catch (e) {
       debugPrint('Error updating experience: $e');
@@ -227,7 +228,7 @@ class ProfileController {
           .from(TableConstants.education)
           .update(data)
           .eq('educationID', education.educationID!)
-          .eq('seekerID', _supabase.auth.currentUser!.id); // only your own records
+          .eq('seekerID', SessionHelper.requireUserId()); // only your own records
       return true;
     } catch (e) {
       debugPrint('Error updating education: $e');
@@ -238,7 +239,7 @@ class ProfileController {
   Future<bool> addWorkExperience(WorkExperienceModel experience) async {
     try {
       final data = experience.toJson();
-      data['seekerID'] = _supabase.auth.currentUser!.id;
+      data['seekerID'] = SessionHelper.requireUserId();
       await _supabase.from(TableConstants.workExperience).insert(data);
       return true;
     } catch (e) {
@@ -253,7 +254,7 @@ class ProfileController {
           .from(TableConstants.workExperience)
           .delete()
           .eq('experienceID', experienceId)
-          .eq('seekerID', _supabase.auth.currentUser!.id); // only your own records
+          .eq('seekerID', SessionHelper.requireUserId()); // only your own records
       return true;
     } catch (e) {
       debugPrint('Error deleting experience: $e');
@@ -264,7 +265,7 @@ class ProfileController {
   Future<bool> addEducation(EducationModel education) async {
     try {
       final data = education.toJson();
-      data['seekerID'] = _supabase.auth.currentUser!.id;
+      data['seekerID'] = SessionHelper.requireUserId();
       await _supabase.from(TableConstants.education).insert(data);
       return true;
     } catch (e) {
@@ -279,7 +280,7 @@ class ProfileController {
           .from(TableConstants.education)
           .delete()
           .eq('educationID', educationId)
-          .eq('seekerID', _supabase.auth.currentUser!.id); // only your own records
+          .eq('seekerID', SessionHelper.requireUserId()); // only your own records
       return true;
     } catch (e) {
       debugPrint('Error deleting education: $e');

@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/data_load_exception.dart';
+import '../../../core/utils/session_helper.dart';
 import '../../../models/job_model.dart';
+import '../../../shared_widgets/login_screen.dart';
 import '../../community/screens/chat_list_screen.dart';
 import '../../community/screens/community_dashboard.dart';
 import '../controllers/applied_jobs_controller.dart';
@@ -54,6 +58,8 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
 
   User? get _currentUser => Supabase.instance.client.auth.currentUser;
 
+  StreamSubscription<AuthState>? _authSubscription;
+
   bool get _hasActiveFilters =>
       _keywordController.text.isNotEmpty ||
           _locationController.text.isNotEmpty ||
@@ -75,9 +81,35 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
   @override
   void initState() {
     super.initState();
+    SessionHelper.consumeManualSignOut(); // fresh login: clear any old flag
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen(
+      (data) {
+        if (data.event == AuthChangeEvent.signedOut) _handleSignedOut();
+      },
+      onError: (Object e) => debugPrint('Auth state error: $e'),
+    );
     _scrollController.addListener(_handleScroll);
     _loadJobs();
     _loadName();
+  }
+
+  /// The session ended (expired, or signed out elsewhere): go back to Login.
+  /// For a normal Logout the profile screen navigates too; whichever runs
+  /// first wins and the other sees `mounted == false`.
+  void _handleSignedOut() {
+    final wasManual = SessionHelper.consumeManualSignOut();
+    if (!mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
+    if (!wasManual) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Your session has expired. Please log in again.')),
+      );
+    }
   }
 
   Future<void> _loadName() async {
@@ -87,6 +119,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
 
   @override
   void dispose() {
+    _authSubscription?.cancel();
     _scrollController.removeListener(_handleScroll);
     _scrollController.dispose();
     _keywordController.dispose();

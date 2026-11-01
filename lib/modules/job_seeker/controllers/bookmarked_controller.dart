@@ -4,10 +4,11 @@ import '../../../core/utils/data_load_exception.dart';
 import '../../../models/job_model.dart';
 import '../../../models/bookmarked_job_model.dart';
 import '../../../core/constants/table_constants.dart';
+import '../../../core/utils/session_helper.dart';
 
 class BookmarkedController {
   final _supabase = Supabase.instance.client;
-  String get _currentSeekerID => Supabase.instance.client.auth.currentUser!.id;
+  String get _currentSeekerID => SessionHelper.requireUserId();
   /// Flipped whenever a bookmark is added/removed (the Bookmarked tab reloads its list).
   static final ValueNotifier<bool> bookmarkNotifier = ValueNotifier(false);
 

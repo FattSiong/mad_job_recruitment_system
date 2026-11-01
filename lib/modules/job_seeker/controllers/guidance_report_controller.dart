@@ -5,6 +5,7 @@ import '../../../core/constants/table_constants.dart';
 import '../../../models/guidance_report_model.dart';
 import '../../../models/mock_interview_model.dart';
 import '../../../models/skill_gap_model.dart';
+import '../../../core/utils/session_helper.dart';
 
 /// Thrown when reports can't be loaded (use case A2: database error).
 class GuidanceReportException implements Exception {
@@ -17,7 +18,7 @@ class GuidanceReportException implements Exception {
 
 class GuidanceReportController {
   final _supabase = Supabase.instance.client;
-  String get _currentSeekerID => _supabase.auth.currentUser!.id;
+  String get _currentSeekerID => SessionHelper.requireUserId();
 
   /// All completed AI advisory activities, newest first.
   /// Returns an empty list when there are none (use case A1),

@@ -2,10 +2,11 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../models/reported_job_model.dart';
 import '../../../core/constants/table_constants.dart';
+import '../../../core/utils/session_helper.dart';
 
 class ReportController {
   final _supabase = Supabase.instance.client;
-  String get _currentSeekerID => Supabase.instance.client.auth.currentUser!.id;
+  String get _currentSeekerID => SessionHelper.requireUserId();
 
   Future<bool> submitJobReport({
     required String jobId,

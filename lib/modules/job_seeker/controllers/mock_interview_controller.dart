@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/table_constants.dart';
 import '../../../models/mock_interview_model.dart';
+import '../../../core/utils/session_helper.dart';
 
 /// Error with a message that is safe to show to the user.
 class MockInterviewException implements Exception {
@@ -37,7 +38,7 @@ class EvaluateAnswerResult {
 
 class MockInterviewController {
   final _supabase = Supabase.instance.client;
-  String get _currentSeekerID => _supabase.auth.currentUser!.id;
+  String get _currentSeekerID => SessionHelper.requireUserId();
 
   static const String _functionName = 'mock-interview';
   static const String _unavailable =

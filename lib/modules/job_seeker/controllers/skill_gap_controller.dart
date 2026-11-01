@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/table_constants.dart';
 import '../../../models/skill_gap_model.dart';
+import '../../../core/utils/session_helper.dart';
 
 /// Error with a message that is safe to show to the user.
 class SkillGapException implements Exception {
@@ -22,7 +23,7 @@ class SkillGapException implements Exception {
 
 class SkillGapController {
   final _supabase = Supabase.instance.client;
-  String get _currentSeekerID => _supabase.auth.currentUser!.id;
+  String get _currentSeekerID => SessionHelper.requireUserId();
 
   static const String _unavailable =
       'The AI service is currently unavailable. Please try again later.';

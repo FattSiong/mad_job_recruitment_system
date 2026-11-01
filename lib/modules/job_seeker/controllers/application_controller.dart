@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/table_constants.dart';
 import '../../../models/pre_screening_question_model.dart';
 import 'applied_jobs_controller.dart';
+import '../../../core/utils/session_helper.dart';
 
 /// Error with a message that is safe to show to the user.
 class ApplicationException implements Exception {
@@ -22,7 +23,7 @@ class ApplicationException implements Exception {
 
 class ApplicationController {
   final _supabase = Supabase.instance.client;
-  String get _currentSeekerID => _supabase.auth.currentUser!.id;
+  String get _currentSeekerID => SessionHelper.requireUserId();
 
   static const String _resumeBucket = 'resumes';
   static const String _answerBucket = 'answer_files';
