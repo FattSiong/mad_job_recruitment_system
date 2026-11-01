@@ -6,6 +6,7 @@ import '../models/company_member_model.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import '../core/constants/table_constants.dart';
+import '../core/utils/storage_url_helper.dart';
 import 'dart:convert';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:http/http.dart' as http;
@@ -899,8 +900,9 @@ CRITICAL INSTRUCTION: Output ONLY the question/request text itself. Do not use q
 
       if (resumeUrl.isNotEmpty && resumeUrl.startsWith('http')) {
         try {
+          // Resumes are private: download through a signed URL
           final response = await http
-              .get(Uri.parse(resumeUrl))
+              .get(Uri.parse(await StorageUrlHelper.resolve(resumeUrl)))
               .timeout(const Duration(seconds: 15));
           if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
             resumePdfBytes = response.bodyBytes;

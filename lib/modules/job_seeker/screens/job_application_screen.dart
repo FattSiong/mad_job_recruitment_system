@@ -47,6 +47,12 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     _loadApplicationData();
   }
 
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadApplicationData() async {
     final questions = await _appController.getQuestions(widget.job.jobID!);
     final resumeUrl = await _appController.getSeekerResume();
@@ -97,33 +103,40 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
 
     setState(() => _isSubmitting = true);
 
-    final success = await _appController.submitApplication(
-      jobId: widget.job.jobID!,
-      answers: _answers,
-      existingResumeUrl:
-      _resumeSelection == 'existing' ? _existingResumeUrl : null,
-      newResumeFile: _newResumeFile,
-    );
+    try {
+      // Uploads files first, then saves the application + answers in one transaction
+      await _appController.submitApplication(
+        jobId: widget.job.jobID!,
+        answers: _answers,
+        existingResumeUrl:
+        _resumeSelection == 'existing' ? _existingResumeUrl : null,
+        newResumeFile: _resumeSelection == 'new' ? _newResumeFile : null,
+      );
 
-    if (!mounted) return;
-
-    setState(() => _isSubmitting = false);
-
-    if (success) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
       SnackBarHelper.showStyled(
         context,
         message: 'Application submitted successfully!',
         icon: Icons.check_circle_outline_rounded,
         accentColor: const Color(0xFF1E8F8B),
       );
-      Navigator.pop(context);
-    } else {
+      Navigator.pop(context, true); // tells JobDetailsScreen the user has applied
+    } on ApplicationException catch (e) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
       SnackBarHelper.showStyled(
         context,
-        message: 'Failed to submit application.',
-        icon: Icons.error_outline_rounded,
+        message: e.message,
+        icon: e.code == 'already_applied'
+            ? Icons.info_outline_rounded
+            : Icons.error_outline_rounded,
         accentColor: const Color(0xFFE27D60),
+        duration: const Duration(seconds: 3),
       );
+      if (e.code == 'already_applied' || e.code == 'job_unavailable') {
+        Navigator.pop(context, e.code == 'already_applied');
+      }
     }
   }
 

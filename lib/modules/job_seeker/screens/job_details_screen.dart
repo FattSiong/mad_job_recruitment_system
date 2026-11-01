@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/job_model.dart';
+import '../controllers/application_controller.dart';
 import '../controllers/bookmarked_controller.dart';
 import 'job_application_screen.dart';
 import 'report_job_screen.dart';
@@ -21,7 +22,12 @@ class JobDetailsScreen extends StatefulWidget {
 
 class _JobDetailsScreenState extends State<JobDetailsScreen> {
   final BookmarkedController _bookmarkController = BookmarkedController();
+  final ApplicationController _applicationController = ApplicationController();
   final ScrollController _scrollController = ScrollController();
+
+  // Fix #1: block applying twice, whichever screen the job was opened from
+  bool _hasApplied = false;
+  bool _isCheckingApplied = true;
 
   bool _isBookmarked = false;
   bool _isBookmarkUpdating = false;
@@ -33,6 +39,35 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     super.initState();
     _scrollController.addListener(_scrollListener);
     _checkBookmarkStatus();
+    _checkAppliedStatus();
+  }
+
+  Future<void> _checkAppliedStatus() async {
+    if (widget.disableApplyButton || widget.job.jobID == null) {
+      _isCheckingApplied = false; // runs synchronously inside initState, no setState needed
+      return;
+    }
+    final applied = await _applicationController.hasApplied(widget.job.jobID!);
+    if (mounted) {
+      setState(() {
+        _hasApplied = applied;
+        _isCheckingApplied = false;
+      });
+    }
+  }
+
+  bool get _alreadyApplied => widget.disableApplyButton || _hasApplied;
+
+  Future<void> _openApplication() async {
+    final applied = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => JobApplicationScreen(job: widget.job),
+      ),
+    );
+    if (applied == true && mounted) {
+      setState(() => _hasApplied = true);
+    }
   }
 
   @override
@@ -586,16 +621,9 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
-                          onPressed: widget.disableApplyButton
+                          onPressed: (_alreadyApplied || _isCheckingApplied)
                               ? null
-                              : () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => JobApplicationScreen(job: widget.job),
-                              ),
-                            );
-                          },
+                              : _openApplication,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF163B65),
                             foregroundColor: Colors.white,
@@ -607,11 +635,17 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                               borderRadius: BorderRadius.circular(16),
                             ),
                           ),
-                          icon: Icon(
-                            widget.disableApplyButton ? Icons.check_circle_outline : Icons.send_rounded,
-                          ),
+                          icon: _isCheckingApplied
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : Icon(
+                                  _alreadyApplied ? Icons.check_circle_outline : Icons.send_rounded,
+                                ),
                           label: Text(
-                            widget.disableApplyButton ? 'Already Applied' : 'Apply Now',
+                            _alreadyApplied ? 'Already Applied' : 'Apply Now',
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,

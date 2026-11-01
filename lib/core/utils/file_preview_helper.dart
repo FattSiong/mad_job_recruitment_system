@@ -3,11 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:open_filex/open_filex.dart';
 
+import 'storage_url_helper.dart';
+
 class FilePreviewHelper {
-  /// Opens a network URL using the device's browser or default app
+  /// Opens a network URL using the device's browser or default app.
+  /// Files in private buckets (resumes, answer files) are opened through a signed URL.
   static Future<void> previewNetworkFile(BuildContext context, String url) async {
-    final Uri uri = Uri.parse(url);
     try {
+      final Uri uri = Uri.parse(await StorageUrlHelper.resolve(url));
       if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

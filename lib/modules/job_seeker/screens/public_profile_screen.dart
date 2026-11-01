@@ -28,6 +28,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
 
   final ProfileController _controller = ProfileController();
   JobSeekerModel? _profile;
+  bool _contactVisible = false;
   bool _isLoading = true;
 
   @override
@@ -37,10 +38,11 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   }
 
   Future<void> _loadPublicProfile() async {
-    final profile = await _controller.fetchPublicProfile(widget.seekerId);
+    final result = await _controller.fetchPublicProfile(widget.seekerId);
     if (mounted) {
       setState(() {
-        _profile = profile;
+        _profile = result?.profile;
+        _contactVisible = result?.contactVisible ?? false;
         _isLoading = false;
       });
     }
@@ -438,6 +440,28 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (!_contactVisible)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 20),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: _surfaceAlt,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.lock_outline_rounded, color: _textMuted, size: 20),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Contact details and resume are only visible to employers.',
+                                style: TextStyle(color: _textMuted, fontSize: 13, height: 1.35),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     _buildField(
                       label: 'Email',
                       value: _profile!.email,

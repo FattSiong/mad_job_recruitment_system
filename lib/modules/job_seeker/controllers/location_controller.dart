@@ -67,9 +67,15 @@ class LocationController {
           .not('latitude', 'is', null)
           .not('longitude', 'is', null);
 
-      if (query.isNotEmpty) {
+      // Characters like , ( ) . : would break the PostgREST "or" filter, so keep
+      // only letters, numbers, spaces and a few safe symbols (fix #5).
+      final safeQuery = query
+          .replaceAll(RegExp(r'[^A-Za-z0-9\s+#&/-]'), ' ')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+      if (safeQuery.isNotEmpty) {
         queryBuilder = queryBuilder.or(
-          'title.ilike.%$query%,description.ilike.%$query%',
+          'title.ilike.%$safeQuery%,description.ilike.%$safeQuery%',
         );
       }
 
@@ -93,6 +99,11 @@ class LocationController {
 
       final filteredJobs = allJobs.where((job) {
         if (job.latitude == null || job.longitude == null) {
+          return false;
+        }
+
+        // Hide jobs past their expiry date (fix #6)
+        if (job.isExpired) {
           return false;
         }
 

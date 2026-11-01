@@ -28,15 +28,50 @@ class ProfileController {
     }
   }
 
-  Future<JobSeekerModel?> fetchPublicProfile(String targetSeekerId) async {
+  /// Profile shown after scanning a QR code (fix #8).
+  /// Email, phone and resume are only included for employers, admins and the owner;
+  /// [contactVisible] tells the screen whether they were hidden.
+  Future<({JobSeekerModel profile, bool contactVisible})?> fetchPublicProfile(
+    String targetSeekerId,
+  ) async {
     try {
+      final viewerId = _supabase.auth.currentUser?.id;
+
       final response = await _supabase
           .from('JobSeeker')
           .select('*, WorkExperience(*), Education(*)')
           .eq('seekerID', targetSeekerId)
           .single();
+      final full = JobSeekerModel.fromJson(response);
 
-      return JobSeekerModel.fromJson(response);
+      String? viewerRole;
+      if (viewerId != null) {
+        final roleRow = await _supabase
+            .from('User')
+            .select('role')
+            .eq('userID', viewerId)
+            .maybeSingle();
+        viewerRole = roleRow?['role'] as String?;
+      }
+
+      final contactVisible = viewerId == targetSeekerId ||
+          viewerRole == 'employer' ||
+          viewerRole == 'admin';
+      if (contactVisible) return (profile: full, contactVisible: true);
+
+      final limited = JobSeekerModel(
+        seekerID: full.seekerID,
+        fullName: full.fullName,
+        profilePictureURL: full.profilePictureURL,
+        location: full.location,
+        bio: full.bio,
+        linkedInURL: full.linkedInURL,
+        gitHubURL: full.gitHubURL,
+        education: full.education,
+        workExperience: full.workExperience,
+        // email, phoneNumber and resumeURL intentionally left out
+      );
+      return (profile: limited, contactVisible: false);
     } catch (e) {
       debugPrint('Error fetching public profile: $e');
       return null;
@@ -121,7 +156,12 @@ class ProfileController {
     required VoidCallback onSuccess,
   }) async {
     try {
-      await _supabase.from('WorkExperience').delete().eq('experienceID', experienceId);
+      final userId = _supabase.auth.currentUser!.id;
+      await _supabase
+          .from('WorkExperience')
+          .delete()
+          .eq('experienceID', experienceId)
+          .eq('seekerID', userId); // only your own records (fix #3)
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -201,7 +241,12 @@ class ProfileController {
     required VoidCallback onSuccess,
   }) async {
     try {
-      await _supabase.from('Education').delete().eq('educationID', educationId);
+      final userId = _supabase.auth.currentUser!.id;
+      await _supabase
+          .from('Education')
+          .delete()
+          .eq('educationID', educationId)
+          .eq('seekerID', userId); // only your own records (fix #3)
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

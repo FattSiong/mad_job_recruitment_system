@@ -6,6 +6,7 @@ import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/utils/storage_url_helper.dart';
 import '../../../services/community_service.dart';
 import '../../../services/employer_service.dart';
 import '../../community/screens/active_chat_screen.dart';
@@ -153,7 +154,8 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
       final file = File(savePath);
 
       if (!await file.exists()) {
-        final response = await http.get(Uri.parse(url));
+        // Resumes / answer files are private: download through a signed URL
+        final response = await http.get(Uri.parse(await StorageUrlHelper.resolve(url)));
         await file.writeAsBytes(response.bodyBytes);
       }
 
