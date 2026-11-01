@@ -27,7 +27,7 @@ class UnavailableJobNoticeScreen extends StatelessWidget {
         : Icons.pause_circle_outline_rounded;
     final accentColor = isDeleted
         ? AppColors.textMuted
-        : const Color(0xFF9AA5B1);
+        : AppColors.statusInactive;
 
     return Scaffold(
       backgroundColor: AppColors.background,

@@ -103,7 +103,7 @@ class _GuidancePdfViewerScreenState extends State<GuidancePdfViewerScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFD9E4F1)),
+        border: Border.all(color: AppColors.borderSoft),
       ),
       child: IconButton(
         icon: Icon(icon, color: onPressed == null ? const Color(0xFFB0BCCB) : _primary),

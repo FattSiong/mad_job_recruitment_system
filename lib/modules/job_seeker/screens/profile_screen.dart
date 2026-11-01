@@ -715,7 +715,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               style: _secondaryButtonStyle().copyWith(
                 foregroundColor: WidgetStateProperty.all(_primary),
                 side: WidgetStateProperty.all(
-                  const BorderSide(color: Color(0xFFB8D1EE)),
+                  const BorderSide(color: AppColors.borderActive),
                 ),
               ),
             ),
@@ -818,7 +818,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               style: _secondaryButtonStyle().copyWith(
                 foregroundColor: WidgetStateProperty.all(_primary),
                 side: WidgetStateProperty.all(
-                  const BorderSide(color: Color(0xFFB8D1EE)),
+                  const BorderSide(color: AppColors.borderActive),
                 ),
               ),
             ),
@@ -840,7 +840,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               style: _secondaryButtonStyle().copyWith(
                 foregroundColor: WidgetStateProperty.all(_primary),
                 side: WidgetStateProperty.all(
-                  const BorderSide(color: Color(0xFFB8D1EE)),
+                  const BorderSide(color: AppColors.borderActive),
                 ),
               ),
             ),
@@ -1005,7 +1005,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           style: _secondaryButtonStyle().copyWith(
             foregroundColor: WidgetStateProperty.all(_primary),
             side: WidgetStateProperty.all(
-              const BorderSide(color: Color(0xFFB8D1EE)),
+              const BorderSide(color: AppColors.borderActive),
             ),
           ),
         ),

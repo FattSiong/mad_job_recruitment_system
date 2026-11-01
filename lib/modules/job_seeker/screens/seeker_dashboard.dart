@@ -13,7 +13,9 @@ import '../../community/screens/community_dashboard.dart';
 import '../controllers/applied_jobs_controller.dart';
 import '../controllers/job_discovery_controller.dart';
 import '../controllers/profile_controller.dart';
+import '../widgets/dashboard/job_search_panel.dart';
 import '../widgets/job_card.dart';
+import '../widgets/job_filters.dart';
 import '../widgets/load_error_view.dart';
 import 'job_details_screen.dart';
 import 'job_map_screen.dart';
@@ -32,7 +34,6 @@ class SeekerDashboard extends StatefulWidget {
 class _SeekerDashboardState extends State<SeekerDashboard> {
   final TextEditingController _keywordController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
-  final TextEditingController _salaryInputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final JobDiscoveryController _controller = JobDiscoveryController();
 
@@ -52,9 +53,9 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
   bool _hasMoreJobs = false;
   int _requestId = 0; // ignores results from an older search that finishes late
 
-  String _selectedJobType = 'All';
-  String _selectedDatePosted = 'All time';
-  String _selectedSalary = 'Any';
+  String _selectedJobType = JobFilterOptions.anyJobType;
+  String _selectedDatePosted = JobFilterOptions.anyDate;
+  String _selectedSalary = JobFilterOptions.anySalary;
 
   User? get _currentUser => Supabase.instance.client.auth.currentUser;
 
@@ -63,9 +64,9 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
   bool get _hasActiveFilters =>
       _keywordController.text.isNotEmpty ||
           _locationController.text.isNotEmpty ||
-          _selectedJobType != 'All' ||
-          _selectedDatePosted != 'All time' ||
-          _selectedSalary != 'Any';
+          _selectedJobType != JobFilterOptions.anyJobType ||
+          _selectedDatePosted != JobFilterOptions.anyDate ||
+          _selectedSalary != JobFilterOptions.anySalary;
 
   List<JobModel> get _visibleJobs => _jobs;
 
@@ -124,7 +125,6 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     _scrollController.dispose();
     _keywordController.dispose();
     _locationController.dispose();
-    _salaryInputController.dispose();
     super.dispose();
   }
 
@@ -233,9 +233,9 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
 
   Future<void> _resetFilters() async {
     setState(() {
-      _selectedJobType = 'All';
-      _selectedDatePosted = 'All time';
-      _selectedSalary = 'Any';
+      _selectedJobType = JobFilterOptions.anyJobType;
+      _selectedDatePosted = JobFilterOptions.anyDate;
+      _selectedSalary = JobFilterOptions.anySalary;
       _keywordController.clear();
       _locationController.clear();
     });
@@ -263,258 +263,36 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     }
   }
 
-  void _showFilterOptions(String filterType) {
-    List<String> options = [];
-    String currentValue = '';
-
-    if (filterType == 'Date posted') {
-      options = [
-        'All time',
-        'Last 24 hours',
-        'Last 3 days',
-        'Last 7 days',
-        'Last 14 days',
-      ];
-      currentValue = _selectedDatePosted;
-    } else if (filterType == 'Job type') {
-      options = ['All', 'Full-time', 'Part-time'];
-      currentValue = _selectedJobType;
-    } else if (filterType == 'Salary') {
-      options = ['Any', 'RM1000', 'RM2000', 'RM3000', 'RM4000', 'RM5000'];
-      currentValue = _selectedSalary;
-      _salaryInputController.text =
-          _selectedSalary.replaceAll(RegExp(r'[^0-9]'), '');
+  String _currentFilterValue(String filterType) {
+    switch (filterType) {
+      case JobFilterOptions.datePosted:
+        return _selectedDatePosted;
+      case JobFilterOptions.jobType:
+        return _selectedJobType;
+      default:
+        return _selectedSalary;
     }
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 16,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 42,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  'Filter by $filterType',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textDark,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                if (filterType == 'Salary') ...[
-                  const Text(
-                    'Enter custom minimum salary',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _salaryInputController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      hintText: 'e.g. 3500',
-                      prefixIcon: const Padding(
-                        padding: EdgeInsetsDirectional.only(start: 16, end: 8),
-                        child: Align(
-                          widthFactor: 1,
-                          heightFactor: 1,
-                          child: Text(
-                            'RM',
-                            style: TextStyle(color: AppColors.textMuted),
-                          ),
-                        ),
-                      ),
-                      prefixIconConstraints: const BoxConstraints(
-                        minWidth: 0,
-                        minHeight: 0,
-                      ),
-                      filled: true,
-                      fillColor: AppColors.surfaceAlt,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(
-                          color: AppColors.primary,
-                          width: 1.5,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () {
-                            _salaryInputController.clear();
-                            setState(() => _selectedSalary = 'Any');
-                            Navigator.pop(context);
-                            _performSearch();
-                          },
-                          child: const Text('Clear'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () {
-                            final typed = _salaryInputController.text.trim();
-                            if (typed.isNotEmpty) {
-                              final salary = int.tryParse(typed);
-                              if (salary == null || salary <= 0) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Please enter a valid salary amount.')),
-                                );
-                                return;
-                              }
-                            }
-                            setState(() {
-                              _selectedSalary = typed.isNotEmpty ? 'RM $typed' : 'Any';
-                            });
-                            Navigator.pop(context);
-                            _performSearch();
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                          ),
-                          child: const Text('Apply'),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  const Divider(),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Or select a suggested range',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  RadioGroup<String>(
-                    groupValue: currentValue,
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() => _selectedSalary = value);
-                      Navigator.pop(context);
-                      _performSearch();
-                    },
-                    child: Column(
-                      children: options
-                          .map(
-                            (option) => RadioListTile<String>(
-                          value: option,
-                          title: Text(option),
-                          activeColor: AppColors.primary,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      )
-                          .toList(),
-                    ),
-                  ),
-                ] else ...[
-                  RadioGroup<String>(
-                    groupValue: currentValue,
-                    onChanged: (value) {
-                      if (value == null) return;
-
-                      setState(() {
-                        if (filterType == 'Date posted') {
-                          _selectedDatePosted = value;
-                        } else if (filterType == 'Job type') {
-                          _selectedJobType = value;
-                        }
-                      });
-
-                      Navigator.pop(context);
-                      _performSearch();
-                    },
-                    child: Column(
-                      children: options
-                          .map(
-                            (option) => RadioListTile<String>(
-                          value: option,
-                          title: Text(option),
-                          activeColor: AppColors.primary,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      )
-                          .toList(),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        );
-      },
-    );
   }
 
-  Widget _buildFilterChip(String label, String value, String defaultValue) {
-    final isActive = value != defaultValue;
-
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(
-        label: Text(isActive ? value : label),
-        selected: isActive,
-        onSelected: (_) => _showFilterOptions(label),
-        selectedColor: AppColors.primarySoft,
-        backgroundColor: Colors.white,
-        labelStyle: TextStyle(
-          color: isActive ? AppColors.primary : AppColors.textDark,
-          fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-          side: BorderSide(
-            color: isActive
-                ? const Color(0xFFB8D1EE)
-                : AppColors.border,
-          ),
-        ),
-      ),
+  Future<void> _showFilterOptions(String filterType) async {
+    final value = await showJobFilterSheet(
+      context,
+      filterType: filterType,
+      currentValue: _currentFilterValue(filterType),
     );
+    if (value == null || !mounted) return;
+
+    setState(() {
+      switch (filterType) {
+        case JobFilterOptions.datePosted:
+          _selectedDatePosted = value;
+        case JobFilterOptions.jobType:
+          _selectedJobType = value;
+        default:
+          _selectedSalary = value;
+      }
+    });
+    _performSearch();
   }
 
   Widget _buildHomeTab() {
@@ -533,7 +311,21 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                   [
                     _buildHeroHeader(),
                     const SizedBox(height: 24),
-                    _buildSearchPanel(),
+                    JobSearchPanel(
+                      keywordController: _keywordController,
+                      locationController: _locationController,
+                      selectedDatePosted: _selectedDatePosted,
+                      selectedJobType: _selectedJobType,
+                      selectedSalary: _selectedSalary,
+                      onSearch: _performSearch,
+                      onReset: _resetFilters,
+                      onOpenLocation: _openLocationSearch,
+                      onClearLocation: () {
+                        _locationController.clear();
+                        _performSearch();
+                      },
+                      onFilterTap: _showFilterOptions,
+                    ),
                     const SizedBox(height: 24),
                     _buildResultsHeader(),
                     const SizedBox(height: 12),
@@ -743,118 +535,6 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     );
   }
 
-  Widget _buildSearchPanel() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Search smarter',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textDark,
-            ),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Refine by role, location, job type, posted date, and salary.',
-            style: TextStyle(fontSize: 14, color: AppColors.textMuted),
-          ),
-          const SizedBox(height: 18),
-          TextField(
-            controller: _keywordController,
-            textInputAction: TextInputAction.search,
-            onSubmitted: (_) => _performSearch(),
-            decoration: _searchInputDecoration(
-              hint: 'Job title, keywords, or company',
-              icon: Icons.search,
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _locationController,
-            readOnly: true,
-            onTap: _openLocationSearch,
-            decoration: _searchInputDecoration(
-              hint: 'City, state, or postcode',
-              icon: Icons.location_on_outlined,
-              suffix: _locationController.text.isNotEmpty
-                  ? IconButton(
-                onPressed: () {
-                  _locationController.clear();
-                  _performSearch();
-                },
-                icon: const Icon(Icons.close, size: 18),
-              )
-                  : IconButton(
-                onPressed: _openLocationSearch,
-                icon: const Icon(Icons.arrow_forward_ios, size: 16),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _performSearch,
-                  icon: const Icon(Icons.search),
-                  label: const Text('Search Jobs'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              OutlinedButton.icon(
-                onPressed: _resetFilters,
-                icon: const Icon(Icons.restart_alt),
-                label: const Text('Reset'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 15,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  side: const BorderSide(color: Color(0xFFB8D1EE)),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _buildFilterChip(
-                  'Date posted',
-                  _selectedDatePosted,
-                  'All time',
-                ),
-                _buildFilterChip('Job type', _selectedJobType, 'All'),
-                _buildFilterChip('Salary', _selectedSalary, 'Any'),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildResultsHeader() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -886,7 +566,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                 foregroundColor: AppColors.primary,
                 padding:
                 const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                side: const BorderSide(color: Color(0xFFB8D1EE)),
+                side: const BorderSide(color: AppColors.borderActive),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
@@ -962,33 +642,6 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
         automaticallyImplyLeading: false,
       ),
       body: ChatListScreen(currentUserID: _currentUser!.id),
-    );
-  }
-
-  InputDecoration _searchInputDecoration({
-    required String hint,
-    required IconData icon,
-    Widget? suffix,
-  }) {
-    return InputDecoration(
-      hintText: hint,
-      prefixIcon: Icon(icon, color: AppColors.textMuted),
-      suffixIcon: suffix,
-      filled: true,
-      fillColor: AppColors.surfaceAlt,
-      contentPadding: const EdgeInsets.symmetric(vertical: 16),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: BorderSide(color: Colors.grey.shade300),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: BorderSide(color: Colors.grey.shade300),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-      ),
     );
   }
 

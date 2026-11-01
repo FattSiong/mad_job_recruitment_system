@@ -165,7 +165,7 @@ class _EducationScreenState extends State<EducationScreen> {
             if (_isSaving)
               const Positioned.fill(
                 child: ColoredBox(
-                  color: Color(0x33000000),
+                  color: AppColors.overlay,
                   child: Center(child: CircularProgressIndicator(color: Colors.white)),
                 ),
               ),

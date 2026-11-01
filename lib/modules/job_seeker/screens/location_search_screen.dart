@@ -98,7 +98,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
           context,
           message: e.toString().replaceAll('Exception: ', ''),
           icon: Icons.location_off_rounded,
-          accentColor: const Color(0xFFE27D60),
+          accentColor: AppColors.coral,
         );
       }
     } finally {

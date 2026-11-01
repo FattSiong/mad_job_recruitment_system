@@ -26,7 +26,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
   static const Color _textPrimary = AppColors.textDark;
   static const Color _textMuted = AppColors.textMuted;
   static const Color _softBlue = AppColors.primarySoft;
-  static const Color _border = Color(0xFFD9E4F1);
+  static const Color _border = AppColors.borderSoft;
 
   static const List<String> _suggestedQuestions = [
     'What career paths suit my skills?',
@@ -604,7 +604,7 @@ class _AdvisorMessageBubble extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: isUser ? _primary : Colors.white,
-                border: isUser ? null : Border.all(color: const Color(0xFFD9E4F1)),
+                border: isUser ? null : Border.all(color: AppColors.borderSoft),
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(22),
                   topRight: const Radius.circular(22),
@@ -659,7 +659,7 @@ class _TypingBubble extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: Colors.white,
-          border: Border.all(color: const Color(0xFFD9E4F1)),
+          border: Border.all(color: AppColors.borderSoft),
           borderRadius: const BorderRadius.only(
             topLeft: Radius.circular(22),
             topRight: Radius.circular(22),

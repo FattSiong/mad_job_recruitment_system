@@ -123,7 +123,7 @@ class SkillGapResultScreen extends StatelessWidget {
                   label: const Text('View as PDF'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: _primary,
-                    side: const BorderSide(color: Color(0xFFB8D1EE)),
+                    side: const BorderSide(color: AppColors.borderActive),
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                   ),

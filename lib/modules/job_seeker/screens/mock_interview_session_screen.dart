@@ -42,7 +42,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
   static const Color _textMuted = AppColors.textMuted;
   static const Color _surfaceAlt = AppColors.surfaceAlt;
   static const Color _border = AppColors.border;
-  static const Color _recordRed = Color(0xFFC24E4E);
+  static const Color _recordRed = AppColors.danger;
 
   static const Duration _maxAnswerLength = Duration(minutes: 3);
   static const Duration _minAnswerLength = Duration(seconds: 3);
@@ -755,7 +755,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
               width: 84,
               height: 84,
               decoration: const BoxDecoration(
-                color: Color(0xFFFDECEC),
+                color: AppColors.dangerSoft,
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.stop_rounded, color: _recordRed, size: 44),
@@ -887,7 +887,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
                 label: const Text('Re-record'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: _primary,
-                  side: const BorderSide(color: Color(0xFFB8D1EE)),
+                  side: const BorderSide(color: AppColors.borderActive),
                   padding: const EdgeInsets.symmetric(vertical: 15),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                 ),

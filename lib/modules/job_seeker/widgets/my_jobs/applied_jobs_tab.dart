@@ -65,17 +65,17 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'pending':
-        return const Color(0xFFE4A73B);
+        return AppColors.statusPending;
       case 'scheduled':
-        return const Color(0xFF4C6EF5);
+        return AppColors.statusScheduled;
       case 'interviewed':
-        return const Color(0xFF7B61FF);
+        return AppColors.statusInterviewed;
       case 'accepted':
-        return const Color(0xFF1E8F8B);
+        return AppColors.statusAccepted;
       case 'rejected':
-        return const Color(0xFFE27D60);
+        return AppColors.statusRejected;
       case 'inactive':
-        return const Color(0xFF9AA5B1);
+        return AppColors.statusInactive;
       case 'deleted':
         return AppColors.textMuted;
       default:

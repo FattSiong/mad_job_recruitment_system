@@ -24,10 +24,10 @@ class LoadErrorView extends StatelessWidget {
               width: 72,
               height: 72,
               decoration: BoxDecoration(
-                color: const Color(0xFFFDECEC),
+                color: AppColors.dangerSoft,
                 borderRadius: BorderRadius.circular(22),
               ),
-              child: const Icon(Icons.cloud_off_rounded, size: 34, color: Color(0xFFC24E4E)),
+              child: const Icon(Icons.cloud_off_rounded, size: 34, color: AppColors.danger),
             ),
             const SizedBox(height: 16),
             const Text(

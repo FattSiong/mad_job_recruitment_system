@@ -363,7 +363,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
               label: Text(label),
               style: OutlinedButton.styleFrom(
                 foregroundColor: _primary,
-                side: const BorderSide(color: Color(0xFFB8D1EE)),
+                side: const BorderSide(color: AppColors.borderActive),
                 padding: padding,
                 shape: shape,
               ),

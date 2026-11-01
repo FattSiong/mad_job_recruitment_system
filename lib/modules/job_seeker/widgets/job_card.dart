@@ -42,7 +42,7 @@ class _JobCardState extends State<JobCard> {
         context,
         message: 'Could not update bookmark. Please try again.',
         icon: Icons.error_outline_rounded,
-        accentColor: const Color(0xFFE27D60),
+        accentColor: AppColors.coral,
       );
       return;
     }
@@ -51,7 +51,7 @@ class _JobCardState extends State<JobCard> {
       context,
       message: newState ? 'Job bookmarked!' : 'Bookmark removed.',
       icon: newState ? Icons.bookmark_added_rounded : Icons.bookmark_remove_rounded,
-      accentColor: newState ? const Color(0xFF1E8F8B) : AppColors.textMuted,
+      accentColor: newState ? AppColors.teal : AppColors.textMuted,
     );
   }
 

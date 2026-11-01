@@ -48,7 +48,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
         context,
         message: 'Please select a reason for reporting.',
         icon: Icons.info_outline_rounded,
-        accentColor: const Color(0xFFE27D60),
+        accentColor: AppColors.coral,
       );
       return;
     }
@@ -58,7 +58,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
         context,
         message: 'Please provide details when selecting Other.',
         icon: Icons.info_outline_rounded,
-        accentColor: const Color(0xFFE27D60),
+        accentColor: AppColors.coral,
       );
       return;
     }
@@ -78,7 +78,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
           context,
           message: 'Report submitted successfully.',
           icon: Icons.check_circle_outline_rounded,
-          accentColor: const Color(0xFF1E8F8B),
+          accentColor: AppColors.teal,
         );
         Navigator.pop(context); // Go back to job details
       } else {
@@ -86,7 +86,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
           context,
           message: 'Failed to submit report. Please try again.',
           icon: Icons.error_outline_rounded,
-          accentColor: const Color(0xFFE27D60),
+          accentColor: AppColors.coral,
         );
       }
     }
@@ -130,7 +130,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
           color: isSelected ? _primarySoft : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? const Color(0xFFB8D1EE) : _border,
+            color: isSelected ? AppColors.borderActive : _border,
             width: isSelected ? 2 : 1,
           ),
         ),

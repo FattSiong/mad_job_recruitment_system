@@ -118,7 +118,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
         context,
         message: 'Failed to update bookmark.',
         icon: Icons.error_outline_rounded,
-        accentColor: const Color(0xFFE27D60),
+        accentColor: AppColors.coral,
       );
       return;
     }
@@ -130,7 +130,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
           ? Icons.bookmark_added_rounded
           : Icons.bookmark_remove_rounded,
       accentColor:
-      actualState ? const Color(0xFF1E8F8B) : AppColors.textMuted,
+      actualState ? AppColors.teal : AppColors.textMuted,
     );
 
   }
@@ -432,14 +432,14 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
             icon: Icons.work_outline_rounded,
             title: 'Job Type',
             value: widget.job.jobType,
-            color: const Color(0xFF1E8F8B),
+            color: AppColors.teal,
           ),
           const SizedBox(height: 12),
           _buildInfoTile(
             icon: Icons.location_on_outlined,
             title: 'Location',
             value: widget.job.locationName ?? 'Location unavailable',
-            color: const Color(0xFFE27D60),
+            color: AppColors.coral,
           ),
           const SizedBox(height: 12),
           _buildInfoTile(
@@ -448,7 +448,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
             value: widget.job.minExperienceYears <= 0
                 ? 'No minimum experience required'
                 : '${widget.job.minExperienceYears} year(s) minimum',
-            color: const Color(0xFFE4A73B),
+            color: AppColors.statusPending,
           ),
         ],
       ),

@@ -566,7 +566,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
         style: OutlinedButton.styleFrom(
           foregroundColor: _primary,
           backgroundColor: Colors.white,
-          side: const BorderSide(color: Color(0xFFB8D1EE)),
+          side: const BorderSide(color: AppColors.borderActive),
           padding: const EdgeInsets.symmetric(vertical: 15),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         ),
@@ -586,7 +586,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
                 onPressed: () => Navigator.pop(context),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: _primary,
-                  side: const BorderSide(color: Color(0xFFB8D1EE)),
+                  side: const BorderSide(color: AppColors.borderActive),
                   padding: const EdgeInsets.symmetric(vertical: 15),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                 ),

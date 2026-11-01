@@ -86,7 +86,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
       context,
       message: message,
       icon: Icons.info_outline_rounded,
-      accentColor: const Color(0xFFE27D60),
+      accentColor: AppColors.coral,
     );
   }
 
@@ -96,7 +96,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
         context,
         message: 'Please select a resume file to upload.',
         icon: Icons.info_outline_rounded,
-        accentColor: const Color(0xFFE27D60),
+        accentColor: AppColors.coral,
       );
       return;
     }
@@ -106,7 +106,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
         context,
         message: 'No existing resume found. Please upload a new one.',
         icon: Icons.info_outline_rounded,
-        accentColor: const Color(0xFFE27D60),
+        accentColor: AppColors.coral,
       );
       return;
     }
@@ -129,7 +129,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
         context,
         message: 'Application submitted successfully!',
         icon: Icons.check_circle_outline_rounded,
-        accentColor: const Color(0xFF1E8F8B),
+        accentColor: AppColors.teal,
       );
       Navigator.pop(context, true); // tells JobDetailsScreen the user has applied
     } on ApplicationException catch (e) {
@@ -141,7 +141,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
         icon: e.code == 'already_applied'
             ? Icons.info_outline_rounded
             : Icons.error_outline_rounded,
-        accentColor: const Color(0xFFE27D60),
+        accentColor: AppColors.coral,
         duration: const Duration(seconds: 3),
       );
       if (e.code == 'already_applied' || e.code == 'job_unavailable') {
@@ -231,7 +231,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
               color: isDone || isActive ? _primarySoft : Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: isDone || isActive ? const Color(0xFFB8D1EE) : _border,
+                color: isDone || isActive ? AppColors.borderActive : _border,
               ),
             ),
             child: Center(
@@ -348,7 +348,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                       style: _secondaryButtonStyle().copyWith(
                         foregroundColor: WidgetStateProperty.all(_primary),
                         side: WidgetStateProperty.all(
-                          const BorderSide(color: Color(0xFFB8D1EE)),
+                          const BorderSide(color: AppColors.borderActive),
                         ),
                       ),
                     ),
@@ -360,7 +360,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                         currentAnswer.path.split('/').last,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          color: Color(0xFF1E8F8B),
+                          color: AppColors.teal,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -445,7 +445,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: selected ? const Color(0xFFB8D1EE) : _border,
+            color: selected ? AppColors.borderActive : _border,
             width: selected ? 2 : 1,
           ),
         ),
@@ -842,7 +842,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                                 message:
                                     'Please answer all pre-screening questions before continuing.',
                                 icon: Icons.info_outline_rounded,
-                                accentColor: const Color(0xFFE27D60),
+                                accentColor: AppColors.coral,
                               );
                               return;
                             }
