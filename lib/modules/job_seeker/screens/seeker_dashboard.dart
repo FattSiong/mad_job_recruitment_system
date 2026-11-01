@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/data_load_exception.dart';
 import '../../../models/job_model.dart';
 import '../../community/screens/chat_list_screen.dart';
 import '../../community/screens/community_dashboard.dart';
+import '../controllers/applied_jobs_controller.dart';
 import '../controllers/job_discovery_controller.dart';
+import '../controllers/profile_controller.dart';
 import '../widgets/job_card.dart';
+import '../widgets/load_error_view.dart';
 import 'job_details_screen.dart';
 import 'job_map_screen.dart';
 import 'location_search_screen.dart';
@@ -32,6 +36,8 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
 
   List<JobModel> _jobs = [];
   bool _isLoading = true;
+  String? _loadError; // shown instead of "No jobs" when loading fails
+  String? _fullName;
   bool _isFetchingMore = false;
   int _currentIndex = 0;
   int _visibleJobCount = 0;
@@ -54,6 +60,9 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
   bool get _hasMoreJobs => _visibleJobCount < _jobs.length;
 
   String get _firstName {
+    final name = _fullName?.trim() ?? '';
+    if (name.isNotEmpty) return name.split(RegExp(r'\s+')).first;
+
     final email = _currentUser?.email ?? '';
     if (email.isEmpty) return 'there';
     return email.split('@').first;
@@ -64,6 +73,12 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     super.initState();
     _scrollController.addListener(_handleScroll);
     _loadJobs();
+    _loadName();
+  }
+
+  Future<void> _loadName() async {
+    final name = await ProfileController().fetchFullName();
+    if (mounted && name != null) setState(() => _fullName = name);
   }
 
   @override
@@ -78,6 +93,8 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
 
   void _onTabTapped(int index) {
     setState(() => _currentIndex = index);
+    // My Jobs tab: reload Applied + Interviews so statuses are up to date
+    if (index == 1) AppliedJobsController.notifyChanged();
   }
 
   void _handleScroll() {
@@ -113,40 +130,59 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
   }
 
   Future<void> _loadJobs() async {
-    setState(() => _isLoading = true);
-
-    final fetchedJobs = await _controller.fetchActiveJobs();
-
-    if (!mounted) return;
-
     setState(() {
-      _jobs = fetchedJobs;
-      _visibleJobCount =
-      fetchedJobs.length > _pageSize ? _pageSize : fetchedJobs.length;
+      _isLoading = true;
+      _loadError = null;
+    });
+
+    try {
+      final fetchedJobs = await _controller.fetchActiveJobs();
+      if (!mounted) return;
+      _showJobs(fetchedJobs);
+    } on DataLoadException catch (e) {
+      if (!mounted) return;
+      _showLoadError(e.message);
+    }
+  }
+
+  void _showJobs(List<JobModel> jobs) {
+    setState(() {
+      _jobs = jobs;
+      _visibleJobCount = jobs.length > _pageSize ? _pageSize : jobs.length;
+      _isLoading = false;
+    });
+  }
+
+  void _showLoadError(String message) {
+    setState(() {
+      _jobs = [];
+      _visibleJobCount = 0;
+      _loadError = message;
       _isLoading = false;
     });
   }
 
   Future<void> _performSearch() async {
     FocusScope.of(context).unfocus();
-    setState(() => _isLoading = true);
-
-    final searchResults = await _controller.searchJobs(
-      query: _keywordController.text.trim(),
-      location: _locationController.text.trim(),
-      jobType: _selectedJobType,
-      datePosted: _selectedDatePosted,
-      salary: _selectedSalary,
-    );
-
-    if (!mounted) return;
-
     setState(() {
-      _jobs = searchResults;
-      _visibleJobCount =
-      searchResults.length > _pageSize ? _pageSize : searchResults.length;
-      _isLoading = false;
+      _isLoading = true;
+      _loadError = null;
     });
+
+    try {
+      final searchResults = await _controller.searchJobs(
+        query: _keywordController.text.trim(),
+        location: _locationController.text.trim(),
+        jobType: _selectedJobType,
+        datePosted: _selectedDatePosted,
+        salary: _selectedSalary,
+      );
+      if (!mounted) return;
+      _showJobs(searchResults);
+    } on DataLoadException catch (e) {
+      if (!mounted) return;
+      _showLoadError(e.message);
+    }
   }
 
   Future<void> _refreshJobs() async {
@@ -473,6 +509,11 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                 child: Center(
                   child: CircularProgressIndicator(color: AppColors.primaryBlue),
                 ),
+              )
+            else if (_loadError != null)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: LoadErrorView(message: _loadError!, onRetry: _refreshJobs),
               )
             else if (_jobs.isEmpty)
               SliverFillRemaining(

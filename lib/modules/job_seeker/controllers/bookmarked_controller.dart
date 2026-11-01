@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/utils/data_load_exception.dart';
 import '../../../models/job_model.dart';
 import '../../../models/bookmarked_job_model.dart';
 
@@ -67,8 +68,10 @@ class BookmarkedController {
 
       return bookmarkedJobs;
     } catch (e) {
-      print('Error fetching bookmarked jobs: $e');
-      return [];
+      debugPrint('Error fetching bookmarked jobs: $e');
+      throw DataLoadException(
+        'Unable to load your bookmarked jobs. Please check your connection and try again.',
+      );
     }
   }
 }

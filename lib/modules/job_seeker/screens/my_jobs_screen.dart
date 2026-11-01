@@ -10,6 +10,7 @@ import '../../community/screens/interview_lobby_screen.dart';
 import '../controllers/applied_jobs_controller.dart';
 import '../controllers/bookmarked_controller.dart';
 import '../widgets/job_card.dart';
+import '../widgets/load_error_view.dart';
 import 'job_details_screen.dart';
 
 class MyJobsScreen extends StatelessWidget {
@@ -173,6 +174,10 @@ class _BookmarkedJobsListState extends State<_BookmarkedJobsList> {
     _jobsFuture = _bookmarkedController.fetchBookmarkedJobs();
   }
 
+  void _reload() {
+    setState(() => _jobsFuture = _bookmarkedController.fetchBookmarkedJobs());
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<JobModel>>(
@@ -181,6 +186,13 @@ class _BookmarkedJobsListState extends State<_BookmarkedJobsList> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
             child: CircularProgressIndicator(color: AppColors.primaryBlue),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return LoadErrorView(
+            message: snapshot.error.toString(),
+            onRetry: _reload,
           );
         }
 
@@ -235,21 +247,45 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
   final AppliedJobsController _appliedController = AppliedJobsController();
   List<Map<String, dynamic>> _appliedJobs = [];
   bool _isLoading = true;
+  String? _loadError;
 
   @override
   void initState() {
     super.initState();
     _loadAppliedJobs();
+    // Reload after applying for a job or when the My Jobs tab is opened
+    AppliedJobsController.refreshSignal.addListener(_loadAppliedJobs);
+  }
+
+  @override
+  void dispose() {
+    AppliedJobsController.refreshSignal.removeListener(_loadAppliedJobs);
+    super.dispose();
   }
 
   Future<void> _loadAppliedJobs() async {
-    final jobs = await _appliedController.fetchAppliedJobs();
-    if (mounted) {
-      setState(() {
-        _appliedJobs = jobs;
-        _isLoading = false;
-      });
+    try {
+      final jobs = await _appliedController.fetchAppliedJobs();
+      if (mounted) {
+        setState(() {
+          _appliedJobs = jobs;
+          _loadError = null;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loadError = e.toString();
+          _isLoading = false;
+        });
+      }
     }
+  }
+
+  void _retry() {
+    setState(() => _isLoading = true);
+    _loadAppliedJobs();
   }
 
   Color _getStatusColor(String status) {
@@ -279,6 +315,10 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
       return const Center(
         child: CircularProgressIndicator(color: AppColors.primaryBlue),
       );
+    }
+
+    if (_loadError != null) {
+      return LoadErrorView(message: _loadError!, onRetry: _retry);
     }
 
     if (_appliedJobs.isEmpty) {
@@ -472,11 +512,24 @@ class InterviewsTab extends StatefulWidget {
 
 class _InterviewsTabState extends State<InterviewsTab> {
   bool _isLoading = true;
+  String? _loadError;
   List<Map<String, dynamic>> _interviews = [];
 
   @override
   void initState() {
     super.initState();
+    _fetchInterviews();
+    AppliedJobsController.refreshSignal.addListener(_fetchInterviews);
+  }
+
+  @override
+  void dispose() {
+    AppliedJobsController.refreshSignal.removeListener(_fetchInterviews);
+    super.dispose();
+  }
+
+  void _retry() {
+    setState(() => _isLoading = true);
     _fetchInterviews();
   }
 
@@ -503,13 +556,18 @@ class _InterviewsTabState extends State<InterviewsTab> {
       if (mounted) {
         setState(() {
           _interviews = List<Map<String, dynamic>>.from(response);
+          _loadError = null;
           _isLoading = false;
         });
       }
     } catch (e) {
       debugPrint('Error fetching interviews: $e');
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _loadError =
+              'Unable to load your interviews. Please check your connection and try again.';
+          _isLoading = false;
+        });
       }
     }
   }
@@ -547,7 +605,7 @@ class _InterviewsTabState extends State<InterviewsTab> {
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Database Error: Could not read the room ID.'),
+              content: Text('This interview room isn\'t ready yet. Please try again shortly.'),
             ),
           );
         }
@@ -556,7 +614,7 @@ class _InterviewsTabState extends State<InterviewsTab> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                'Error: Could not find interview room. The employer may not have set it up yet.',
+                'The interview room isn\'t available yet. The employer may not have opened it.',
               ),
             ),
           );
@@ -565,8 +623,11 @@ class _InterviewsTabState extends State<InterviewsTab> {
     } catch (e) {
       if (mounted) {
         Navigator.pop(context);
+        debugPrint('Join interview error: $e');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          const SnackBar(
+            content: Text('Unable to join the interview right now. Please try again.'),
+          ),
         );
       }
     }
@@ -1177,6 +1238,10 @@ class _InterviewsTabState extends State<InterviewsTab> {
       return const Center(
         child: CircularProgressIndicator(color: AppColors.primaryBlue),
       );
+    }
+
+    if (_loadError != null) {
+      return LoadErrorView(message: _loadError!, onRetry: _retry);
     }
 
     if (_interviews.isEmpty) {

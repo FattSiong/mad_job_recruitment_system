@@ -28,6 +28,23 @@ class ProfileController {
     }
   }
 
+  /// Full name of the logged-in job seeker (for the dashboard greeting).
+  Future<String?> fetchFullName() async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return null;
+      final row = await _supabase
+          .from('JobSeeker')
+          .select('fullName')
+          .eq('seekerID', userId)
+          .maybeSingle();
+      return row?['fullName'] as String?;
+    } catch (e) {
+      debugPrint('Error fetching name: $e');
+      return null;
+    }
+  }
+
   /// Profile shown after scanning a QR code (fix #8).
   /// Email, phone and resume are only included for employers, admins and the owner;
   /// [contactVisible] tells the screen whether they were hidden.

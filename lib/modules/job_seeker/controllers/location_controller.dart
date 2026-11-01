@@ -1,5 +1,8 @@
 import 'dart:math' show asin, cos, sqrt;
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/utils/data_load_exception.dart';
+import '../../../core/utils/salary_utils.dart';
 import '../../../models/job_model.dart';
 
 class LocationController {
@@ -18,15 +21,6 @@ class LocationController {
         c(lat1 * p) * c(lat2 * p) * (1 - c((lon2 - lon1) * p)) / 2;
 
     return 12742 * asin(sqrt(a)) * 1000;
-  }
-
-  List<int> _extractSalaryNumbers(String text) {
-    final parts = text
-        .split(RegExp(r'[^0-9]'))
-        .where((s) => s.isNotEmpty)
-        .toList();
-
-    return parts.map((s) => int.tryParse(s) ?? 0).toList();
   }
 
   DateTime? _getFilterDate(String? datePosted) {
@@ -116,31 +110,18 @@ class LocationController {
 
         final isWithinDistance = distance <= radiusInMeters;
 
-        bool isSalaryMatched = true;
-        if (salary != null && salary != 'Any' && salary != 'All') {
-          final inputNumbers = _extractSalaryNumbers(salary);
-
-          if (inputNumbers.isNotEmpty) {
-            final userInput = inputNumbers.first;
-            final jobRange = _extractSalaryNumbers(job.salaryRange);
-
-            if (jobRange.length >= 2) {
-              final min = jobRange[0];
-              final max = jobRange[1];
-              isSalaryMatched = userInput >= min && userInput <= max;
-            } else if (jobRange.length == 1) {
-              isSalaryMatched = userInput >= jobRange[0];
-            }
-          }
-        }
+        // Same minimum-salary rule as the Home dashboard (see SalaryUtils)
+        final isSalaryMatched = SalaryUtils.meetsMinimum(job.salaryRange, salary);
 
         return isWithinDistance && isSalaryMatched;
       }).toList();
 
       return filteredJobs;
     } catch (e) {
-      print('Error fetching nearby jobs: $e');
-      return [];
+      debugPrint('Error fetching nearby jobs: $e');
+      throw DataLoadException(
+        'Unable to load nearby jobs. Please check your connection and try again.',
+      );
     }
   }
 }

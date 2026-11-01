@@ -4,6 +4,8 @@ import 'package:geolocator/geolocator.dart';
 
 import '../../../core/constants/ui_constants.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/data_load_exception.dart';
+import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/job_model.dart';
 import '../controllers/location_controller.dart';
 import 'job_details_screen.dart';
@@ -84,15 +86,35 @@ class _JobMapScreenState extends State<JobMapScreen> {
       LocationPermission permission;
 
       serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return;
+      if (!serviceEnabled) {
+        _showLocationProblem(
+          'Location is turned off. Showing Kuala Lumpur instead.',
+          actionLabel: 'Turn On',
+          onAction: Geolocator.openLocationSettings,
+        );
+        return;
+      }
 
       permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) return;
+        if (permission == LocationPermission.denied) {
+          _showLocationProblem(
+            'Location permission was denied. Showing Kuala Lumpur instead. '
+            'You can still move the map to search any area.',
+          );
+          return;
+        }
       }
 
-      if (permission == LocationPermission.deniedForever) return;
+      if (permission == LocationPermission.deniedForever) {
+        _showLocationProblem(
+          'Location permission is blocked. Allow it in Settings to see jobs near you.',
+          actionLabel: 'Settings',
+          onAction: Geolocator.openAppSettings,
+        );
+        return;
+      }
 
       final position = await Geolocator.getCurrentPosition();
 
@@ -109,7 +131,25 @@ class _JobMapScreenState extends State<JobMapScreen> {
       );
     } catch (e) {
       debugPrint('Error getting location: $e');
+      _showLocationProblem('Unable to get your current location. Showing Kuala Lumpur instead.');
     }
+  }
+
+  void _showLocationProblem(
+    String message, {
+    String? actionLabel,
+    Future<bool> Function()? onAction,
+  }) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 5),
+        action: (actionLabel != null && onAction != null)
+            ? SnackBarAction(label: actionLabel, onPressed: () => onAction())
+            : null,
+      ),
+    );
   }
 
   Future<void> _searchNearbyJobs() async {
@@ -174,6 +214,15 @@ class _JobMapScreenState extends State<JobMapScreen> {
       setState(() {
         _isLoading = false;
       });
+      SnackBarHelper.showStyled(
+        context,
+        message: e is DataLoadException
+            ? e.message
+            : 'Unable to load nearby jobs. Please try again.',
+        icon: Icons.error_outline_rounded,
+        accentColor: AppColors.errorRed,
+        duration: const Duration(seconds: 3),
+      );
     }
   }
 

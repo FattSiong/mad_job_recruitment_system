@@ -1,25 +1,14 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/utils/data_load_exception.dart';
+import '../../../core/utils/salary_utils.dart';
 import '../../../models/job_model.dart';
 
 class JobDiscoveryController {
   final _supabase = Supabase.instance.client;
 
-  // Helper method to extract the highest number from a salary string
-  double _extractMaxSalary(String text) {
-    String cleanText = text.replaceAll(',', ''); // Remove commas
-    Iterable<Match> matches = RegExp(r'\d+(\.\d+)?').allMatches(cleanText);
-
-    if (matches.isEmpty) return 0;
-
-    double maxSalary = 0;
-    for (Match match in matches) {
-      double? val = double.tryParse(match.group(0) ?? '');
-      if (val != null && val > maxSalary) {
-        maxSalary = val;
-      }
-    }
-    return maxSalary;
-  }
+  static const String _loadError =
+      'Unable to load jobs. Please check your connection and try again.';
 
   /// PostgREST filter: no expiry date, or expiry date still in the future.
   /// Expired jobs are marked inactive on the server by the
@@ -40,8 +29,8 @@ class JobDiscoveryController {
           .map((jobJson) => JobModel.fromJson(jobJson as Map<String, dynamic>))
           .toList();
     } catch (e) {
-      print('Unexpected Error fetching jobs: $e');
-      return [];
+      debugPrint('Error fetching jobs: $e');
+      throw DataLoadException(_loadError);
     }
   }
 
@@ -107,19 +96,15 @@ class JobDiscoveryController {
         }).toList();
       }
 
-      // 👉 Salary Filter
-      if (salary != null && salary != 'Any') {
-        jobs = jobs.where((job) {
-          double targetSalary = _extractMaxSalary(salary); // The filter number
-          double jobMaxSalary = _extractMaxSalary(job.salaryRange); // The job's number
-          return jobMaxSalary >= targetSalary;
-        }).toList();
-      }
+      // 👉 Salary Filter (same rule as the Job Map, see SalaryUtils)
+      jobs = jobs
+          .where((job) => SalaryUtils.meetsMinimum(job.salaryRange, salary))
+          .toList();
 
       return jobs;
     } catch (e) {
-      print('Unexpected Error searching jobs: $e');
-      return [];
+      debugPrint('Error searching jobs: $e');
+      throw DataLoadException(_loadError);
     }
   }
 }

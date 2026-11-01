@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/table_constants.dart';
 import '../../../models/pre_screening_question_model.dart';
+import 'applied_jobs_controller.dart';
 
 /// Error with a message that is safe to show to the user.
 class ApplicationException implements Exception {
@@ -150,6 +151,7 @@ class ApplicationController {
         'p_resume_url': resumeUrl,
         'p_answers': answerRows,
       });
+      AppliedJobsController.notifyChanged(); // refresh My Jobs > Applied
     } on PostgrestException catch (e) {
       await _removeUploaded(uploaded);
       throw _mapDatabaseError(e.message);

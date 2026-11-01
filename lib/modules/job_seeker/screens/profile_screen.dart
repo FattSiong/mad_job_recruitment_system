@@ -795,6 +795,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  /// Asks before deleting a profile record.
+  Future<bool> _confirmDelete(String title, String message) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.errorRed),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
   Widget _buildExperienceCard(WorkExperienceModel exp) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -858,11 +882,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
             if (_isEditing && exp.experienceID != null)
               IconButton(
                 icon: const Icon(Icons.delete_outline_rounded, color: AppColors.errorRed),
-                onPressed: () => _controller.deleteWorkExperience(
-                  context: context,
-                  experienceId: exp.experienceID!,
-                  onSuccess: _loadProfile,
-                ),
+                onPressed: () async {
+                  final confirmed = await _confirmDelete(
+                    'Remove work experience?',
+                    '"${exp.jobTitle}" at ${exp.companyName} will be removed from your profile.',
+                  );
+                  if (!confirmed || !mounted) return;
+                  await _controller.deleteWorkExperience(
+                    context: context,
+                    experienceId: exp.experienceID!,
+                    onSuccess: _loadProfile,
+                  );
+                },
               ),
           ],
         ),
@@ -935,11 +966,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
             if (_isEditing && edu.educationID != null)
               IconButton(
                 icon: const Icon(Icons.delete_outline_rounded, color: AppColors.errorRed),
-                onPressed: () => _controller.deleteEducation(
-                  context: context,
-                  educationId: edu.educationID!,
-                  onSuccess: _loadProfile,
-                ),
+                onPressed: () async {
+                  final confirmed = await _confirmDelete(
+                    'Remove education?',
+                    '"${edu.degree}" at ${edu.institutionName} will be removed from your profile.',
+                  );
+                  if (!confirmed || !mounted) return;
+                  await _controller.deleteEducation(
+                    context: context,
+                    educationId: edu.educationID!,
+                    onSuccess: _loadProfile,
+                  );
+                },
               ),
           ],
         ),
@@ -1729,7 +1767,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                           Navigator.pop(context);
                           _controller.addWorkExperience(
-                            context: context,
+                            // the sheet is closed now, so use the screen's context
+                            context: this.context,
                             experience: newExp,
                             onSucess: _loadProfile,
                           );
@@ -2085,7 +2124,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                           Navigator.pop(context);
                           _controller.addEducation(
-                            context: context,
+                            // the sheet is closed now, so use the screen's context
+                            context: this.context,
                             education: newEdu,
                             onSucess: _loadProfile,
                           );
