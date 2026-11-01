@@ -15,12 +15,12 @@ class MockInterviewSetupScreen extends StatefulWidget {
 }
 
 class _MockInterviewSetupScreenState extends State<MockInterviewSetupScreen> {
-  static const Color _primary = Color(0xFF163B65);
-  static const Color _background = Color(0xFFF4F7FB);
-  static const Color _textPrimary = Color(0xFF1B2433);
-  static const Color _textMuted = Color(0xFF687588);
-  static const Color _surfaceAlt = Color(0xFFF7F9FC);
-  static const Color _border = Color(0xFFE1E8F0);
+  static const Color _primary = AppColors.primary;
+  static const Color _background = AppColors.background;
+  static const Color _textPrimary = AppColors.textDark;
+  static const Color _textMuted = AppColors.textMuted;
+  static const Color _surfaceAlt = AppColors.surfaceAlt;
+  static const Color _border = AppColors.border;
 
   static const List<String> _suggestedRoles = [
     'Software Developer',
@@ -179,7 +179,7 @@ class _MockInterviewSetupScreenState extends State<MockInterviewSetupScreen> {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF163B65), Color(0xFF335D8A)],
+          colors: [AppColors.primary, AppColors.primaryLight],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -300,7 +300,7 @@ class _MockInterviewSetupScreenState extends State<MockInterviewSetupScreen> {
                       _roleController.selection =
                           TextSelection.collapsed(offset: role.length);
                     },
-              selectedColor: const Color(0xFFDCEBFB),
+              selectedColor: AppColors.primarySoft,
               backgroundColor: _surfaceAlt,
               side: BorderSide(color: selected ? _primary : _border),
               labelStyle: TextStyle(
@@ -494,7 +494,7 @@ class _MockInterviewSetupScreenState extends State<MockInterviewSetupScreen> {
           child: Container(
             padding: const EdgeInsets.fromLTRB(6, 10, 12, 10),
             decoration: BoxDecoration(
-              color: _consentGiven ? const Color(0xFFDCEBFB) : _surfaceAlt,
+              color: _consentGiven ? AppColors.primarySoft : _surfaceAlt,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: _consentGiven ? _primary : _border),
             ),

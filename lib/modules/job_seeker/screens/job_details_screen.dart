@@ -5,6 +5,7 @@ import '../controllers/application_controller.dart';
 import '../controllers/bookmarked_controller.dart';
 import 'job_application_screen.dart';
 import 'report_job_screen.dart';
+import '../../../core/theme/app_colors.dart';
 
 class JobDetailsScreen extends StatefulWidget {
   final JobModel job;
@@ -129,7 +130,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
           ? Icons.bookmark_added_rounded
           : Icons.bookmark_remove_rounded,
       accentColor:
-      actualState ? const Color(0xFF1E8F8B) : const Color(0xFF687588),
+      actualState ? const Color(0xFF1E8F8B) : AppColors.textMuted,
     );
 
   }
@@ -278,7 +279,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF687588),
+                    color: AppColors.textMuted,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -287,7 +288,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF1B2433),
+                    color: AppColors.textDark,
                     height: 1.4,
                   ),
                 ),
@@ -319,7 +320,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
             style: const TextStyle(
               fontSize: 21,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF1B2433),
+              color: AppColors.textDark,
             ),
           ),
           if (subtitle != null) ...[
@@ -328,7 +329,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
               subtitle,
               style: const TextStyle(
                 fontSize: 14,
-                color: Color(0xFF687588),
+                color: AppColors.textMuted,
                 height: 1.4,
               ),
             ),
@@ -351,7 +352,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
             style: const TextStyle(
               fontSize: 15,
               height: 1.75,
-              color: Color(0xFF1B2433),
+              color: AppColors.textDark,
             ),
           );
 
@@ -372,7 +373,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                 style: const TextStyle(
                   fontSize: 15,
                   height: 1.75,
-                  color: Color(0xFF1B2433),
+                  color: AppColors.textDark,
                 ),
                 maxLines: _isDescriptionExpanded ? null : 8,
                 overflow:
@@ -390,7 +391,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                     });
                   },
                   style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF163B65),
+                    foregroundColor: AppColors.primary,
                     padding: EdgeInsets.zero,
                     minimumSize: const Size(0, 0),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -424,7 +425,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
             icon: Icons.attach_money_rounded,
             title: 'Salary',
             value: _formatSalaryOnly(),
-            color: const Color(0xFF163B65),
+            color: AppColors.primary,
           ),
           const SizedBox(height: 12),
           _buildInfoTile(
@@ -459,7 +460,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     final bottomContentSpacing = 120.0;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FB),
+      backgroundColor: AppColors.background,
       body: Stack(
         children: [
           SafeArea(
@@ -482,7 +483,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                           padding: const EdgeInsets.all(24),
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [Color(0xFF163B65), Color(0xFF335D8A)],
+                              colors: [AppColors.primary, AppColors.primaryLight],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
@@ -625,7 +626,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                               ? null
                               : _openApplication,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF163B65),
+                            backgroundColor: AppColors.primary,
                             foregroundColor: Colors.white,
                             disabledBackgroundColor: Colors.grey.shade300,
                             disabledForegroundColor: Colors.grey.shade600,

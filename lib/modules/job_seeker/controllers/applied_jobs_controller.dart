@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/utils/data_load_exception.dart';
 import '../../../models/job_applicant_model.dart';
 import '../../../models/job_model.dart';
+import '../../../core/constants/table_constants.dart';
 
 class AppliedJobsController {
   final _supabase = Supabase.instance.client;
@@ -18,7 +19,7 @@ class AppliedJobsController {
   Future<List<Map<String, dynamic>>> fetchAppliedJobs() async {
     try {
       final response = await _supabase
-          .from('JobApplicant')
+          .from(TableConstants.jobApplicant)
           .select('*, Job (*, Company(name))')
           .eq('seekerID', _currentSeekerID)
           .order('appliedAt', ascending: false);

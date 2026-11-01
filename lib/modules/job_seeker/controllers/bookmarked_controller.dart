@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/utils/data_load_exception.dart';
 import '../../../models/job_model.dart';
 import '../../../models/bookmarked_job_model.dart';
+import '../../../core/constants/table_constants.dart';
 
 class BookmarkedController {
   final _supabase = Supabase.instance.client;
@@ -36,7 +37,7 @@ class BookmarkedController {
   Future<void> _loadIds(String userId) async {
     try {
       final rows = await _supabase
-          .from('BookmarkedJob')
+          .from(TableConstants.bookmarkedJob)
           .select('jobID')
           .eq('seekerID', userId);
       bookmarkedIds.value = (rows as List<dynamic>)
@@ -64,7 +65,7 @@ class BookmarkedController {
     try {
       if (currentlyBookmarked) {
         await _supabase
-            .from('BookmarkedJob')
+            .from(TableConstants.bookmarkedJob)
             .delete()
             .eq('seekerID', _currentSeekerID)
             .eq('jobID', jobId);
@@ -80,7 +81,7 @@ class BookmarkedController {
         );
 
         // 👉 Insert using toJson()
-        await _supabase.from('BookmarkedJob').insert(newBookmark.toJson());
+        await _supabase.from(TableConstants.bookmarkedJob).insert(newBookmark.toJson());
         _setBookmarked(jobId, true);
         bookmarkNotifier.value = !bookmarkNotifier.value;
         return true;
@@ -94,7 +95,7 @@ class BookmarkedController {
   Future<List<JobModel>> fetchBookmarkedJobs() async {
     try {
       final response = await _supabase
-          .from('BookmarkedJob')
+          .from(TableConstants.bookmarkedJob)
           .select('Job(*, Company(name))')
           .eq('seekerID', _currentSeekerID)
           .order('savedAt', ascending: false);

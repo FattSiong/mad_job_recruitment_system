@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import '../../../core/utils/snackbar_helper.dart';
+import '../../../core/theme/app_colors.dart';
 
 class LocationSearchScreen extends StatefulWidget {
   final String initialKeyword;
@@ -19,11 +20,11 @@ class LocationSearchScreen extends StatefulWidget {
 
 class _LocationSearchScreenState extends State<LocationSearchScreen> {
   // Theme Colors matching Seeker Dashboard
-  static const Color _primary = Color(0xFF163B65);
-  static const Color _textPrimary = Color(0xFF1B2433);
-  static const Color _textMuted = Color(0xFF687588);
-  static const Color _surfaceAlt = Color(0xFFF7F9FC);
-  static const Color _border = Color(0xFFE1E8F0);
+  static const Color _primary = AppColors.primary;
+  static const Color _textPrimary = AppColors.textDark;
+  static const Color _textMuted = AppColors.textMuted;
+  static const Color _surfaceAlt = AppColors.surfaceAlt;
+  static const Color _border = AppColors.border;
 
   late TextEditingController _keywordController;
   late TextEditingController _locationController;
@@ -158,7 +159,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FB),
+      backgroundColor: AppColors.background,
       body: SafeArea(
         // Wrap the entire Column in a SingleChildScrollView so everything scrolls together
         child: SingleChildScrollView(
@@ -174,7 +175,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
-                          colors: [Color(0xFF163B65), Color(0xFF335D8A)],
+                          colors: [AppColors.primary, AppColors.primaryLight],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),

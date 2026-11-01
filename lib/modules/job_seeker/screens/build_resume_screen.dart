@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/app_colors.dart';
 
 class BuildResumeScreen extends StatefulWidget {
   const BuildResumeScreen({super.key});
@@ -10,12 +11,12 @@ class BuildResumeScreen extends StatefulWidget {
 class _BuildResumeScreenState extends State<BuildResumeScreen> {
   int _currentStep = 0;
 
-  static const Color _primary = Color(0xFF163B65);
-  static const Color _background = Color(0xFFF4F7FB);
-  static const Color _textPrimary = Color(0xFF1B2433);
-  static const Color _textMuted = Color(0xFF687588);
-  static const Color _surfaceAlt = Color(0xFFF7F9FC);
-  static const Color _border = Color(0xFFE1E8F0);
+  static const Color _primary = AppColors.primary;
+  static const Color _background = AppColors.background;
+  static const Color _textPrimary = AppColors.textDark;
+  static const Color _textMuted = AppColors.textMuted;
+  static const Color _surfaceAlt = AppColors.surfaceAlt;
+  static const Color _border = AppColors.border;
 
   final List<String> _stepTitles = [
     'Personal Details',
@@ -71,7 +72,7 @@ class _BuildResumeScreenState extends State<BuildResumeScreen> {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF163B65), Color(0xFF335D8A)],
+          colors: [AppColors.primary, AppColors.primaryLight],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -307,10 +308,10 @@ class _MockInput extends StatelessWidget {
           labelText: label,
           prefixIcon: Padding(
             padding: const EdgeInsets.all(12),
-            child: Icon(icon, color: Color(0xFF687588), size: 20),
+            child: Icon(icon, color: AppColors.textMuted, size: 20),
           ),
           filled: true,
-          fillColor: const Color(0xFFF7F9FC),
+          fillColor: AppColors.surfaceAlt,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
             borderSide: BorderSide(color: Colors.grey.shade300),
@@ -321,7 +322,7 @@ class _MockInput extends StatelessWidget {
           ),
           focusedBorder: const OutlineInputBorder(
             borderRadius: BorderRadius.all(Radius.circular(16)),
-            borderSide: BorderSide(color: Color(0xFF163B65), width: 1.6),
+            borderSide: BorderSide(color: AppColors.primary, width: 1.6),
           ),
         ),
       ),

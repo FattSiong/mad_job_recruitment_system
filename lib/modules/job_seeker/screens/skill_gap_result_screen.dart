@@ -13,13 +13,13 @@ class SkillGapResultScreen extends StatelessWidget {
 
   const SkillGapResultScreen({super.key, required this.analysis});
 
-  static const Color _primary = Color(0xFF163B65);
-  static const Color _background = Color(0xFFF4F7FB);
-  static const Color _textPrimary = Color(0xFF1B2433);
-  static const Color _textMuted = Color(0xFF687588);
-  static const Color _surfaceAlt = Color(0xFFF7F9FC);
-  static const Color _border = Color(0xFFE1E8F0);
-  static const Color _warning = Color(0xFFC77700);
+  static const Color _primary = AppColors.primary;
+  static const Color _background = AppColors.background;
+  static const Color _textPrimary = AppColors.textDark;
+  static const Color _textMuted = AppColors.textMuted;
+  static const Color _surfaceAlt = AppColors.surfaceAlt;
+  static const Color _border = AppColors.border;
+  static const Color _warning = AppColors.warning;
 
   Color _scoreColor(int score) {
     if (score >= 75) return AppColors.successGreen;
@@ -157,7 +157,7 @@ class SkillGapResultScreen extends StatelessWidget {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF163B65), Color(0xFF335D8A)],
+          colors: [AppColors.primary, AppColors.primaryLight],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -522,7 +522,7 @@ class SkillGapResultScreen extends StatelessWidget {
                       height: 20,
                       margin: const EdgeInsets.only(top: 1),
                       alignment: Alignment.center,
-                      decoration: const BoxDecoration(color: Color(0xFFDCEBFB), shape: BoxShape.circle),
+                      decoration: const BoxDecoration(color: AppColors.primarySoft, shape: BoxShape.circle),
                       child: Text('${i + 1}',
                           style: const TextStyle(
                               color: _primary, fontSize: 11, fontWeight: FontWeight.bold)),
@@ -607,7 +607,7 @@ class SkillGapResultScreen extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFDCEBFB),
+                        color: AppColors.primarySoft,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(s.skill,

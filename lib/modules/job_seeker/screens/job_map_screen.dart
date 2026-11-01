@@ -18,12 +18,12 @@ class JobMapScreen extends StatefulWidget {
 }
 
 class _JobMapScreenState extends State<JobMapScreen> {
-  static const Color _primary = Color(0xFF163B65);
-  static const Color _primarySoft = Color(0xFFDCEBFB);
-  static const Color _textPrimary = Color(0xFF1B2433);
-  static const Color _textMuted = Color(0xFF687588);
-  static const Color _surfaceAlt = Color(0xFFF7F9FC);
-  static const Color _border = Color(0xFFE1E8F0);
+  static const Color _primary = AppColors.primary;
+  static const Color _primarySoft = AppColors.primarySoft;
+  static const Color _textPrimary = AppColors.textDark;
+  static const Color _textMuted = AppColors.textMuted;
+  static const Color _surfaceAlt = AppColors.surfaceAlt;
+  static const Color _border = AppColors.border;
 
   final LocationController _locationController = LocationController();
   final TextEditingController _keywordController = TextEditingController();
@@ -413,7 +413,7 @@ class _JobMapScreenState extends State<JobMapScreen> {
                               heightFactor: 1,
                               child: Text(
                                 'RM',
-                                style: TextStyle(color: Color(0xFF687588)),
+                                style: TextStyle(color: AppColors.textMuted),
                               ),
                             ),
                           ),
@@ -570,7 +570,7 @@ class _JobMapScreenState extends State<JobMapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FB),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text(
           'Discover Nearby Jobs',
@@ -580,7 +580,7 @@ class _JobMapScreenState extends State<JobMapScreen> {
             fontSize: 22,
           ),
         ),
-        backgroundColor: const Color(0xFFF4F7FB),
+        backgroundColor: AppColors.background,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         iconTheme: const IconThemeData(color: _textPrimary),
@@ -944,7 +944,7 @@ class CustomSliderThumb extends SliderComponentShape {
     final Canvas canvas = context.canvas;
 
     final Paint paintCircle = Paint()
-      ..color = sliderTheme.thumbColor ?? const Color(0xFF163B65)
+      ..color = sliderTheme.thumbColor ?? AppColors.primary
       ..style = PaintingStyle.fill;
     canvas.drawCircle(center, 18, paintCircle);
 

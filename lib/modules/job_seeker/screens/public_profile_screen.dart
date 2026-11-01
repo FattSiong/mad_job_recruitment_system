@@ -21,10 +21,10 @@ class PublicProfileScreen extends StatefulWidget {
 
 class _PublicProfileScreenState extends State<PublicProfileScreen> {
   // Theme Colors matching profile_screen.dart
-  static const Color _primary = Color(0xFF163B65);
-  static const Color _textPrimary = Color(0xFF1B2433);
-  static const Color _textMuted = Color(0xFF687588);
-  static const Color _surfaceAlt = Color(0xFFF7F9FC);
+  static const Color _primary = AppColors.primary;
+  static const Color _textPrimary = AppColors.textDark;
+  static const Color _textMuted = AppColors.textMuted;
+  static const Color _surfaceAlt = AppColors.surfaceAlt;
 
   final ProfileController _controller = ProfileController();
   JobSeekerModel? _profile;
@@ -137,7 +137,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF163B65), Color(0xFF335D8A)],
+          colors: [AppColors.primary, AppColors.primaryLight],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -421,9 +421,9 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FB),
+      backgroundColor: AppColors.background,
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primaryBlue))
+          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
           : _profile == null
           ? const Center(child: Text('Profile not found.', style: TextStyle(color: _textPrimary)))
           : SafeArea(

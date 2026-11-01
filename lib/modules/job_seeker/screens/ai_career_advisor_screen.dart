@@ -21,11 +21,11 @@ class AiCareerAdvisorScreen extends StatefulWidget {
 
 class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
   // Same palette as the other job seeker screens
-  static const Color _primary = Color(0xFF163B65);
-  static const Color _background = Color(0xFFF4F7FB);
-  static const Color _textPrimary = Color(0xFF1B2433);
-  static const Color _textMuted = Color(0xFF687588);
-  static const Color _softBlue = Color(0xFFDCEBFB);
+  static const Color _primary = AppColors.primary;
+  static const Color _background = AppColors.background;
+  static const Color _textPrimary = AppColors.textDark;
+  static const Color _textMuted = AppColors.textMuted;
+  static const Color _softBlue = AppColors.primarySoft;
   static const Color _border = Color(0xFFD9E4F1);
 
   static const List<String> _suggestedQuestions = [
@@ -267,7 +267,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
             height: 44,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [Color(0xFF163B65), Color(0xFF335D8A)],
+                colors: [AppColors.primary, AppColors.primaryLight],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -425,7 +425,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
-        color: const Color(0xFFF7F9FC),
+        color: AppColors.surfaceAlt,
         borderRadius: BorderRadius.circular(18),
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
@@ -435,7 +435,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xFFE1E8F0)),
+              border: Border.all(color: AppColors.border),
             ),
             child: Row(
               children: [
@@ -530,7 +530,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
                   decoration: BoxDecoration(
-                    color: canSend ? AppColors.primaryBlue : const Color(0xFFD7E3F3),
+                    color: canSend ? AppColors.primary : const Color(0xFFD7E3F3),
                     borderRadius: BorderRadius.circular(18),
                   ),
                   child: IconButton(
@@ -565,7 +565,7 @@ class _AdvisorMessageBubble extends StatelessWidget {
 
   const _AdvisorMessageBubble({required this.message, required this.onLongPress});
 
-  static const Color _primary = Color(0xFF163B65);
+  static const Color _primary = AppColors.primary;
 
   @override
   Widget build(BuildContext context) {
@@ -626,7 +626,7 @@ class _AdvisorMessageBubble extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 15,
                   height: 1.45,
-                  color: isUser ? Colors.white : const Color(0xFF1B2433),
+                  color: isUser ? Colors.white : AppColors.textDark,
                 ),
               ),
             ),
@@ -675,13 +675,13 @@ class _TypingBubble extends StatelessWidget {
               height: 16,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: Color(0xFF163B65),
+                color: AppColors.primary,
               ),
             ),
             SizedBox(width: 10),
             Text(
               'Advisor is thinking…',
-              style: TextStyle(color: Color(0xFF687588), fontSize: 14),
+              style: TextStyle(color: AppColors.textMuted, fontSize: 14),
             ),
           ],
         ),
@@ -712,9 +712,9 @@ class _ConversationHistorySheet extends StatefulWidget {
 }
 
 class _ConversationHistorySheetState extends State<_ConversationHistorySheet> {
-  static const Color _primary = Color(0xFF163B65);
-  static const Color _textPrimary = Color(0xFF1B2433);
-  static const Color _textMuted = Color(0xFF687588);
+  static const Color _primary = AppColors.primary;
+  static const Color _textPrimary = AppColors.textDark;
+  static const Color _textMuted = AppColors.textMuted;
 
   late Future<List<AdvisorConversationModel>> _future;
 
@@ -833,8 +833,8 @@ class _ConversationHistorySheetState extends State<_ConversationHistorySheet> {
 
                         return Material(
                           color: isCurrent
-                              ? const Color(0xFFDCEBFB)
-                              : const Color(0xFFF7F9FC),
+                              ? AppColors.primarySoft
+                              : AppColors.surfaceAlt,
                           borderRadius: BorderRadius.circular(18),
                           child: InkWell(
                             borderRadius: BorderRadius.circular(18),

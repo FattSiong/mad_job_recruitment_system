@@ -26,14 +26,14 @@ class GuidanceReportsScreen extends StatefulWidget {
 }
 
 class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
-  static const Color _primary = Color(0xFF163B65);
-  static const Color _background = Color(0xFFF4F7FB);
-  static const Color _textPrimary = Color(0xFF1B2433);
-  static const Color _textMuted = Color(0xFF687588);
-  static const Color _surfaceAlt = Color(0xFFF7F9FC);
-  static const Color _border = Color(0xFFE1E8F0);
-  static const Color _warning = Color(0xFFC77700);
-  static const Color _interviewColor = Color(0xFF163B65);
+  static const Color _primary = AppColors.primary;
+  static const Color _background = AppColors.background;
+  static const Color _textPrimary = AppColors.textDark;
+  static const Color _textMuted = AppColors.textMuted;
+  static const Color _surfaceAlt = AppColors.surfaceAlt;
+  static const Color _border = AppColors.border;
+  static const Color _warning = AppColors.warning;
+  static const Color _interviewColor = AppColors.primary;
   static const Color _skillGapColor = Color(0xFF2E7D8C);
 
   final GuidanceReportController _controller = GuidanceReportController();
@@ -231,7 +231,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF163B65), Color(0xFF335D8A)],
+          colors: [AppColors.primary, AppColors.primaryLight],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -303,7 +303,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
             width: 72,
             height: 72,
             decoration: BoxDecoration(
-              color: const Color(0xFFDCEBFB),
+              color: AppColors.primarySoft,
               borderRadius: BorderRadius.circular(22),
             ),
             child: const Icon(Icons.assignment_outlined, size: 34, color: _primary),

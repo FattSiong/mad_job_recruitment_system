@@ -289,7 +289,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF1B2433),
+                    color: AppColors.textDark,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -299,7 +299,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF687588),
+                      color: AppColors.textMuted,
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -315,7 +315,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                           heightFactor: 1,
                           child: Text(
                             'RM',
-                            style: TextStyle(color: Color(0xFF687588)),
+                            style: TextStyle(color: AppColors.textMuted),
                           ),
                         ),
                       ),
@@ -324,7 +324,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                         minHeight: 0,
                       ),
                       filled: true,
-                      fillColor: const Color(0xFFF7F9FC),
+                      fillColor: AppColors.surfaceAlt,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
                         borderSide: BorderSide(color: Colors.grey.shade300),
@@ -336,7 +336,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
                         borderSide: const BorderSide(
-                          color: AppColors.primaryBlue,
+                          color: AppColors.primary,
                           width: 1.5,
                         ),
                       ),
@@ -377,7 +377,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                             _performSearch();
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF163B65),
+                            backgroundColor: AppColors.primary,
                             foregroundColor: Colors.white,
                           ),
                           child: const Text('Apply'),
@@ -393,7 +393,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF687588),
+                      color: AppColors.textMuted,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -411,7 +411,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                             (option) => RadioListTile<String>(
                           value: option,
                           title: Text(option),
-                          activeColor: AppColors.primaryBlue,
+                          activeColor: AppColors.primary,
                           contentPadding: EdgeInsets.zero,
                         ),
                       )
@@ -441,7 +441,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                             (option) => RadioListTile<String>(
                           value: option,
                           title: Text(option),
-                          activeColor: AppColors.primaryBlue,
+                          activeColor: AppColors.primary,
                           contentPadding: EdgeInsets.zero,
                         ),
                       )
@@ -466,10 +466,10 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
         label: Text(isActive ? value : label),
         selected: isActive,
         onSelected: (_) => _showFilterOptions(label),
-        selectedColor: const Color(0xFFDCEBFB),
+        selectedColor: AppColors.primarySoft,
         backgroundColor: Colors.white,
         labelStyle: TextStyle(
-          color: isActive ? const Color(0xFF163B65) : const Color(0xFF1B2433),
+          color: isActive ? AppColors.primary : AppColors.textDark,
           fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
         ),
         shape: RoundedRectangleBorder(
@@ -477,7 +477,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
           side: BorderSide(
             color: isActive
                 ? const Color(0xFFB8D1EE)
-                : const Color(0xFFE1E8F0),
+                : AppColors.border,
           ),
         ),
       ),
@@ -488,7 +488,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     return SafeArea(
       child: RefreshIndicator(
         onRefresh: _refreshJobs,
-        color: AppColors.primaryBlue,
+        color: AppColors.primary,
         child: CustomScrollView(
           controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
@@ -512,7 +512,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
               const SliverFillRemaining(
                 hasScrollBody: false,
                 child: Center(
-                  child: CircularProgressIndicator(color: AppColors.primaryBlue),
+                  child: CircularProgressIndicator(color: AppColors.primary),
                 ),
               )
             else if (_loadError != null)
@@ -540,7 +540,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
-                            color: Color(0xFF1B2433),
+                            color: AppColors.textDark,
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -550,7 +550,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                           style: TextStyle(
                             fontSize: 14,
                             height: 1.45,
-                            color: Color(0xFF687588),
+                            color: AppColors.textMuted,
                           ),
                         ),
                       ],
@@ -586,7 +586,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                             padding: EdgeInsets.symmetric(vertical: 20),
                             child: Center(
                               child: CircularProgressIndicator(
-                                color: AppColors.primaryBlue,
+                                color: AppColors.primary,
                               ),
                             ),
                           );
@@ -639,7 +639,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF163B65), Color(0xFF335D8A)],
+          colors: [AppColors.primary, AppColors.primaryLight],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -725,13 +725,13 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF1B2433),
+              color: AppColors.textDark,
             ),
           ),
           const SizedBox(height: 6),
           const Text(
             'Refine by role, location, job type, posted date, and salary.',
-            style: TextStyle(fontSize: 14, color: Color(0xFF687588)),
+            style: TextStyle(fontSize: 14, color: AppColors.textMuted),
           ),
           const SizedBox(height: 18),
           TextField(
@@ -774,7 +774,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                   icon: const Icon(Icons.search),
                   label: const Text('Search Jobs'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF163B65),
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 15),
                     shape: RoundedRectangleBorder(
@@ -789,7 +789,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                 icon: const Icon(Icons.restart_alt),
                 label: const Text('Reset'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF163B65),
+                  foregroundColor: AppColors.primary,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 15,
@@ -834,7 +834,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF1B2433),
+                  color: AppColors.textDark,
                 ),
               ),
             ),
@@ -850,7 +850,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
               icon: const Icon(Icons.map, size: 18),
               label: const Text('Nearby Jobs'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF163B65),
+                foregroundColor: AppColors.primary,
                 padding:
                 const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 side: const BorderSide(color: Color(0xFFB8D1EE)),
@@ -866,7 +866,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
           _hasActiveFilters
               ? 'Showing filtered roles based on your current search.'
               : 'Fresh opportunities selected from active postings.',
-          style: const TextStyle(fontSize: 14, color: Color(0xFF687588)),
+          style: const TextStyle(fontSize: 14, color: AppColors.textMuted),
         ),
         const SizedBox(height: 12),
         Container(
@@ -882,12 +882,12 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                 width: 38,
                 height: 38,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFDCEBFB),
+                  color: AppColors.primarySoft,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(
                   Icons.work_outline_rounded,
-                  color: Color(0xFF163B65),
+                  color: AppColors.primary,
                   size: 20,
                 ),
               ),
@@ -900,7 +900,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF1B2433),
+                    color: AppColors.textDark,
                   ),
                 ),
               ),
@@ -939,10 +939,10 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
   }) {
     return InputDecoration(
       hintText: hint,
-      prefixIcon: Icon(icon, color: const Color(0xFF687588)),
+      prefixIcon: Icon(icon, color: AppColors.textMuted),
       suffixIcon: suffix,
       filled: true,
-      fillColor: const Color(0xFFF7F9FC),
+      fillColor: AppColors.surfaceAlt,
       contentPadding: const EdgeInsets.symmetric(vertical: 16),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(18),
@@ -954,7 +954,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(18),
-        borderSide: const BorderSide(color: AppColors.primaryBlue, width: 1.5),
+        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
       ),
     );
   }
@@ -985,7 +985,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FB),
+      backgroundColor: AppColors.background,
       body: IndexedStack(
         index: _currentIndex,
         children: [
@@ -1000,7 +1000,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
         selectedIndex: _currentIndex,
         onDestinationSelected: _onTabTapped,
         backgroundColor: Colors.white,
-        indicatorColor: const Color(0xFFDCEBFB),
+        indicatorColor: AppColors.primarySoft,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.dashboard_outlined),

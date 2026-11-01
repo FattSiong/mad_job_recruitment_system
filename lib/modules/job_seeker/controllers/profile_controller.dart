@@ -1,8 +1,9 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/constants/table_constants.dart';
 import '../../../models/education_model.dart';
 import '../../../models/job_seeker_model.dart';
 import '../../../models/work_experience_model.dart';
@@ -10,13 +11,12 @@ import '../../../models/work_experience_model.dart';
 class ProfileController {
   final _supabase = Supabase.instance.client;
   static const String _profilePicturesBucket = 'profile_pictures';
-  bool isLoading = false;
 
   Future<JobSeekerModel?> fetchProfile() async {
     try {
       final userId = _supabase.auth.currentUser!.id;
       final response = await _supabase
-          .from('JobSeeker')
+          .from(TableConstants.jobSeeker)
           .select('*, WorkExperience(*), Education(*)')
           .eq('seekerID', userId)
           .single();
@@ -34,7 +34,7 @@ class ProfileController {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return null;
       final row = await _supabase
-          .from('JobSeeker')
+          .from(TableConstants.jobSeeker)
           .select('fullName')
           .eq('seekerID', userId)
           .maybeSingle();
@@ -55,7 +55,7 @@ class ProfileController {
       final viewerId = _supabase.auth.currentUser?.id;
 
       final response = await _supabase
-          .from('JobSeeker')
+          .from(TableConstants.jobSeeker)
           .select('*, WorkExperience(*), Education(*)')
           .eq('seekerID', targetSeekerId)
           .single();
@@ -64,7 +64,7 @@ class ProfileController {
       String? viewerRole;
       if (viewerId != null) {
         final roleRow = await _supabase
-            .from('User')
+            .from(TableConstants.user)
             .select('role')
             .eq('userID', viewerId)
             .maybeSingle();
@@ -110,7 +110,7 @@ class ProfileController {
 
       // 3. Update the JobSeeker table with the new URL
       await _supabase
-          .from('JobSeeker')
+          .from(TableConstants.jobSeeker)
           .update({'resumeURL': newResumeUrl})
           .eq('seekerID', userId);
 
@@ -140,144 +140,73 @@ class ProfileController {
     }
   }
 
-  Future<bool> updateProfileBasics({
-    required BuildContext context,
-    required JobSeekerModel updatedModel,
-  }) async {
+  // ---------------------------------------------------------------------
+  // Writes. These only talk to the database and return true/false.
+  // The screen decides what message to show (MVC: no UI code in controllers).
+  // ---------------------------------------------------------------------
+
+  Future<bool> updateProfileBasics(JobSeekerModel updatedModel) async {
     try {
       await _supabase
-          .from('JobSeeker')
+          .from(TableConstants.jobSeeker)
           .update(updatedModel.toJson())
           .eq('seekerID', updatedModel.seekerID);
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile updated successfully!')),
-        );
-      }
       return true;
     } catch (e) {
       debugPrint('Error updating profile: $e');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to update profile.')),
-        );
-      }
       return false;
     }
   }
 
-  Future<void> deleteWorkExperience({
-    required BuildContext context,
-    required String experienceId,
-    required VoidCallback onSuccess,
-  }) async {
+  Future<bool> addWorkExperience(WorkExperienceModel experience) async {
     try {
-      final userId = _supabase.auth.currentUser!.id;
-      await _supabase
-          .from('WorkExperience')
-          .delete()
-          .eq('experienceID', experienceId)
-          .eq('seekerID', userId); // only your own records (fix #3)
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Work experience removed'), backgroundColor: Colors.orange),
-        );
-      }
-      onSuccess();
-    } catch (e) {
-      debugPrint('Error deleting experience: $e');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to remove work experience.')),
-        );
-      }
-    }
-  }
-
-  Future<void> addWorkExperience({
-    required BuildContext context,
-    required WorkExperienceModel experience,
-    required VoidCallback onSucess,
-  }) async {
-    try {
-      final userId = _supabase.auth.currentUser!.id;
       final data = experience.toJson();
-      data['seekerID'] = userId;
-
-      await _supabase.from('WorkExperience').insert(data);
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Work experience added!')),
-        );
-      }
-      onSucess();
+      data['seekerID'] = _supabase.auth.currentUser!.id;
+      await _supabase.from(TableConstants.workExperience).insert(data);
+      return true;
     } catch (e) {
       debugPrint('Error adding experience: $e');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to add work experience.')),
-        );
-      }
+      return false;
     }
   }
 
-  Future<void> addEducation({
-    required BuildContext context,
-    required EducationModel education,
-    required VoidCallback onSucess,
-  }) async {
+  Future<bool> deleteWorkExperience(String experienceId) async {
     try {
-      final userId = _supabase.auth.currentUser!.id;
+      await _supabase
+          .from(TableConstants.workExperience)
+          .delete()
+          .eq('experienceID', experienceId)
+          .eq('seekerID', _supabase.auth.currentUser!.id); // only your own records
+      return true;
+    } catch (e) {
+      debugPrint('Error deleting experience: $e');
+      return false;
+    }
+  }
+
+  Future<bool> addEducation(EducationModel education) async {
+    try {
       final data = education.toJson();
-      data['seekerID'] = userId;
-
-      await _supabase.from('Education').insert(data);
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Education added!')),
-        );
-      }
-      onSucess();
+      data['seekerID'] = _supabase.auth.currentUser!.id;
+      await _supabase.from(TableConstants.education).insert(data);
+      return true;
     } catch (e) {
       debugPrint('Error adding education: $e');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to add education.')),
-        );
-      }
+      return false;
     }
   }
 
-  Future<void> deleteEducation({
-    required BuildContext context,
-    required String educationId,
-    required VoidCallback onSuccess,
-  }) async {
+  Future<bool> deleteEducation(String educationId) async {
     try {
-      final userId = _supabase.auth.currentUser!.id;
       await _supabase
-          .from('Education')
+          .from(TableConstants.education)
           .delete()
           .eq('educationID', educationId)
-          .eq('seekerID', userId); // only your own records (fix #3)
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Education removed'), backgroundColor: Colors.orange),
-        );
-      }
-      onSuccess();
+          .eq('seekerID', _supabase.auth.currentUser!.id); // only your own records
+      return true;
     } catch (e) {
       debugPrint('Error deleting education: $e');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to remove education.')),
-        );
-      }
+      return false;
     }
   }
 }

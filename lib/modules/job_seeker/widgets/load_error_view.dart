@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/app_colors.dart';
 
 /// Shown when a list couldn't be loaded (instead of an empty-state message).
 class LoadErrorView extends StatelessWidget {
@@ -7,9 +8,9 @@ class LoadErrorView extends StatelessWidget {
 
   const LoadErrorView({super.key, required this.message, required this.onRetry});
 
-  static const Color _primary = Color(0xFF163B65);
-  static const Color _textPrimary = Color(0xFF1B2433);
-  static const Color _textMuted = Color(0xFF687588);
+  static const Color _primary = AppColors.primary;
+  static const Color _textPrimary = AppColors.textDark;
+  static const Color _textMuted = AppColors.textMuted;
 
   @override
   Widget build(BuildContext context) {

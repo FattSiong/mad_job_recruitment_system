@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/utils/data_load_exception.dart';
 import '../../../core/utils/salary_utils.dart';
 import '../../../models/job_model.dart';
+import '../../../core/constants/table_constants.dart';
 
 class LocationController {
   final _supabase = Supabase.instance.client;
@@ -78,7 +79,7 @@ class LocationController {
       }) async {
     try {
       var queryBuilder = _supabase
-          .from('Job')
+          .from(TableConstants.job)
           .select('*, Company(name)')
           .eq('status', 'active')
           .not('latitude', 'is', null)

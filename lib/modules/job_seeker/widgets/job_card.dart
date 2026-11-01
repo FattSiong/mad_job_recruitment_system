@@ -51,7 +51,7 @@ class _JobCardState extends State<JobCard> {
       context,
       message: newState ? 'Job bookmarked!' : 'Bookmark removed.',
       icon: newState ? Icons.bookmark_added_rounded : Icons.bookmark_remove_rounded,
-      accentColor: newState ? const Color(0xFF1E8F8B) : const Color(0xFF687588),
+      accentColor: newState ? const Color(0xFF1E8F8B) : AppColors.textMuted,
     );
   }
 
@@ -94,7 +94,7 @@ class _JobCardState extends State<JobCard> {
                         final isBookmarked = ids.contains(widget.job.jobID);
                         return Icon(
                           isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                          color: isBookmarked ? AppColors.primaryBlue : Colors.grey.shade500,
+                          color: isBookmarked ? AppColors.primary : Colors.grey.shade500,
                           size: 26,
                         );
                       },
@@ -143,17 +143,17 @@ class _JobCardState extends State<JobCard> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.primaryBlue.withValues(alpha: 0.1),
+        color: AppColors.primary.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: AppColors.primaryBlue),
+          Icon(icon, size: 14, color: AppColors.primary),
           const SizedBox(width: 4),
           Text(
             label,
-            style: const TextStyle(fontSize: 12, color: AppColors.primaryBlue, fontWeight: FontWeight.w600),
+            style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600),
           ),
         ],
       ),

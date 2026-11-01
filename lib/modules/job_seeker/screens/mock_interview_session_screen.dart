@@ -36,12 +36,12 @@ class MockInterviewSessionScreen extends StatefulWidget {
 
 class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
     with WidgetsBindingObserver {
-  static const Color _primary = Color(0xFF163B65);
-  static const Color _background = Color(0xFFF4F7FB);
-  static const Color _textPrimary = Color(0xFF1B2433);
-  static const Color _textMuted = Color(0xFF687588);
-  static const Color _surfaceAlt = Color(0xFFF7F9FC);
-  static const Color _border = Color(0xFFE1E8F0);
+  static const Color _primary = AppColors.primary;
+  static const Color _background = AppColors.background;
+  static const Color _textPrimary = AppColors.textDark;
+  static const Color _textMuted = AppColors.textMuted;
+  static const Color _surfaceAlt = AppColors.surfaceAlt;
+  static const Color _border = AppColors.border;
   static const Color _recordRed = Color(0xFFC24E4E);
 
   static const Duration _maxAnswerLength = Duration(minutes: 3);
@@ -417,7 +417,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
       padding: const EdgeInsets.fromLTRB(12, 16, 20, 20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF163B65), Color(0xFF335D8A)],
+          colors: [AppColors.primary, AppColors.primaryLight],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -615,7 +615,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: const Color(0xFFDCEBFB),
+              color: AppColors.primarySoft,
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
@@ -857,7 +857,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFDCEBFB),
+        color: AppColors.primarySoft,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(

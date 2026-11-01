@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/utils/data_load_exception.dart';
 import '../../../core/utils/salary_utils.dart';
 import '../../../models/job_model.dart';
+import '../../../core/constants/table_constants.dart';
 
 /// Search options for the Home job list. Kept together so "load more"
 /// continues with exactly the same search the first page used.
@@ -62,7 +63,7 @@ class JobDiscoveryController {
   /// match company names in the same database query.
   Future<List<String>> _companyIdsMatching(String keyword) async {
     final rows = await _supabase
-        .from('Company')
+        .from(TableConstants.company)
         .select('companyID')
         .ilike('name', '%$keyword%')
         .limit(50);
@@ -129,7 +130,7 @@ class JobDiscoveryController {
 
       while (collected.length < pageSize && hasMore && rounds < _maxRoundsPerPage) {
         var query = _supabase
-            .from('Job')
+            .from(TableConstants.job)
             .select('*, Company(name)')
             .eq('status', 'active')
             .or(combinedFilter);

@@ -20,12 +20,12 @@ class JobApplicationScreen extends StatefulWidget {
 }
 
 class _JobApplicationScreenState extends State<JobApplicationScreen> {
-  static const Color _primary = Color(0xFF163B65);
-  static const Color _primarySoft = Color(0xFFDCEBFB);
-  static const Color _textPrimary = Color(0xFF1B2433);
-  static const Color _textMuted = Color(0xFF687588);
-  static const Color _surfaceAlt = Color(0xFFF7F9FC);
-  static const Color _border = Color(0xFFE1E8F0);
+  static const Color _primary = AppColors.primary;
+  static const Color _primarySoft = AppColors.primarySoft;
+  static const Color _textPrimary = AppColors.textDark;
+  static const Color _textMuted = AppColors.textMuted;
+  static const Color _surfaceAlt = AppColors.surfaceAlt;
+  static const Color _border = AppColors.border;
 
   final ApplicationController _appController = ApplicationController();
   final PageController _pageController = PageController();
@@ -78,6 +78,16 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
       if (answer is String && answer.trim().isEmpty) return false;
     }
     return true;
+  }
+
+  void _showFileTooLarge(String message) {
+    if (!mounted) return;
+    SnackBarHelper.showStyled(
+      context,
+      message: message,
+      icon: Icons.info_outline_rounded,
+      accentColor: const Color(0xFFE27D60),
+    );
   }
 
   Future<void> _submitApplication() async {
@@ -325,6 +335,8 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                             'css',
                             'txt',
                           ],
+                          maxSizeMB: FileLimits.answerFileMB,
+                          onTooLarge: _showFileTooLarge,
                         );
 
                         if (pickedFile != null) {
@@ -543,6 +555,8 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
 
                     final pickedFile = await FilePickerHelper.pickFile(
                       allowedExtensions: ['pdf', 'doc', 'docx', 'rtf', 'txt'],
+                      maxSizeMB: FileLimits.resumeMB,
+                      onTooLarge: _showFileTooLarge,
                     );
 
                     if (pickedFile != null) {
@@ -575,9 +589,9 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
-        backgroundColor: Color(0xFFF4F7FB),
+        backgroundColor: AppColors.background,
         body: Center(
-          child: CircularProgressIndicator(color: AppColors.primaryBlue),
+          child: CircularProgressIndicator(color: AppColors.primary),
         ),
       );
     }
@@ -587,7 +601,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     final progress = (_currentPage + 1) / totalPages;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FB),
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -617,7 +631,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                             padding: EdgeInsets.all(headerPadding),
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
-                                colors: [Color(0xFF163B65), Color(0xFF335D8A)],
+                                colors: [AppColors.primary, AppColors.primaryLight],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                               ),
