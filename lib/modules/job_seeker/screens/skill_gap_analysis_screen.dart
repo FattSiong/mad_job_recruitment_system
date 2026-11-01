@@ -6,7 +6,9 @@ import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/skill_gap_model.dart';
 import '../controllers/skill_gap_controller.dart';
 import 'add_skill_screen.dart';
+import 'education_screen.dart';
 import 'skill_gap_result_screen.dart';
+import 'work_experience_screen.dart';
 
 /// Use Case 4.60: choose a target role and run the skill gap analysis.
 class SkillGapAnalysisScreen extends StatefulWidget {
@@ -392,19 +394,21 @@ class _SkillGapAnalysisScreenState extends State<SkillGapAnalysisScreen> {
               ? '${r.skillCount} skill${r.skillCount == 1 ? '' : 's'} in your profile – tap to manage'
               : 'None listed – tap to add, or they will be detected from your resume.',
           r.skillCount > 0,
-          onTap: _openSkillsScreen,
+          onTap: () => _openProfileScreen(const AddSkillScreen()),
         ),
         _readinessTile(
           Icons.school_outlined,
           'Education',
-          r.educationCount > 0 ? '${r.educationCount} record(s)' : 'Not added yet',
+          r.educationCount > 0 ? '${r.educationCount} record(s) – tap to manage' : 'Not added yet – tap to add',
           r.educationCount > 0,
+          onTap: () => _openProfileScreen(const EducationScreen()),
         ),
         _readinessTile(
           Icons.work_history_outlined,
           'Work Experience',
-          r.experienceCount > 0 ? '${r.experienceCount} record(s)' : 'Not added yet',
+          r.experienceCount > 0 ? '${r.experienceCount} record(s) – tap to manage' : 'Not added yet – tap to add',
           r.experienceCount > 0,
+          onTap: () => _openProfileScreen(const WorkExperienceScreen()),
         ),
         if (!r.canAnalyse)
           Container(
@@ -432,11 +436,10 @@ class _SkillGapAnalysisScreenState extends State<SkillGapAnalysisScreen> {
     );
   }
 
-  Future<void> _openSkillsScreen() async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const AddSkillScreen()),
-    );
+  /// Opens a profile screen (skills, education, experience) and refreshes the
+  /// readiness counts when the user comes back.
+  Future<void> _openProfileScreen(Widget screen) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
     if (mounted) _load();
   }
 

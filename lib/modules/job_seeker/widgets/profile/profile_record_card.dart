@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 
 /// One work-experience or education entry on the profile screen.
-/// Shows a delete button when [onDelete] is given (edit mode).
+/// Shows edit/delete buttons when [onEdit] / [onDelete] are given.
 class ProfileRecordCard extends StatelessWidget {
   final IconData icon;
   final Color iconColor;
@@ -11,6 +11,7 @@ class ProfileRecordCard extends StatelessWidget {
   final String subtitle;
   final String dateRange;
   final String? description;
+  final VoidCallback? onEdit;
   final VoidCallback? onDelete;
 
   const ProfileRecordCard({
@@ -21,6 +22,7 @@ class ProfileRecordCard extends StatelessWidget {
     required this.subtitle,
     required this.dateRange,
     this.description,
+    this.onEdit,
     this.onDelete,
   });
 
@@ -86,6 +88,12 @@ class ProfileRecordCard extends StatelessWidget {
               ],
             ),
           ),
+          if (onEdit != null)
+            IconButton(
+              icon: const Icon(Icons.edit_outlined, color: AppColors.primary),
+              tooltip: 'Edit',
+              onPressed: onEdit,
+            ),
           if (onDelete != null)
             IconButton(
               icon: const Icon(Icons.delete_outline_rounded, color: AppColors.errorRed),

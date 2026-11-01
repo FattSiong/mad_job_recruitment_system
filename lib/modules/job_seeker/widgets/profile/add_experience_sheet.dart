@@ -5,17 +5,21 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../models/work_experience_model.dart';
 import 'profile_sheet_helpers.dart';
 
-/// Bottom sheet for adding a work experience.
-/// Returns the new record, or null if the user closes the sheet.
-/// The screen saves it through ProfileController.
-Future<WorkExperienceModel?> showAddExperienceSheet(BuildContext context) {
+/// Bottom sheet for adding a work experience, or editing [initial] when given.
+/// Returns the record (keeping [initial]'s ID when editing), or null if the user
+/// closes the sheet. The screen saves it through ProfileController.
+Future<WorkExperienceModel?> showAddExperienceSheet(
+  BuildContext context, {
+  WorkExperienceModel? initial,
+}) {
+  final isEditing = initial != null;
   final formKey = GlobalKey<FormState>();
-  final titleController = TextEditingController();
-  final companyController = TextEditingController();
-  final descController = TextEditingController();
-  DateTime? startDate;
-  DateTime? endDate;
-  bool isCurrentRole = false;
+  final titleController = TextEditingController(text: initial?.jobTitle);
+  final companyController = TextEditingController(text: initial?.companyName);
+  final descController = TextEditingController(text: initial?.description);
+  DateTime? startDate = initial?.startDate;
+  DateTime? endDate = initial?.endDate;
+  bool isCurrentRole = initial?.isCurrent ?? false;
   String? startDateErrorText;
   String? endDateErrorText;
 
@@ -49,9 +53,9 @@ Future<WorkExperienceModel?> showAddExperienceSheet(BuildContext context) {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  const Text(
-                    'Add Work Experience',
-                    style: TextStyle(
+                  Text(
+                    isEditing ? 'Edit Work Experience' : 'Add Work Experience',
+                    style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
                       letterSpacing: -0.5,
@@ -268,7 +272,8 @@ Future<WorkExperienceModel?> showAddExperienceSheet(BuildContext context) {
                         if (startDateErrorText != null || endDateErrorText != null) return;
 
                         final newExp = WorkExperienceModel(
-                          seekerID: '',
+                          experienceID: initial?.experienceID,
+                          seekerID: initial?.seekerID ?? '',
                           companyName: companyController.text.trim(),
                           jobTitle: titleController.text.trim(),
                           startDate: startDate!,
@@ -289,9 +294,9 @@ Future<WorkExperienceModel?> showAddExperienceSheet(BuildContext context) {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: const Text(
-                      'Add Experience',
-                      style: TextStyle(
+                    child: Text(
+                      isEditing ? 'Save Changes' : 'Add Experience',
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 16,
                         fontWeight: FontWeight.bold,

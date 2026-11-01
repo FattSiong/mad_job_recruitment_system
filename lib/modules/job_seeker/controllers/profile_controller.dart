@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/table_constants.dart';
+import '../../../core/utils/data_load_exception.dart';
 import '../../../models/education_model.dart';
 import '../../../models/job_seeker_model.dart';
 import '../../../models/work_experience_model.dart';
@@ -154,6 +155,82 @@ class ProfileController {
       return true;
     } catch (e) {
       debugPrint('Error updating profile: $e');
+      return false;
+    }
+  }
+
+  /// The seeker's work experience, most recent first.
+  Future<List<WorkExperienceModel>> fetchWorkExperiences() async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return [];
+    try {
+      final response = await _supabase
+          .from(TableConstants.workExperience)
+          .select()
+          .eq('seekerID', userId)
+          .order('isCurrent', ascending: false)
+          .order('startDate', ascending: false);
+      return (response as List)
+          .map((row) => WorkExperienceModel.fromJson(row as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('Error fetching experience: $e');
+      throw DataLoadException(
+        'Unable to load your work experience. Please check your connection and try again.',
+      );
+    }
+  }
+
+  /// The seeker's education, most recent first.
+  Future<List<EducationModel>> fetchEducation() async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return [];
+    try {
+      final response = await _supabase
+          .from(TableConstants.education)
+          .select()
+          .eq('seekerID', userId)
+          .order('isCurrent', ascending: false)
+          .order('startDate', ascending: false);
+      return (response as List)
+          .map((row) => EducationModel.fromJson(row as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('Error fetching education: $e');
+      throw DataLoadException(
+        'Unable to load your education. Please check your connection and try again.',
+      );
+    }
+  }
+
+  Future<bool> updateWorkExperience(WorkExperienceModel experience) async {
+    if (experience.experienceID == null) return false;
+    try {
+      final data = experience.toJson()..remove('seekerID');
+      await _supabase
+          .from(TableConstants.workExperience)
+          .update(data)
+          .eq('experienceID', experience.experienceID!)
+          .eq('seekerID', _supabase.auth.currentUser!.id); // only your own records
+      return true;
+    } catch (e) {
+      debugPrint('Error updating experience: $e');
+      return false;
+    }
+  }
+
+  Future<bool> updateEducation(EducationModel education) async {
+    if (education.educationID == null) return false;
+    try {
+      final data = education.toJson()..remove('seekerID');
+      await _supabase
+          .from(TableConstants.education)
+          .update(data)
+          .eq('educationID', education.educationID!)
+          .eq('seekerID', _supabase.auth.currentUser!.id); // only your own records
+      return true;
+    } catch (e) {
+      debugPrint('Error updating education: $e');
       return false;
     }
   }

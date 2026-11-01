@@ -5,17 +5,21 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../models/education_model.dart';
 import 'profile_sheet_helpers.dart';
 
-/// Bottom sheet for adding an education record.
-/// Returns the new record, or null if the user closes the sheet.
-/// The screen saves it through ProfileController.
-Future<EducationModel?> showAddEducationSheet(BuildContext context) {
+/// Bottom sheet for adding an education record, or editing [initial] when given.
+/// Returns the record (keeping [initial]'s ID when editing), or null if the user
+/// closes the sheet. The screen saves it through ProfileController.
+Future<EducationModel?> showAddEducationSheet(
+  BuildContext context, {
+  EducationModel? initial,
+}) {
+  final isEditing = initial != null;
   final formKey = GlobalKey<FormState>();
-  final institutionController = TextEditingController();
-  final fieldOfStudyController = TextEditingController();
-  final descController = TextEditingController();
-  DateTime? startDate;
-  DateTime? endDate;
-  bool isCurrent = false;
+  final institutionController = TextEditingController(text: initial?.institutionName);
+  final fieldOfStudyController = TextEditingController(text: initial?.fieldOfStudy);
+  final descController = TextEditingController(text: initial?.description);
+  DateTime? startDate = initial?.startDate;
+  DateTime? endDate = initial?.endDate;
+  bool isCurrent = initial?.isCurrent ?? false;
   String? startDateErrorText;
   String? endDateErrorText;
 
@@ -29,7 +33,12 @@ Future<EducationModel?> showAddEducationSheet(BuildContext context) {
     'Doctorate / PhD',
     'Other',
   ];
-  String? selectedDegree;
+  String? selectedDegree = initial?.degree;
+  // Keep an older/custom degree value selectable when editing.
+  final existingDegree = initial?.degree;
+  if (existingDegree != null && !degreeOptions.contains(existingDegree)) {
+    degreeOptions.add(existingDegree);
+  }
 
   bool isDiplomaOrAbove(String? degree) {
     return degree == 'Diploma' ||
@@ -68,9 +77,9 @@ Future<EducationModel?> showAddEducationSheet(BuildContext context) {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  const Text(
-                    'Add Education',
-                    style: TextStyle(
+                  Text(
+                    isEditing ? 'Edit Education' : 'Add Education',
+                    style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
                       letterSpacing: -0.5,
@@ -317,6 +326,8 @@ Future<EducationModel?> showAddEducationSheet(BuildContext context) {
                         if (startDateErrorText != null || endDateErrorText != null) return;
 
                         final newEdu = EducationModel(
+                          educationID: initial?.educationID,
+                          seekerID: initial?.seekerID,
                           institutionName: institutionController.text.trim(),
                           degree: selectedDegree!,
                           fieldOfStudy: isDiplomaOrAbove(selectedDegree)
@@ -340,9 +351,9 @@ Future<EducationModel?> showAddEducationSheet(BuildContext context) {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: const Text(
-                      'Add Education',
-                      style: TextStyle(
+                    child: Text(
+                      isEditing ? 'Save Changes' : 'Add Education',
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 16,
                         fontWeight: FontWeight.bold,

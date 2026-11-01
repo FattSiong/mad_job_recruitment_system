@@ -18,12 +18,12 @@ import '../../../services/auth_service.dart';
 import '../../../shared_widgets/login_screen.dart';
 import '../controllers/profile_controller.dart';
 import '../controllers/skill_controller.dart';
-import '../widgets/profile/add_education_sheet.dart';
-import '../widgets/profile/add_experience_sheet.dart';
 import '../widgets/profile/profile_qr_dialog.dart';
 import '../widgets/profile/profile_record_card.dart';
 import '../widgets/profile/profile_sheet_helpers.dart';
 import 'add_skill_screen.dart';
+import 'education_screen.dart';
+import 'work_experience_screen.dart';
 import 'ai_career_advisor_screen.dart';
 import 'mock_interview_setup_screen.dart';
 import 'skill_gap_analysis_screen.dart';
@@ -468,9 +468,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           if (onAddPressed != null && _isEditing)
             TextButton.icon(
               onPressed: onAddPressed,
-              icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+              icon: const Icon(Icons.edit_note_rounded, size: 20),
               label: const Text(
-                'Add',
+                'Manage',
                 style: TextStyle(fontWeight: FontWeight.w700),
               ),
               style: TextButton.styleFrom(
@@ -879,33 +879,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   /// Asks before deleting a profile record.
-  Future<bool> _confirmDelete(String title, String message) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.errorRed),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
-    );
-    return result ?? false;
-  }
-
-  // ---------------------------------------------------------------------
-  // Work experience / education (UI in widgets/profile, data in ProfileController)
-  // ---------------------------------------------------------------------
-
   void _showResult(bool ok, String success, String failure) {
     _showStyledSnackBar(
       message: ok ? success : failure,
@@ -914,46 +887,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Future<void> _addExperience() async {
-    final experience = await showAddExperienceSheet(context);
-    if (experience == null || !mounted) return;
-    final ok = await _controller.addWorkExperience(experience);
-    if (!mounted) return;
-    _showResult(ok, 'Work experience added!', 'Failed to add work experience.');
-    if (ok) _loadProfile();
-  }
-
-  Future<void> _addEducation() async {
-    final education = await showAddEducationSheet(context);
-    if (education == null || !mounted) return;
-    final ok = await _controller.addEducation(education);
-    if (!mounted) return;
-    _showResult(ok, 'Education added!', 'Failed to add education.');
-    if (ok) _loadProfile();
-  }
-
-  Future<void> _deleteExperience(WorkExperienceModel exp) async {
-    final confirmed = await _confirmDelete(
-      'Remove work experience?',
-      '"${exp.jobTitle}" at ${exp.companyName} will be removed from your profile.',
-    );
-    if (!confirmed || !mounted) return;
-    final ok = await _controller.deleteWorkExperience(exp.experienceID!);
-    if (!mounted) return;
-    _showResult(ok, 'Work experience removed.', 'Failed to remove work experience.');
-    if (ok) _loadProfile();
-  }
-
-  Future<void> _deleteEducation(EducationModel edu) async {
-    final confirmed = await _confirmDelete(
-      'Remove education?',
-      '"${edu.degree}" at ${edu.institutionName} will be removed from your profile.',
-    );
-    if (!confirmed || !mounted) return;
-    final ok = await _controller.deleteEducation(edu.educationID!);
-    if (!mounted) return;
-    _showResult(ok, 'Education removed.', 'Failed to remove education.');
-    if (ok) _loadProfile();
+  Future<void> _openRecordsScreen(Widget screen) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+    if (mounted) _loadProfile();
   }
 
   Widget _experienceCard(WorkExperienceModel exp) {
@@ -964,7 +900,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       subtitle: exp.companyName,
       dateRange: formatProfileDateRange(exp.startDate, exp.endDate, exp.isCurrent),
       description: exp.description,
-      onDelete: (_isEditing && exp.experienceID != null) ? () => _deleteExperience(exp) : null,
     );
   }
 
@@ -978,7 +913,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       subtitle: edu.institutionName,
       dateRange: formatProfileDateRange(edu.startDate, edu.endDate, edu.isCurrent),
       description: edu.description,
-      onDelete: (_isEditing && edu.educationID != null) ? () => _deleteEducation(edu) : null,
     );
   }
 
@@ -1295,7 +1229,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                 _buildSectionHeader(
                   'Work Experience',
-                  onAddPressed: _addExperience,
+                  onAddPressed: () => _openRecordsScreen(const WorkExperienceScreen()),
                 ),
                 if (_profile!.workExperience.isEmpty)
                   _buildEmptyInfoCard('No work experience added yet.')
@@ -1304,7 +1238,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                 _buildSectionHeader(
                   'Education',
-                  onAddPressed: _addEducation,
+                  onAddPressed: () => _openRecordsScreen(const EducationScreen()),
                 ),
                 if (_profile!.education.isEmpty)
                   _buildEmptyInfoCard('No education details added yet.')
