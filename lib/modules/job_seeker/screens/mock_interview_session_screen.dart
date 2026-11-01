@@ -1,0 +1,926 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:ui' show FontFeature;
+
+import 'package:camera/camera.dart';
+import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
+
+import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/snackbar_helper.dart';
+import '../../../models/mock_interview_model.dart';
+import '../controllers/mock_interview_controller.dart';
+import 'mock_interview_result_screen.dart';
+
+enum _Stage { ready, recording, evaluating, reviewed, finishing }
+
+/// Steps 2-6 of Use Case 4.59: introduction, questions, answers, end.
+class MockInterviewSessionScreen extends StatefulWidget {
+  final String sessionID;
+  final String targetJobRole;
+  final int questionCount; // excluding the introduction
+  final List<InterviewQuestion> initialQuestions;
+
+  const MockInterviewSessionScreen({
+    super.key,
+    required this.sessionID,
+    required this.targetJobRole,
+    required this.questionCount,
+    required this.initialQuestions,
+  });
+
+  @override
+  State<MockInterviewSessionScreen> createState() => _MockInterviewSessionScreenState();
+}
+
+class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
+    with WidgetsBindingObserver {
+  static const Color _primary = Color(0xFF163B65);
+  static const Color _background = Color(0xFFF4F7FB);
+  static const Color _textPrimary = Color(0xFF1B2433);
+  static const Color _textMuted = Color(0xFF687588);
+  static const Color _surfaceAlt = Color(0xFFF7F9FC);
+  static const Color _border = Color(0xFFE1E8F0);
+  static const Color _recordRed = Color(0xFFC24E4E);
+
+  static const Duration _maxAnswerLength = Duration(minutes: 3);
+  static const Duration _minAnswerLength = Duration(seconds: 3);
+
+  final MockInterviewController _controller = MockInterviewController();
+  final AudioRecorder _recorder = AudioRecorder();
+
+  late List<InterviewQuestion> _questions;
+  final Map<int, MockInterviewAnswerModel> _answers = {};
+  int _position = 0; // position in _questions
+  _Stage _stage = _Stage.ready;
+
+  // Recording
+  String? _recordingPath;
+  Duration _elapsed = Duration.zero;
+  Timer? _ticker;
+  StreamSubscription<Amplitude>? _amplitudeSub;
+  double _level = 0; // 0..1 microphone level
+  static const int _amplitudeIntervalMs = 100;
+  final List<double> _amplitudeTrack = []; // dBFS, one sample per _amplitudeIntervalMs
+  final Stopwatch _recordClock = Stopwatch();
+
+  // Camera (preview only, never recorded)
+  CameraController? _camera;
+  bool _cameraOn = false;
+  bool _cameraLoading = false;
+
+  /// Questions are generated after the introduction, so until then use the requested count.
+  bool get _questionsReady => _questions.length > 1;
+  int get _totalQuestions =>
+      _questionsReady ? _questions.length : widget.questionCount + 1; // + introduction
+  InterviewQuestion get _current => _questions[_position];
+  bool get _isLastQuestion => _questionsReady && _position == _questions.length - 1;
+  bool get _isBusy => _stage == _Stage.evaluating || _stage == _Stage.finishing;
+
+  @override
+  void initState() {
+    super.initState();
+    _questions = List.of(widget.initialQuestions);
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _ticker?.cancel();
+    _amplitudeSub?.cancel();
+    _recorder.dispose();
+    _camera?.dispose();
+    _deleteRecordingFile();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Only react to "paused" (app really in background). "inactive" also fires for
+    // permission dialogs and the notification shade, which must not stop an answer.
+    if (state == AppLifecycleState.paused) {
+      // Leaving the app: stop the camera and throw away a half-finished answer
+      if (_stage == _Stage.recording) _cancelRecording();
+      final cam = _camera;
+      _camera = null;
+      cam?.dispose();
+      if (mounted) setState(() {});
+    } else if (state == AppLifecycleState.resumed &&
+        _cameraOn &&
+        _camera == null &&
+        !_cameraLoading) {
+      _initCamera();
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Camera
+  // ---------------------------------------------------------------------
+
+  Future<void> _toggleCamera() async {
+    if (_cameraOn) {
+      final cam = _camera;
+      setState(() {
+        _cameraOn = false;
+        _camera = null;
+      });
+      await cam?.dispose();
+    } else {
+      setState(() => _cameraOn = true);
+      await _initCamera();
+    }
+  }
+
+  Future<void> _initCamera() async {
+    setState(() => _cameraLoading = true);
+    try {
+      final cameras = await availableCameras();
+      if (cameras.isEmpty) throw CameraException('no_camera', 'No camera found');
+      final front = cameras.firstWhere(
+        (c) => c.lensDirection == CameraLensDirection.front,
+        orElse: () => cameras.first,
+      );
+      // enableAudio: false -> the microphone stays free for the answer recorder
+      final controller = CameraController(front, ResolutionPreset.medium, enableAudio: false);
+      await controller.initialize();
+      if (!mounted || !_cameraOn) {
+        await controller.dispose();
+        return;
+      }
+      setState(() => _camera = controller);
+    } on CameraException catch (e) {
+      debugPrint('Camera error: ${e.code} ${e.description}');
+      if (!mounted) return;
+      setState(() => _cameraOn = false);
+      _showError(
+        e.code.contains('Access')
+            ? 'Camera permission was denied. You can continue without the camera.'
+            : 'Unable to open the camera. You can continue without it.',
+      );
+    } finally {
+      if (mounted) setState(() => _cameraLoading = false);
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Recording (mono AAC, 16 kHz)
+  // ---------------------------------------------------------------------
+
+  Future<void> _startRecording() async {
+    if (_stage != _Stage.ready && _stage != _Stage.reviewed) return;
+
+    if (!await _recorder.hasPermission()) {
+      _showError('Microphone access is required to answer. Please allow it in Settings.');
+      return;
+    }
+
+    final dir = await getTemporaryDirectory();
+    final path = '${dir.path}/mock_${widget.sessionID}_${_current.index}_'
+        '${DateTime.now().millisecondsSinceEpoch}.m4a';
+
+    await _recorder.start(
+      const RecordConfig(
+        encoder: AudioEncoder.aacLc,
+        numChannels: 1, // mono
+        sampleRate: 16000,
+        bitRate: 32000,
+      ),
+      path: path,
+    );
+
+    _recordingPath = path;
+    _amplitudeTrack.clear();
+    _recordClock
+      ..reset()
+      ..start();
+    _amplitudeSub = _recorder
+        .onAmplitudeChanged(const Duration(milliseconds: _amplitudeIntervalMs))
+        .listen((amp) {
+      // Keep the track aligned to real time: fill any missed slots with the latest value
+      final slot = _recordClock.elapsedMilliseconds ~/ _amplitudeIntervalMs;
+      final value = amp.current.isFinite ? amp.current : -100.0;
+      while (_amplitudeTrack.length <= slot) {
+        _amplitudeTrack.add(value);
+      }
+      if (!mounted) return;
+      // dBFS (-60 .. 0) -> 0 .. 1
+      setState(() => _level = ((amp.current + 50) / 50).clamp(0.0, 1.0));
+    });
+
+    setState(() {
+      _stage = _Stage.recording;
+      _elapsed = Duration.zero;
+    });
+
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() => _elapsed += const Duration(seconds: 1));
+      if (_elapsed >= _maxAnswerLength) _stopAndEvaluate(); // auto stop
+    });
+  }
+
+  Future<void> _stopRecorderOnly() async {
+    _recordClock.stop();
+    _ticker?.cancel();
+    _ticker = null;
+    await _amplitudeSub?.cancel();
+    _amplitudeSub = null;
+    _level = 0;
+  }
+
+  Future<void> _cancelRecording() async {
+    await _stopRecorderOnly();
+    await _recorder.cancel(); // also deletes the file
+    _recordingPath = null;
+    if (mounted) setState(() => _stage = _answers.containsKey(_current.index) ? _Stage.reviewed : _Stage.ready);
+  }
+
+  Future<void> _stopAndEvaluate() async {
+    if (_stage != _Stage.recording) return;
+    await _stopRecorderOnly();
+    final path = await _recorder.stop() ?? _recordingPath;
+
+    if (path == null || _elapsed < _minAnswerLength) {
+      await _deleteRecordingFile();
+      setState(() => _stage = _answers.containsKey(_current.index) ? _Stage.reviewed : _Stage.ready);
+      _showError('That answer was too short. Tap the mic and try again.');
+      return;
+    }
+
+    setState(() => _stage = _Stage.evaluating);
+    final questionIndex = _current.index;
+
+    try {
+      final result = await _controller.evaluateAnswer(
+        sessionID: widget.sessionID,
+        questionIndex: questionIndex,
+        audioFile: File(path),
+        amplitudeDb: List.of(_amplitudeTrack),
+        amplitudeIntervalMs: _amplitudeIntervalMs,
+      );
+      if (!mounted) return;
+      setState(() {
+        _answers[questionIndex] = result.answer;
+        if (result.questions != null && result.questions!.isNotEmpty) {
+          _questions = result.questions!;
+        }
+        _stage = _Stage.reviewed;
+      });
+    } on MockInterviewException catch (e) {
+      if (!mounted) return;
+      setState(() => _stage = _answers.containsKey(questionIndex) ? _Stage.reviewed : _Stage.ready);
+      if (e.code == 'session_not_found') {
+        _showError(e.message);
+        Navigator.pop(context);
+        return;
+      }
+      _showError(e.message);
+    } finally {
+      await _deleteRecordingFile();
+    }
+  }
+
+  Future<void> _deleteRecordingFile() async {
+    final path = _recordingPath;
+    _recordingPath = null;
+    if (path == null) return;
+    try {
+      final f = File(path);
+      if (await f.exists()) await f.delete();
+    } catch (_) {}
+  }
+
+  // ---------------------------------------------------------------------
+  // Navigation
+  // ---------------------------------------------------------------------
+
+  void _nextQuestion() {
+    if (_position + 1 >= _questions.length) return;
+    setState(() {
+      _position++;
+      _stage = _answers.containsKey(_current.index) ? _Stage.reviewed : _Stage.ready;
+    });
+  }
+
+  Future<void> _endInterview() async {
+    setState(() => _stage = _Stage.finishing);
+    try {
+      final record = await _controller.finishInterview(widget.sessionID);
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => MockInterviewResultScreen(
+            sessionID: record.sessionID,
+            initialRecord: record,
+          ),
+        ),
+      );
+    } on MockInterviewException catch (e) {
+      if (!mounted) return;
+      setState(() => _stage = _Stage.reviewed);
+      _showError(e.message);
+    }
+  }
+
+  /// Use case A2: early exit discards the session.
+  Future<void> _confirmExit() async {
+    if (_stage == _Stage.finishing) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text('Exit interview?'),
+        content: const Text(
+          'Exiting now will discard your progress. No scorecard will be generated or saved.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Continue Interview'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.errorRed),
+            child: const Text('Exit'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    if (_stage == _Stage.recording) await _cancelRecording();
+    await _controller.discardInterview(widget.sessionID);
+    if (mounted) Navigator.pop(context);
+  }
+
+  void _showError(String message) {
+    SnackBarHelper.showStyled(
+      context,
+      message: message,
+      icon: Icons.error_outline_rounded,
+      accentColor: AppColors.errorRed,
+      duration: const Duration(seconds: 3),
+    );
+  }
+
+  // ---------------------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------------------
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _confirmExit();
+      },
+      child: Scaffold(
+        backgroundColor: _background,
+        body: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildHeader(),
+                      const SizedBox(height: 16),
+                      _buildCameraCard(),
+                      const SizedBox(height: 16),
+                      _buildQuestionCard(),
+                      const SizedBox(height: 16),
+                      _buildAnswerArea(),
+                    ],
+                  ),
+                ),
+              ),
+              _buildBottomBar(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    final progress = (_position + (_answers.containsKey(_current.index) ? 1 : 0)) /
+        _totalQuestions;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 16, 20, 20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF163B65), Color(0xFF335D8A)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              IconButton(
+                onPressed: _stage == _Stage.finishing ? null : _confirmExit,
+                icon: const Icon(Icons.close_rounded, color: Colors.white),
+                tooltip: 'Exit interview',
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Mock Interview',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      widget.targetJobRole,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.white70, fontSize: 14),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${_position + 1} / $_totalQuestions',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 6,
+                backgroundColor: Colors.white.withValues(alpha: 0.2),
+                valueColor: const AlwaysStoppedAnimation(Colors.white),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCameraCard() {
+    final cam = _camera;
+    final ready = cam != null && cam.value.isInitialized;
+
+    return Container(
+      width: double.infinity,
+      height: 240,
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F2440),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (ready)
+            FittedBox(
+              fit: BoxFit.cover,
+              child: SizedBox(
+                // previewSize is landscape, so swap for portrait
+                width: cam!.value.previewSize?.height ?? 300,
+                height: cam.value.previewSize?.width ?? 400,
+                child: CameraPreview(cam),
+              ),
+            )
+          else
+            Center(
+              child: _cameraLoading
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 64,
+                          height: 64,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Icon(Icons.person_outline_rounded,
+                              color: Colors.white, size: 34),
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Turn on the camera to practise eye contact\nand body language.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white70, height: 1.4),
+                        ),
+                      ],
+                    ),
+            ),
+          // Recording badge
+          if (_stage == _Stage.recording)
+            Positioned(
+              left: 14,
+              top: 14,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: _recordRed,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.fiber_manual_record, color: Colors.white, size: 12),
+                    const SizedBox(width: 6),
+                    Text(
+                      _formatDuration(_elapsed),
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          // Privacy note
+          if (ready)
+            Positioned(
+              left: 14,
+              bottom: 14,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  'Preview only · not recorded',
+                  style: TextStyle(color: Colors.white, fontSize: 12),
+                ),
+              ),
+            ),
+          // Camera toggle
+          Positioned(
+            right: 12,
+            bottom: 12,
+            child: Material(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              child: IconButton(
+                tooltip: _cameraOn ? 'Turn camera off' : 'Turn camera on',
+                icon: Icon(
+                  _cameraOn ? Icons.videocam_off_outlined : Icons.videocam_outlined,
+                  color: _primary,
+                ),
+                onPressed: _cameraLoading ? null : _toggleCamera,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuestionCard() {
+    final q = _current;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0xFFDCEBFB),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              q.isIntroduction ? 'Introduction' : 'Question ${q.index} · ${q.typeLabel}',
+              style: const TextStyle(
+                color: _primary,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            q.question,
+            style: const TextStyle(
+              fontSize: 19,
+              fontWeight: FontWeight.w700,
+              color: _textPrimary,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAnswerArea() {
+    switch (_stage) {
+      case _Stage.ready:
+        return _buildMicPrompt();
+      case _Stage.recording:
+        return _buildRecordingPanel();
+      case _Stage.evaluating:
+        return _buildLoadingPanel(
+          _current.isIntroduction
+              ? 'Analysing your introduction and preparing your questions…'
+              : 'Analysing your answer…',
+        );
+      case _Stage.finishing:
+        return _buildLoadingPanel('Generating your interview scorecard…');
+      case _Stage.reviewed:
+        return _buildReviewPanel(_answers[_current.index]!);
+    }
+  }
+
+  Widget _panel({required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _buildMicPrompt() {
+    return _panel(
+      child: Column(
+        children: [
+          GestureDetector(
+            onTap: _startRecording,
+            child: Container(
+              width: 84,
+              height: 84,
+              decoration: BoxDecoration(
+                color: _primary,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: _primary.withValues(alpha: 0.25),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: const Icon(Icons.mic_rounded, color: Colors.white, size: 38),
+            ),
+          ),
+          const SizedBox(height: 14),
+          const Text(
+            'Tap to start your answer',
+            style: TextStyle(fontWeight: FontWeight.bold, color: _textPrimary, fontSize: 16),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Speak clearly. You can answer for up to 3 minutes.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: _textMuted),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecordingPanel() {
+    return _panel(
+      child: Column(
+        children: [
+          SizedBox(
+            height: 40,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: List.generate(7, (i) {
+                // Simple level meter: middle bars are taller
+                final weight = 1 - ((i - 3).abs() / 4);
+                final h = 8 + 32 * _level * weight;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 120),
+                  width: 6,
+                  height: h,
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  decoration: BoxDecoration(
+                    color: _recordRed,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                );
+              }),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '${_formatDuration(_elapsed)} / ${_formatDuration(_maxAnswerLength)}',
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: _textPrimary,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
+          ),
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: _stopAndEvaluate,
+            child: Container(
+              width: 84,
+              height: 84,
+              decoration: const BoxDecoration(
+                color: Color(0xFFFDECEC),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.stop_rounded, color: _recordRed, size: 44),
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Recording… tap to finish your answer',
+            style: TextStyle(color: _textMuted),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingPanel(String message) {
+    return _panel(
+      child: Column(
+        children: [
+          const SizedBox(height: 8),
+          const CircularProgressIndicator(color: _primary),
+          const SizedBox(height: 18),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontWeight: FontWeight.w600, color: _textPrimary),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'This usually takes a few seconds.',
+            style: TextStyle(color: _textMuted),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReviewPanel(MockInterviewAnswerModel answer) {
+    return _panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.check_circle_rounded, color: AppColors.successGreen),
+              SizedBox(width: 8),
+              Text(
+                'Answer saved',
+                style: TextStyle(fontWeight: FontWeight.bold, color: _textPrimary, fontSize: 16),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _statChip(Icons.speed_rounded,
+                  '${answer.wordsPerMinute?.round() ?? 0} wpm${answer.paceLabel.isEmpty ? '' : ' · ${answer.paceLabel}'}'),
+              _statChip(Icons.chat_bubble_outline_rounded,
+                  '${answer.fillerWordCount ?? 0} filler words'),
+              _statChip(Icons.pause_circle_outline_rounded,
+                  '${answer.hesitationCount ?? 0} hesitations'),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'What we heard',
+            style: TextStyle(fontWeight: FontWeight.bold, color: _textPrimary),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(maxHeight: 160),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: _surfaceAlt,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _border),
+            ),
+            child: SingleChildScrollView(
+              child: Text(
+                answer.transcriptText,
+                style: const TextStyle(color: _textMuted, height: 1.45),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Detailed feedback will be shown in your scorecard at the end.',
+            style: TextStyle(fontSize: 12, color: _textMuted),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statChip(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFDCEBFB),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: _primary),
+          const SizedBox(width: 6),
+          Text(label, style: const TextStyle(color: _primary, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomBar() {
+    if (_stage != _Stage.reviewed) return const SizedBox.shrink();
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+        child: Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _startRecording,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Re-record'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _primary,
+                  side: const BorderSide(color: Color(0xFFB8D1EE)),
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: ElevatedButton.icon(
+                onPressed: _isBusy
+                    ? null
+                    : (_isLastQuestion ? _endInterview : _nextQuestion),
+                icon: Icon(_isLastQuestion ? Icons.flag_rounded : Icons.arrow_forward_rounded),
+                label: Text(_isLastQuestion ? 'End Interview' : 'Next Question'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatDuration(Duration d) {
+    final m = d.inMinutes.remainder(60).toString().padLeft(1, '0');
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+}

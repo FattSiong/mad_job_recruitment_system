@@ -420,3 +420,17 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/career-advisor/deno.json"
 entrypoint = "./functions/career-advisor/index.ts"
+
+[functions.mock-interview]
+enabled = true
+# Verifies the user's token inside the function (works with sb_publishable_ keys).
+verify_jwt = false
+import_map = "./functions/mock-interview/deno.json"
+entrypoint = "./functions/mock-interview/index.ts"
+
+[functions.skill-gap-analysis]
+enabled = true
+# Verifies the user's token inside the function (works with sb_publishable_ keys).
+verify_jwt = false
+import_map = "./functions/skill-gap-analysis/deno.json"
+entrypoint = "./functions/skill-gap-analysis/index.ts"
