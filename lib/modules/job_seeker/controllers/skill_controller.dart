@@ -41,6 +41,25 @@ class SkillController {
     }
   }
 
+  /// Skills of any job seeker (public profile, employer applicant view).
+  /// Returns an empty list if they can't be loaded, as skills are extra info there.
+  Future<List<SkillModel>> fetchSkillsForSeeker(String seekerId) async {
+    try {
+      final response = await _supabase
+          .from(TableConstants.skill)
+          .select()
+          .eq('seekerID', seekerId)
+          .order('createdAt', ascending: true);
+
+      return (response as List)
+          .map((row) => SkillModel.fromJson(row as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('Error fetching skills for $seekerId: $e');
+      return [];
+    }
+  }
+
   /// Adds a skill and returns the saved row.
   /// Throws [SkillException] for empty, too long or duplicate names.
   Future<SkillModel> addSkill(String name, {String? proficiency}) async {

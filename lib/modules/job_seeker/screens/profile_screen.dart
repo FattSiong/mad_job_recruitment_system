@@ -16,6 +16,7 @@ import '../../../models/skill_model.dart';
 import '../../../models/work_experience_model.dart';
 import '../../../services/auth_service.dart';
 import '../../../shared_widgets/login_screen.dart';
+import '../../../shared_widgets/skill_chips.dart';
 import '../controllers/profile_controller.dart';
 import '../controllers/skill_controller.dart';
 import '../widgets/profile/profile_qr_dialog.dart';
@@ -126,37 +127,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (_skills.isEmpty) {
       return _buildEmptyInfoCard('No skills added yet.');
     }
-    return _buildSurfaceCard(
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: _skills.map((skill) {
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-            decoration: BoxDecoration(
-              color: _surfaceAlt,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: _border),
-            ),
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(
-                    text: skill.skillName,
-                    style: const TextStyle(fontWeight: FontWeight.w700, color: _textPrimary),
-                  ),
-                  if (skill.proficiency != null)
-                    TextSpan(
-                      text: '  ·  ${skill.proficiency}',
-                      style: const TextStyle(color: _textMuted, fontSize: 13),
-                    ),
-                ],
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
+    return _buildSurfaceCard(child: SkillChips(skills: _skills));
   }
 
   void _populateControllers() {

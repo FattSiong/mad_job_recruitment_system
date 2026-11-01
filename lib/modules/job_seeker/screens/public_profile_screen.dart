@@ -8,7 +8,10 @@ import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/job_seeker_model.dart';
 import '../../../models/work_experience_model.dart';
 import '../../../models/education_model.dart';
+import '../../../models/skill_model.dart';
+import '../../../shared_widgets/skill_chips.dart';
 import '../controllers/profile_controller.dart';
+import '../controllers/skill_controller.dart';
 
 class PublicProfileScreen extends StatefulWidget {
   final String seekerId;
@@ -27,7 +30,9 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   static const Color _surfaceAlt = AppColors.surfaceAlt;
 
   final ProfileController _controller = ProfileController();
+  final SkillController _skillController = SkillController();
   JobSeekerModel? _profile;
+  List<SkillModel> _skills = [];
   bool _contactVisible = false;
   bool _isLoading = true;
 
@@ -38,10 +43,15 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   }
 
   Future<void> _loadPublicProfile() async {
-    final result = await _controller.fetchPublicProfile(widget.seekerId);
+    final responses = await Future.wait([
+      _controller.fetchPublicProfile(widget.seekerId),
+      _skillController.fetchSkillsForSeeker(widget.seekerId),
+    ]);
+    final result = responses[0] as ({JobSeekerModel profile, bool contactVisible})?;
     if (mounted) {
       setState(() {
         _profile = result?.profile;
+        _skills = responses[1] as List<SkillModel>;
         _contactVisible = result?.contactVisible ?? false;
         _isLoading = false;
       });
@@ -550,6 +560,12 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                     ],
                   ),
                 ),
+              ],
+
+              // Skills Section
+              if (_skills.isNotEmpty) ...[
+                _buildSectionHeader('Skills'),
+                _buildSurfaceCard(child: SkillChips(skills: _skills)),
               ],
 
               // 👉 Work Experience Section
