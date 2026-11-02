@@ -72,7 +72,7 @@ class _ChatComposerState extends State<ChatComposer> {
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(26),
           boxShadow: const [
-            BoxShadow(color: Color(0x140F172A), blurRadius: 24, offset: Offset(0, 10)),
+            BoxShadow(color: AppColors.shadow, blurRadius: 24, offset: Offset(0, 10)),
           ],
         ),
         child: Row(

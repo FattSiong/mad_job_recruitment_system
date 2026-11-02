@@ -30,7 +30,7 @@ class MessageBubble extends StatelessWidget {
     final isImage = !message.isDeleted && message.mediaType == 'image' && _hasMedia;
 
     final background = message.isDeleted
-        ? const Color(0xFFE9EDF3)
+        ? AppColors.border
         : (isMine ? AppColors.primary : AppColors.surface);
 
     // Mine on the right, theirs on the left, whatever the parent does.
@@ -93,7 +93,7 @@ class MessageBubble extends StatelessWidget {
 
   Widget _buildBody(BuildContext context) {
     final textColor = message.isDeleted
-        ? const Color(0xFF7C8798)
+        ? AppColors.textMuted
         : (isMine ? Colors.white : AppColors.textDark);
 
     if (message.isDeleted) {
