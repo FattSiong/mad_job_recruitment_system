@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../models/company_model.dart';
 import '../../../models/job_model.dart';
 import '../../../services/employer_service.dart';
 import 'applicant_detail_screen.dart';
 import 'edit_job_screen.dart';
+import 'subscription_screen.dart';
 
 enum _JobDetailTab { overview, applicants }
 
@@ -26,17 +28,48 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
 
   bool _isStatusUpdating = false;
   bool _isApplicantsLoading = true;
+  bool _isCompanyLoading = true;
   bool _isRankingWithAi = false;
   int _rankingCompletedCount = 0;
   int _rankingTotalCount = 0;
 
+  CompanyModel? _jobCompany;
   List<Map<String, dynamic>> _applicants = [];
+
+  bool get _hasActiveSubscription =>
+      _jobCompany?.hasActiveSubscription ?? false;
 
   @override
   void initState() {
     super.initState();
     _currentJob = widget.job;
+    _loadCompanyDetails();
     _loadApplicants();
+  }
+
+  Future<void> _loadCompanyDetails() async {
+    setState(() => _isCompanyLoading = true);
+    final company =
+        await _employerService.getCompanyById(_currentJob.companyID);
+    if (!mounted) return;
+    setState(() {
+      _jobCompany = company;
+      _isCompanyLoading = false;
+    });
+  }
+
+  Future<void> _openSubscriptionUpgrade() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SubscriptionScreen(
+          initialCompanyId: _currentJob.companyID,
+        ),
+      ),
+    );
+    if (mounted) {
+      await _loadCompanyDetails();
+    }
   }
 
   Future<void> _loadApplicants() async {
@@ -64,6 +97,18 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
 
   Future<void> _rankCandidatesWithAi({bool onlyUnranked = false}) async {
     if (_isRankingWithAi || _applicants.isEmpty) return;
+
+    if (!_hasActiveSubscription) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Premium feature: upgrade your company plan to use AI Candidate Ranking.',
+          ),
+        ),
+      );
+      await _openSubscriptionUpgrade();
+      return;
+    }
 
     final targets = onlyUnranked
         ? _applicants.where((a) => a['aiRankingScore'] == null).toList()
@@ -1117,33 +1162,78 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
               color: Color(0xFF4F5D70),
             ),
           ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _buildApplicantsMetaChip(
-                icon: Icons.description_outlined,
-                text: 'PDF Resume analysis',
-                color: const Color(0xFF163B65),
-                backgroundColor: Colors.white,
-              ),
-              _buildApplicantsMetaChip(
-                icon: Icons.psychology_outlined,
-                text: 'Skills & experience',
-                color: const Color(0xFF163B65),
-                backgroundColor: Colors.white,
-              ),
-              _buildApplicantsMetaChip(
-                icon: Icons.quiz_outlined,
-                text: 'Screening answers',
-                color: const Color(0xFF163B65),
-                backgroundColor: Colors.white,
-              ),
-            ],
-          ),
           const SizedBox(height: 18),
-          if (_isRankingWithAi)
+          if (_isCompanyLoading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 10),
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          else if (!_hasActiveSubscription) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.amber.shade200),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.workspace_premium_rounded,
+                    color: Colors.amber.shade800,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _jobCompany?.isSubscriptionExpired == true
+                          ? 'Your company Premium subscription has expired. Renew your plan to rank or re-rank candidates with AI.'
+                          : 'Premium feature: upgrade ${_jobCompany?.name ?? 'your company'} to unlock AI Smart Candidate Ranking.',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        height: 1.4,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.amber.shade900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _openSubscriptionUpgrade,
+                icon: Icon(
+                  Icons.lock_rounded,
+                  size: 18,
+                  color: Colors.amber.shade800,
+                ),
+                label: const Text(
+                  'Upgrade Company Plan (Premium)',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.amber.shade100,
+                  foregroundColor: Colors.amber.shade900,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
+          ] else if (_isRankingWithAi)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),

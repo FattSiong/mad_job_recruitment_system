@@ -10,7 +10,9 @@ import '../../../core/constants/table_constants.dart';
 import '../../../models/company_model.dart';
 
 class SubscriptionScreen extends StatefulWidget {
-  const SubscriptionScreen({super.key});
+  final String? initialCompanyId;
+
+  const SubscriptionScreen({super.key, this.initialCompanyId});
 
   @override
   State<SubscriptionScreen> createState() => _SubscriptionScreenState();
@@ -73,7 +75,12 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           ..addAll(loadedCompanies);
 
         if (_companies.isNotEmpty) {
-          _selectedCompany = _companies.first;
+          _selectedCompany = widget.initialCompanyId != null
+              ? _companies.firstWhere(
+                  (c) => c.companyID == widget.initialCompanyId,
+                  orElse: () => _companies.first,
+                )
+              : _companies.first;
           _selectedCompanyId = _selectedCompany!.companyID;
           _syncActivePlanFromSelectedCompany();
         } else {
@@ -467,8 +474,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                     isMostPopular: false,
                     features: const [
                       'All AI features unlocked',
-                      'AI Question Generator',
                       'AI Salary Suggestion',
+                      'AI Pre-Screening Question Generator',
+                      'AI Smart Candidate Ranking',
+                      'Post-Interview AI Analytics & PDF Report',
                     ],
                   ),
                   const SizedBox(height: 24),
@@ -481,8 +490,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                     features: const [
                       'Save ~20% compared to monthly',
                       'All AI features unlocked',
-                      'AI Question Generator',
                       'AI Salary Suggestion',
+                      'AI Pre-Screening Question Generator',
+                      'AI Smart Candidate Ranking',
+                      'Post-Interview AI Analytics & PDF Report',
                     ],
                   ),
                 ],
