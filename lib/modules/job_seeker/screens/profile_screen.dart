@@ -1,9 +1,11 @@
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:image_cropper/image_cropper.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -60,6 +62,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isEditing = false;
   bool _isSavingProfile = false;
   File? _newProfileImage;
+  bool _removePhoto = false; // user chose "Remove photo" (applied on Save)
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -274,29 +277,131 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return _profile!.fullName.trim()[0].toUpperCase();
   }
 
+  /// URL that failed to load; we then show the initial instead of an empty circle.
+  String? _failedImageUrl;
+
+  void _onProfileImageError(Object error, StackTrace? stackTrace) {
+    final url = _profile?.profilePictureURL;
+    debugPrint('Profile photo failed to load ($url): $error');
+    if (!mounted || url == null || url == _failedImageUrl) return;
+    setState(() => _failedImageUrl = url);
+  }
+
   ImageProvider? _getProfileImageProvider() {
     if (_newProfileImage != null) {
       return FileImage(_newProfileImage!);
     }
+    if (_removePhoto) return null;
 
     final imageUrl = _profile?.profilePictureURL;
-    if (imageUrl != null && imageUrl.isNotEmpty) {
-      return NetworkImage(imageUrl);
+    if (imageUrl != null && imageUrl.isNotEmpty && imageUrl != _failedImageUrl) {
+      // Cached on disk (no re-download every launch) and decoded at avatar size.
+      return ResizeImage(CachedNetworkImageProvider(imageUrl), width: 300);
     }
 
     return null;
   }
 
-  Future<void> _pickProfileImage() async {
-    final result = await FilePicker.pickFiles(type: FileType.image);
-    final path = result?.files.single.path;
+  bool get _hasPhoto =>
+      _newProfileImage != null ||
+      (!_removePhoto && (_profile?.profilePictureURL?.isNotEmpty ?? false));
+
+  /// Camera / library / remove options for the profile photo (edit mode).
+  Future<void> _showPhotoOptions() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 42,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Profile Photo',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _textPrimary),
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                leading: const Icon(Icons.photo_camera_outlined, color: _primary),
+                title: const Text('Take photo'),
+                onTap: () => Navigator.pop(sheetContext, 'camera'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined, color: _primary),
+                title: const Text('Choose from library'),
+                onTap: () => Navigator.pop(sheetContext, 'gallery'),
+              ),
+              if (_hasPhoto)
+                ListTile(
+                  leading: const Icon(Icons.delete_outline_rounded, color: AppColors.errorRed),
+                  title: const Text('Remove photo', style: TextStyle(color: AppColors.errorRed)),
+                  onTap: () => Navigator.pop(sheetContext, 'remove'),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (!mounted || choice == null) return;
+    switch (choice) {
+      case 'camera':
+        await _pickProfileImage(ImageSource.camera);
+      case 'gallery':
+        await _pickProfileImage(ImageSource.gallery);
+      case 'remove':
+        setState(() {
+          _newProfileImage = null;
+          _removePhoto = true;
+        });
+    }
+  }
+
+  Future<void> _pickProfileImage(ImageSource source) async {
+    final XFile? picked;
+    try {
+      picked = await ImagePicker().pickImage(
+        source: source,
+        preferredCameraDevice: CameraDevice.front,
+        maxWidth: 1600, // the cropper then makes the final 512px image
+        maxHeight: 1600,
+      );
+    } catch (e) {
+      debugPrint('Image picker error: $e');
+      if (!mounted) return;
+      _showStyledSnackBar(
+        message: source == ImageSource.camera
+            ? 'Unable to open the camera. Please allow camera access in Settings.'
+            : 'Unable to open your photos. Please allow photo access in Settings.',
+        icon: Icons.error_outline_rounded,
+        accentColor: AppColors.errorRed,
+      );
+      return;
+    }
+    final path = picked?.path;
     if (path == null) return;
 
     final croppedFile = await ImageCropper().cropImage(
       sourcePath: path,
       aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-      compressFormat: ImageCompressFormat.png,
-      compressQuality: 100,
+      // A 512px JPEG is ~50-100 KB instead of a multi-MB full-size PNG.
+      maxWidth: 512,
+      maxHeight: 512,
+      compressFormat: ImageCompressFormat.jpg,
+      compressQuality: 85,
       uiSettings: [
         AndroidUiSettings(
           toolbarTitle: 'Adjust Profile Photo',
@@ -334,6 +439,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     setState(() {
       _newProfileImage = File(croppedFile.path);
+      _removePhoto = false;
     });
   }
 
@@ -350,6 +456,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           radius: radius,
           backgroundColor: Colors.white.withValues(alpha: 0.18),
           backgroundImage: imageProvider,
+          onBackgroundImageError: imageProvider == null ? null : _onProfileImageError,
           child: imageProvider == null
               ? Text(
                   _getProfileInitial(),
@@ -366,7 +473,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             color: Colors.white,
             shape: const CircleBorder(),
             child: InkWell(
-              onTap: _isSavingProfile ? null : _pickProfileImage,
+              onTap: _isSavingProfile ? null : _showPhotoOptions,
               customBorder: const CircleBorder(),
               child: const Padding(
                 padding: EdgeInsets.all(8),
@@ -904,7 +1011,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     setState(() => _isSavingProfile = true);
 
-    String? profilePictureUrl = _profile!.profilePictureURL;
+    final String? oldPictureUrl = _profile!.profilePictureURL;
+    String? profilePictureUrl = _removePhoto ? null : oldPictureUrl;
     if (_newProfileImage != null) {
       final uploadedUrl = await _controller.uploadProfilePicture(_newProfileImage!);
       if (uploadedUrl == null) {
@@ -959,9 +1067,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _profile = updatedModel;
         _isEditing = false;
         _newProfileImage = null;
+        _removePhoto = false;
         _populateControllers();
       }
     });
+
+    // The old photo is no longer used (replaced or removed): clean it up.
+    if (didUpdate &&
+        oldPictureUrl != null &&
+        oldPictureUrl.isNotEmpty &&
+        oldPictureUrl != profilePictureUrl) {
+      _controller.deleteProfilePictureFile(oldPictureUrl);
+    }
   }
 
   Future<void> _logout() async {
@@ -1277,6 +1394,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       : () {
                     setState(() => _isEditing = false);
                     _newProfileImage = null;
+                    _removePhoto = false;
                     _populateControllers();
                   },
                   style: _secondaryButtonStyle(),

@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -84,10 +85,20 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     return _profile!.fullName.trim()[0].toUpperCase();
   }
 
+  /// URL that failed to load; we then show the initial instead of an empty circle.
+  String? _failedImageUrl;
+
+  void _onProfileImageError(Object error, StackTrace? stackTrace) {
+    final url = _profile?.profilePictureURL;
+    debugPrint('Profile photo failed to load ($url): $error');
+    if (!mounted || url == null || url == _failedImageUrl) return;
+    setState(() => _failedImageUrl = url);
+  }
+
   ImageProvider? _getProfileImageProvider() {
     final imageUrl = _profile?.profilePictureURL;
-    if (imageUrl != null && imageUrl.isNotEmpty) {
-      return NetworkImage(imageUrl);
+    if (imageUrl != null && imageUrl.isNotEmpty && imageUrl != _failedImageUrl) {
+      return ResizeImage(CachedNetworkImageProvider(imageUrl), width: 300);
     }
     return null;
   }
@@ -195,6 +206,8 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                 radius: 34,
                 backgroundColor: Colors.white.withValues(alpha: 0.18),
                 backgroundImage: _getProfileImageProvider(),
+                onBackgroundImageError:
+                    _getProfileImageProvider() == null ? null : _onProfileImageError,
                 child: _getProfileImageProvider() == null
                     ? Text(
                         _getProfileInitial(),

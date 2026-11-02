@@ -1,0 +1,414 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+
+import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/snackbar_helper.dart';
+import '../../../models/chat_room_model.dart';
+import '../../../models/message_model.dart';
+import '../../../services/push_service.dart';
+import '../../community/screens/standard_call_screen.dart';
+import '../chat_formatters.dart';
+import '../controllers/chat_room_controller.dart';
+import '../controllers/voice_recorder_controller.dart';
+import '../widgets/chat_avatar.dart';
+import '../widgets/chat_composer.dart';
+import '../widgets/message_bubble.dart';
+import '../widgets/shared_attachments_sheet.dart';
+
+/// One conversation.
+class ChatRoomScreen extends StatefulWidget {
+  final String roomID;
+  final ChatParticipant otherUser;
+
+  const ChatRoomScreen({super.key, required this.roomID, required this.otherUser});
+
+  @override
+  State<ChatRoomScreen> createState() => _ChatRoomScreenState();
+}
+
+class _ChatRoomScreenState extends State<ChatRoomScreen> {
+  late final ChatRoomController _controller =
+      ChatRoomController(roomID: widget.roomID, otherUser: widget.otherUser);
+  final VoiceRecorderController _recorder = VoiceRecorderController();
+  final TextEditingController _textController = TextEditingController();
+  bool _isStartingCall = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.start();
+    PushService.activeChatRoomID = widget.roomID; // no pop-ups for this chat while open
+  }
+
+  @override
+  void dispose() {
+    if (PushService.activeChatRoomID == widget.roomID) PushService.activeChatRoomID = null;
+    _recorder.dispose();
+    _controller.dispose();
+    _textController.dispose();
+    super.dispose();
+  }
+
+  // ---------------------------------------------------------------------
+  // Actions (all data work is in the controllers)
+  // ---------------------------------------------------------------------
+
+  void _showError(String message) {
+    if (!mounted) return;
+    SnackBarHelper.showStyled(
+      context,
+      message: message,
+      icon: Icons.error_outline_rounded,
+      accentColor: AppColors.errorRed,
+    );
+  }
+
+  Future<void> _sendText() async {
+    final text = _textController.text;
+    if (text.trim().isEmpty) return;
+    _textController.clear();
+    final error = await _controller.sendText(text);
+    if (error != null) {
+      if (_textController.text.isEmpty) _textController.text = text; // keep what they typed
+      _showError(error);
+    }
+  }
+
+  Future<void> _showAttachOptions() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined, color: AppColors.primary),
+              title: const Text('Photo from library'),
+              onTap: () => Navigator.pop(sheetContext, 'gallery'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined, color: AppColors.primary),
+              title: const Text('Take a photo'),
+              onTap: () => Navigator.pop(sheetContext, 'camera'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.description_outlined, color: AppColors.primary),
+              title: const Text('Document (PDF, Word)'),
+              onTap: () => Navigator.pop(sheetContext, 'document'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+
+    File? file;
+    String? fileName;
+    try {
+      if (choice == 'document') {
+        final result = await FilePicker.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: const ['pdf', 'doc', 'docx'],
+        );
+        final picked = result?.files.single;
+        if (picked?.path != null) {
+          file = File(picked!.path!);
+          fileName = picked.name;
+        }
+      } else {
+        final picked = await ImagePicker().pickImage(
+          source: choice == 'camera' ? ImageSource.camera : ImageSource.gallery,
+          maxWidth: 1920,
+          maxHeight: 1920,
+          imageQuality: 80,
+        );
+        if (picked != null) {
+          file = File(picked.path);
+          fileName = picked.name;
+        }
+      }
+    } catch (e) {
+      _showError('Unable to open ${choice == 'document' ? 'your files' : 'your photos'}. Please check app permissions.');
+      return;
+    }
+
+    if (file == null || fileName == null) return;
+    final error = await _controller.sendAttachment(file, fileName);
+    if (error != null) _showError(error);
+  }
+
+  Future<void> _startRecording() async {
+    final ok = await _recorder.start();
+    if (!ok) _showError('Please allow microphone access to send voice messages.');
+  }
+
+  Future<void> _stopRecording() async {
+    final recording = await _recorder.stop();
+    if (recording == null) return; // too short or cancelled
+    final error = await _controller.sendVoice(recording.file, recording.seconds);
+    if (error != null) _showError(error);
+  }
+
+  Future<void> _showMessageActions(MessageModel message) async {
+    if (message.isDeleted) return;
+    final isText = (message.mediaType ?? 'text') == 'text';
+    final canDelete = _controller.isMine(message) && !_controller.isPending(message);
+    if (!isText && !canDelete) return;
+
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            if (isText)
+              ListTile(
+                leading: const Icon(Icons.copy_rounded, color: AppColors.primary),
+                title: const Text('Copy text'),
+                onTap: () => Navigator.pop(sheetContext, 'copy'),
+              ),
+            if (canDelete)
+              ListTile(
+                leading: const Icon(Icons.delete_outline_rounded, color: AppColors.errorRed),
+                title: const Text('Delete for everyone', style: TextStyle(color: AppColors.errorRed)),
+                onTap: () => Navigator.pop(sheetContext, 'delete'),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+
+    if (choice == 'copy') {
+      await Clipboard.setData(ClipboardData(text: message.content));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied')));
+      }
+    } else if (choice == 'delete') {
+      final ok = await _controller.deleteMessage(message);
+      if (!ok) _showError('Failed to delete the message. Please try again.');
+    }
+  }
+
+  Future<void> _startCall() async {
+    if (_isStartingCall) return;
+    setState(() => _isStartingCall = true);
+    try {
+      final call = await _controller.startCall();
+      if (!mounted) return;
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => StandardCallScreen(
+            callID: call.callID,
+            roomCode: call.roomCode,
+            otherUserName: widget.otherUser.displayName,
+            otherUserProfilePic: widget.otherUser.photoUrl,
+            chatRoomID: widget.roomID,
+            currentUserID: _controller.currentUserID,
+            isCaller: true,
+          ),
+        ),
+      );
+      if (result == 'recall' && mounted) {
+        setState(() => _isStartingCall = false);
+        await _startCall();
+      }
+    } catch (e) {
+      debugPrint('Start call failed: $e');
+      _showError('Unable to start the call. Please try again.');
+    } finally {
+      if (mounted) setState(() => _isStartingCall = false);
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------------------
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        titleSpacing: 0,
+        title: Row(
+          children: [
+            ChatAvatar(user: widget.otherUser, size: 42),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.otherUser.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                  Text(
+                    widget.otherUser.roleLabel,
+                    style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Voice call',
+            onPressed: _isStartingCall ? null : _startCall,
+            icon: _isStartingCall
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.call_rounded, color: AppColors.teal),
+          ),
+          IconButton(
+            tooltip: 'Shared photos & files',
+            onPressed: () => showSharedAttachmentsSheet(
+              context,
+              load: _controller.fetchSharedAttachments,
+            ),
+            icon: const Icon(Icons.perm_media_outlined, color: AppColors.primary),
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListenableBuilder(
+              listenable: _controller,
+              builder: (context, _) => _buildMessages(),
+            ),
+          ),
+          ListenableBuilder(
+            listenable: Listenable.merge([_controller, _recorder]),
+            builder: (context, _) => ChatComposer(
+              textController: _textController,
+              isUploading: _controller.isUploading,
+              isRecording: _recorder.isRecording,
+              recordingElapsed: _recorder.elapsed,
+              onSend: _sendText,
+              onAttach: _showAttachOptions,
+              onRecordStart: _startRecording,
+              onRecordEnd: _stopRecording,
+              onRecordCancel: _recorder.cancel,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessages() {
+    if (_controller.isLoading) {
+      return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+    }
+
+    final messages = _controller.messages; // newest first
+    if (_controller.error != null && messages.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.cloud_off_rounded, size: 40, color: AppColors.danger),
+              const SizedBox(height: 12),
+              Text(
+                _controller.error!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: AppColors.textMuted),
+              ),
+              TextButton.icon(
+                onPressed: _controller.start,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Try Again'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (messages.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ChatAvatar(user: widget.otherUser, size: 72),
+              const SizedBox(height: 16),
+              Text(
+                'Say hello to ${widget.otherUser.displayName}',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textDark,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Your messages will appear here.',
+                style: TextStyle(color: AppColors.textMuted),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      reverse: true,
+      padding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
+      itemCount: messages.length,
+      itemBuilder: (context, index) {
+        final message = messages[index];
+        final older = index + 1 < messages.length ? messages[index + 1] : null;
+        final showDay = older == null || !ChatFormatters.isSameDay(message.sentAt, older.sentAt);
+
+        return Column(
+          key: ValueKey(message.messageID),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (showDay) ChatDaySeparator(date: message.sentAt),
+            MessageBubble(
+              message: message,
+              isMine: _controller.isMine(message),
+              isPending: _controller.isPending(message),
+              onLongPress: () => _showMessageActions(message),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}

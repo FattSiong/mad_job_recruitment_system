@@ -8,7 +8,7 @@ import '../../../core/utils/data_load_exception.dart';
 import '../../../core/utils/session_helper.dart';
 import '../../../models/job_model.dart';
 import '../../../shared_widgets/login_screen.dart';
-import '../../community/screens/chat_list_screen.dart';
+import '../../chat/screens/chat_inbox_screen.dart';
 import '../../community/screens/community_dashboard.dart';
 import '../controllers/applied_jobs_controller.dart';
 import '../controllers/job_discovery_controller.dart';
@@ -629,20 +629,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
       return const Center(child: Text('Not logged in'));
     }
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text(
-          'Messages',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-      ),
-      body: ChatListScreen(currentUserID: _currentUser!.id),
-    );
+    return const ChatInboxScreen();
   }
 
   Widget _buildHeaderIconButton({

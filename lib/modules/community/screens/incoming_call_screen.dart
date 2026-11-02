@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import '../../../models/call_model.dart';
 import '../../../services/call_service.dart';
+import '../../../services/push_service.dart';
 import 'standard_call_screen.dart';
 
 class IncomingCallScreen extends StatefulWidget {
@@ -7,6 +11,8 @@ class IncomingCallScreen extends StatefulWidget {
   final String roomCode;
   final String callerName;
   final String? callerProfilePic;
+  /// Accept straight away ("Answer" tapped on the ringing notification).
+  final bool autoAccept;
 
   const IncomingCallScreen({
     super.key,
@@ -14,6 +20,7 @@ class IncomingCallScreen extends StatefulWidget {
     required this.roomCode,
     required this.callerName,
     this.callerProfilePic,
+    this.autoAccept = false,
   });
 
   @override
@@ -22,9 +29,36 @@ class IncomingCallScreen extends StatefulWidget {
 
 class _IncomingCallScreenState extends State<IncomingCallScreen> {
   final CallService _callService = CallService();
+  StreamSubscription<CallModel?>? _statusSubscription;
+  bool _handled = false; // accepted, declined or closed
+
+  @override
+  void initState() {
+    super.initState();
+    // Close the ringing screen if the caller hangs up first.
+    _statusSubscription = _callService.listenToCallStatus(widget.callID).listen((call) {
+      if (_handled || call == null || call.status == 'ringing') return;
+      _handled = true;
+      CallNotifications.cancel(widget.callID);
+      if (mounted) Navigator.pop(context);
+    });
+    if (widget.autoAccept) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _acceptCall());
+    }
+  }
+
+  @override
+  void dispose() {
+    _statusSubscription?.cancel();
+    CallNotifications.cancel(widget.callID); // stop the ringing notification
+    super.dispose();
+  }
 
   // If they click Accept
   void _acceptCall() async {
+    if (_handled) return;
+    _handled = true;
+    CallNotifications.cancel(widget.callID);
     // 1. Tell the database we answered
     await _callService.updateCallStatus(widget.callID, 'active');
 
@@ -46,6 +80,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
 
   // If they click Decline
   void _declineCall() async {
+    if (_handled) return;
+    _handled = true;
+    CallNotifications.cancel(widget.callID);
     await _callService.updateCallStatus(widget.callID, 'declined');
     if (mounted) {
       Navigator.pop(context); // Close the ringing screen

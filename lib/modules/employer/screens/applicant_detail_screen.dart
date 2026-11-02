@@ -8,10 +8,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/utils/storage_url_helper.dart';
 import '../../../models/skill_model.dart';
-import '../../../services/community_service.dart';
 import '../../../services/employer_service.dart';
 import '../../../shared_widgets/skill_chips.dart';
-import '../../community/screens/active_chat_screen.dart';
+import '../../chat/chat_navigation.dart';
 import '../../job_seeker/controllers/skill_controller.dart';
 import 'interview_scheduling_screen.dart';
 
@@ -109,48 +108,7 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
   }
 
   Future<void> _openChat(String targetUserID, String targetUserName) async {
-    final currentUser = Supabase.instance.client.auth.currentUser;
-    if (currentUser == null) return;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
-    );
-
-    try {
-      final communityService = CommunityService();
-      final roomID = await communityService.getOrCreateChatRoom(
-        currentUser.id,
-        targetUserID,
-      );
-
-      if (mounted) Navigator.pop(context);
-
-      if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ActiveChatScreen(
-              roomID: roomID,
-              currentUserID: currentUser.id,
-              otherUserName: targetUserName,
-              otherUserID: targetUserID,
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to start chat: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
+    await openChatWith(context, targetUserID);
   }
 
   Future<void> _downloadAndOpenFile(String url, String fallbackName) async {

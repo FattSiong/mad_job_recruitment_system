@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/constants/supabase_constants.dart';
 import 'services/notification_service.dart';
+import 'services/push_service.dart';
 import 'shared_widgets/auth_gate.dart';
 
 Future<void> main() async {
@@ -26,6 +27,9 @@ Future<void> main() async {
 
   // Initialize push notifications and incoming call notification handling.
   await NotificationService.initialize();
+
+  // Firebase Cloud Messaging (chat notifications).
+  await PushService.initialize();
 
   runApp(const RecruitmentApp());
 }

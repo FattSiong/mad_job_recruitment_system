@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 // IMPORTANT: Replace these imports with your actual project paths
 import '../../../services/community_service.dart';
 import '../../../models/community_post_model.dart';
-import 'active_chat_screen.dart';
+import '../../chat/chat_navigation.dart';
 import 'create_post_screen.dart';
 import 'edit_screen.dart';
 import 'report_screen.dart';
@@ -837,30 +837,7 @@ class _PostCardState extends State<PostCard> {
         );
         break;
       case 'message':
-        try {
-          final roomID = await _communityService.getOrCreateChatRoom(
-            widget.currentUserID,
-            widget.post.authorID,
-          );
-          if (!mounted) return;
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ActiveChatScreen(
-                roomID: roomID,
-                currentUserID: widget.currentUserID,
-                otherUserName: widget.post.username,
-                otherUserID: widget.post.authorID,
-              ),
-            ),
-          );
-        } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Unable to open chat: $e')),
-            );
-          }
-        }
+        await openChatWith(context, widget.post.authorID);
         break;
     }
   }
