@@ -24,6 +24,9 @@ class PostListView extends StatelessWidget {
 
   final Widget emptyState;
 
+  /// Shown instead of [emptyState] when filters hide every post.
+  final Widget? filteredEmptyState;
+
   /// Called after a post was edited or deleted, so other lists can reload.
   final VoidCallback? onPostsChanged;
 
@@ -33,6 +36,7 @@ class PostListView extends StatelessWidget {
     super.key,
     required this.controller,
     required this.emptyState,
+    this.filteredEmptyState,
     this.header = const [],
     this.onPostsChanged,
     this.padding = const EdgeInsets.fromLTRB(20, 8, 20, 32),
@@ -136,7 +140,9 @@ class PostListView extends StatelessWidget {
             ),
           ));
         } else if (controller.isEmpty) {
-          top.add(emptyState);
+          top.add(controller.isFiltered && filteredEmptyState != null
+              ? filteredEmptyState!
+              : emptyState);
         }
 
         final posts = controller.posts;
@@ -181,6 +187,10 @@ class PostListView extends StatelessWidget {
                     onSave: () => _save(context, post),
                     onComments: () => _comments(context, post),
                     onAction: (a) => _onAction(context, post, a),
+                    // On the feed, tapping a topic shows more posts on it.
+                    onTopicTap: controller.mode == PostListMode.feed
+                        ? (topic) => controller.setFilter(controller.filter.copyWith(topic: topic))
+                        : null,
                   ),
                 );
               },

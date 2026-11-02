@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../models/feed_post_model.dart';
+import '../../../models/post_topic.dart';
 import '../../../shared_widgets/user_avatar.dart';
 import '../community_formatters.dart';
+import 'community_chips.dart';
 import 'post_media_view.dart';
 
 /// Menu actions on a post.
@@ -18,6 +20,9 @@ class PostCard extends StatefulWidget {
   final VoidCallback onSave;
   final ValueChanged<PostAction> onAction;
 
+  /// Tapping the topic label (e.g. show more posts on this topic).
+  final ValueChanged<PostTopic>? onTopicTap;
+
   const PostCard({
     super.key,
     required this.post,
@@ -26,6 +31,7 @@ class PostCard extends StatefulWidget {
     required this.onComments,
     required this.onSave,
     required this.onAction,
+    this.onTopicTap,
   });
 
   @override
@@ -60,6 +66,13 @@ class _PostCardState extends State<PostCard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildHeader(),
+          if (post.topic != PostTopic.general) ...[
+            const SizedBox(height: 12),
+            TopicChip(
+              topic: post.topic,
+              onTap: widget.onTopicTap == null ? null : () => widget.onTopicTap!(post.topic),
+            ),
+          ],
           if (post.content.isNotEmpty) ...[
             const SizedBox(height: 14),
             Text(

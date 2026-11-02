@@ -4,7 +4,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/file_preview_helper.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/feed_post_model.dart';
+import '../../../models/post_topic.dart';
 import '../controllers/post_editor_controller.dart';
+import '../widgets/community_chips.dart';
 import '../../../shared_widgets/confirm_dialog.dart';
 
 /// Create a post, or edit one (pass [post]). Pops with true when saved.
@@ -122,6 +124,8 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
               children: [
+                _buildTopicPicker(),
+                const SizedBox(height: 16),
                 Container(
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
@@ -156,6 +160,47 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  /// Topic of the post; readers can filter the feed by it.
+  Widget _buildTopicPicker() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Topic',
+            style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textDark),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Helps others find your post.',
+            style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final topic in PostTopic.values)
+                OptionChip(
+                  label: topic.label,
+                  icon: topic.icon,
+                  selected: topic == _controller.topic,
+                  onTap: () {
+                    if (!_controller.isSaving) _controller.setTopic(topic);
+                  },
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }
