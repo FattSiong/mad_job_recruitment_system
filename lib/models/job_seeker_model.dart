@@ -54,10 +54,23 @@ class JobSeekerModel {
       linkedInURL: json['linkedInURL'] as String?,
       gitHubURL: json['gitHubURL'] as String?,
 
-      // Parse lists
-      education: eduList.map((e) => EducationModel.fromJson(e)).toList(),
-      workExperience: expList.map((e) => WorkExperienceModel.fromJson(e)).toList(),
+      // Parse lists, newest first (same order as the Education / Work Experience screens)
+      education: eduList.map((e) => EducationModel.fromJson(e)).toList()
+        ..sort((a, b) => _newestFirst(a.isCurrent, a.startDate, a.endDate,
+            b.isCurrent, b.startDate, b.endDate)),
+      workExperience: expList.map((e) => WorkExperienceModel.fromJson(e)).toList()
+        ..sort((a, b) => _newestFirst(a.isCurrent, a.startDate, a.endDate,
+            b.isCurrent, b.startDate, b.endDate)),
     );
+  }
+
+  /// Current entries first, then the latest start date, then the latest end date.
+  static int _newestFirst(bool aCurrent, DateTime aStart, DateTime? aEnd,
+      bool bCurrent, DateTime bStart, DateTime? bEnd) {
+    if (aCurrent != bCurrent) return aCurrent ? -1 : 1;
+    final byStart = bStart.compareTo(aStart);
+    if (byStart != 0) return byStart;
+    return (bEnd ?? bStart).compareTo(aEnd ?? aStart);
   }
 
   /// Null fields are sent too, so clearing a field in the app clears it in the database.

@@ -1169,12 +1169,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
 
                 _buildSectionHeader(
-                  'Skills',
-                  onAddPressed: _openSkillsScreen,
-                ),
-                _buildSkillsSection(),
-
-                _buildSectionHeader(
                   'Work Experience',
                   onAddPressed: () => _openRecordsScreen(const WorkExperienceScreen()),
                 ),
@@ -1191,6 +1185,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _buildEmptyInfoCard('No education details added yet.')
                 else
                   ..._profile!.education.map(_educationCard),
+
+                _buildSectionHeader(
+                  'Skills',
+                  onAddPressed: _openSkillsScreen,
+                ),
+                _buildSkillsSection(),
 
                 if (!_isEditing) ...[
                   const SizedBox(height: 28),
