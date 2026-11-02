@@ -12,6 +12,7 @@ class JobSeekerModel {
   final String? phoneNumber;
   final String? location;
   final String? bio;
+  final String? careerGoal; // also given to the AI Career Advisor and Skill Gap Analysis
   final String? linkedInURL;
   final String? gitHubURL;
 
@@ -28,6 +29,7 @@ class JobSeekerModel {
     this.phoneNumber,
     this.location,
     this.bio,
+    this.careerGoal,
     this.linkedInURL,
     this.gitHubURL,
     this.education = const [],
@@ -48,6 +50,7 @@ class JobSeekerModel {
       phoneNumber: json['phoneNumber'] as String?,
       location: json['location'] as String?,
       bio: json['bio'] as String?,
+      careerGoal: json['careerGoal'] as String?,
       linkedInURL: json['linkedInURL'] as String?,
       gitHubURL: json['gitHubURL'] as String?,
 
@@ -68,6 +71,7 @@ class JobSeekerModel {
       'phoneNumber': phoneNumber,
       'location': location,
       'bio': bio,
+      'careerGoal': careerGoal,
       'linkedInURL': linkedInURL,
       'gitHubURL': gitHubURL,
     };

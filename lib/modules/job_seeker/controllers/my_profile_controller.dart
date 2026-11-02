@@ -16,6 +16,7 @@ class ProfileEdits {
   final String phone;
   final String location;
   final String bio;
+  final String careerGoal;
   final String linkedIn;
   final String gitHub;
 
@@ -24,6 +25,7 @@ class ProfileEdits {
     required this.phone,
     required this.location,
     required this.bio,
+    required this.careerGoal,
     required this.linkedIn,
     required this.gitHub,
   });
@@ -163,6 +165,7 @@ class MyProfileController extends ChangeNotifier {
         phoneNumber: orNull(edits.phone),
         location: orNull(edits.location),
         bio: orNull(edits.bio),
+        careerGoal: orNull(edits.careerGoal),
         linkedInURL: orNull(edits.linkedIn),
         gitHubURL: orNull(edits.gitHub),
         education: current.education,

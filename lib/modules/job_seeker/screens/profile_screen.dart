@@ -62,6 +62,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
   final TextEditingController _bioController = TextEditingController();
+  final TextEditingController _careerGoalController = TextEditingController();
   final TextEditingController _linkedinController = TextEditingController();
   final TextEditingController _githubController = TextEditingController();
 
@@ -83,6 +84,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _phoneController.dispose();
     _locationController.dispose();
     _bioController.dispose();
+    _careerGoalController.dispose();
     _linkedinController.dispose();
     _githubController.dispose();
     _myProfile.removeListener(_onProfileChanged);
@@ -117,6 +119,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _phoneController.text = _profile!.phoneNumber ?? '';
       _locationController.text = _profile!.location ?? '';
       _bioController.text = _profile!.bio ?? '';
+      _careerGoalController.text = _profile!.careerGoal ?? '';
       _linkedinController.text = _profile!.linkedInURL ?? '';
       _githubController.text = _profile!.gitHubURL ?? '';
     }
@@ -925,6 +928,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       phone: _phoneController.text,
       location: _locationController.text,
       bio: _bioController.text,
+      careerGoal: _careerGoalController.text,
       linkedIn: _linkedinController.text,
       gitHub: _githubController.text,
     ));
@@ -1066,6 +1070,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             size: 20,
                           ),
                           maxLines: 4,
+                        ),
+                        _buildEditableField(
+                          label: 'Career Goal',
+                          controller: _careerGoalController,
+                          icon: const Icon(
+                            Icons.flag_outlined,
+                            color: AppColors.textMuted,
+                            size: 20,
+                          ),
+                          maxLines: 3,
+                          validator: (value) => (value?.trim().length ?? 0) > 300
+                              ? 'Keep your career goal under 300 characters'
+                              : null,
                         ),
                         _buildEditableField(
                           label: 'LinkedIn URL',
