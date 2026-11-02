@@ -245,8 +245,8 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
   Widget _buildResumePickerCard() {
     final s = _sources;
     if (s == null) {
-      return SurfaceCard(children: [
-        const Text('Unable to load your resumes. Pull down to try again.',
+      return const SurfaceCard(children: [
+        Text('Unable to load your resumes. Pull down to try again.',
             style: TextStyle(color: AppColors.textMuted)),
       ]);
     }

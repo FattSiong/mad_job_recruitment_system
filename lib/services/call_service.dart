@@ -53,7 +53,7 @@ class CallService {
     try {
       await _supabase.from('Calls').update({'status': newStatus}).eq('callID', callID);
     } catch (e) {
-      print('Error updating call status: $e');
+      debugPrint('Error updating call status: $e');
     }
   }
 

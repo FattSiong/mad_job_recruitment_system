@@ -8,6 +8,7 @@ class MyJobsEmptyState extends StatelessWidget {
   final String subtitle;
 
   const MyJobsEmptyState({
+    super.key,
     required this.icon,
     required this.title,
     required this.subtitle,
