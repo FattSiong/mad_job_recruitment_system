@@ -33,4 +33,7 @@ class TableConstants {
   static const String skillGapAnalysisRecord = 'SkillGapAnalysisRecord';
   static const String guidanceReport = 'GuidanceReport';
   static const String postInterviewReport = 'PostInterviewReport';
+  static const String resume = 'Resume';
+  static const String userDevice = 'UserDevice';
+  static const String resumeReviewRecord = 'ResumeReviewRecord';
 }

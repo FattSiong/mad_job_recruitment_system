@@ -49,7 +49,7 @@ class _SharedAttachmentsSheetState extends State<_SharedAttachmentsSheet> {
                 width: 42,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
+                  color: AppColors.border,
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),

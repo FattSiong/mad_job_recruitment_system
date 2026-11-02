@@ -18,6 +18,7 @@ class AppColors {
   static const Color borderSoft = Color(0xFFD9E4F1);   // light blue outlines
   static const Color borderActive = Color(0xFFB8D1EE); // selected chips, outlined buttons
   static const Color overlay = Color(0x33000000);      // dim layer while saving
+  static const Color shadow = Color(0x140F172A);       // soft shadow under floating bars
 
   // Text
   static const Color textDark = Color(0xFF1B2433); // job seeker screens

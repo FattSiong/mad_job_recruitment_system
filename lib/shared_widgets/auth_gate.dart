@@ -5,6 +5,8 @@ import '../../../core/constants/table_constants.dart';
 // Import your screens here
 import '../modules/job_seeker/screens/seeker_dashboard.dart';
 import 'login_screen.dart';
+import 'reset_password_screen.dart';
+import '../services/password_recovery_service.dart';
 import '../modules/employer/screens/employer_dashboard.dart';
 import '../modules/admin/screens/admin_dashboard.dart';
 
@@ -25,6 +27,18 @@ class _AuthGateState extends State<AuthGate> {
   Future<void> _redirectUser() async {
     // Wait a brief moment to ensure the widget tree is fully built before navigating
     await Future.delayed(Duration.zero);
+
+    // Opened from the password reset email: go straight to "Set a new password".
+    PasswordRecoveryService.appReady = true;
+    if (PasswordRecoveryService.pending) {
+      PasswordRecoveryService.pending = false;
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const ResetPasswordScreen()),
+      );
+      return;
+    }
 
     try {
       // 1. Check if Supabase has a saved session token on the device

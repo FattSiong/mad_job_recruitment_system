@@ -9,7 +9,7 @@ import '../../../core/utils/session_helper.dart';
 import '../../../models/job_model.dart';
 import '../../../shared_widgets/login_screen.dart';
 import '../../chat/screens/chat_inbox_screen.dart';
-import '../../community/screens/community_dashboard.dart';
+import '../../community_hub/screens/community_hub_screen.dart';
 import '../controllers/applied_jobs_controller.dart';
 import '../controllers/job_discovery_controller.dart';
 import '../controllers/profile_controller.dart';
@@ -709,6 +709,6 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     if (_currentUser == null) {
       return const Center(child: Text('Not logged in'));
     }
-    return CommunityDashboard(currentUserID: _currentUser!.id);
+    return CommunityHubScreen(currentUserID: _currentUser!.id);
   }
 }

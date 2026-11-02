@@ -563,6 +563,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                         onPressed: () => FilePreviewHelper.previewNetworkFile(
                           context,
                           _profile!.resumeURL!,
+                          title: '${_profile!.fullName} - Resume',
                         ),
                         icon: const Icon(Icons.visibility_outlined, size: 16),
                         label: const Text('View'),
