@@ -481,6 +481,11 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                       icon: const Icon(Icons.menu_book_outlined, color: AppColors.textMuted, size: 20),
                     ),
                     _buildField(
+                      label: 'Career Goal',
+                      value: _profile!.careerGoal,
+                      icon: const Icon(Icons.flag_outlined, color: AppColors.textMuted, size: 20),
+                    ),
+                    _buildField(
                       label: 'LinkedIn URL',
                       value: _profile!.linkedInURL,
                       icon: const FaIcon(FontAwesomeIcons.linkedin, color: AppColors.textMuted, size: 18),

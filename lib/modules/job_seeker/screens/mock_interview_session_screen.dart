@@ -345,7 +345,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
               fit: BoxFit.cover,
               child: SizedBox(
                 // previewSize is landscape, so swap for portrait
-                width: cam!.value.previewSize?.height ?? 300,
+                width: cam.value.previewSize?.height ?? 300,
                 height: cam.value.previewSize?.width ?? 400,
                 child: CameraPreview(cam),
               ),

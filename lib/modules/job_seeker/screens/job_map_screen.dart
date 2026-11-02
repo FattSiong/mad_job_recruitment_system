@@ -284,7 +284,7 @@ class _JobMapScreenState extends State<JobMapScreen> {
       return Marker(
         markerId: MarkerId(entry.key),
         position: LatLng(first.latitude, first.longitude),
-        zIndex: isSelected ? 2.0 : (count > 1 ? 1.0 : 0.0),
+        zIndexInt: isSelected ? 2 : (count > 1 ? 1 : 0), // selected on top, then groups
         consumeTapEvents: true, // the app moves the map itself
         icon: BitmapDescriptor.defaultMarkerWithHue(
           isSelected

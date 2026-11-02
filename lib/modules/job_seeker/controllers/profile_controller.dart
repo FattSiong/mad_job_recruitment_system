@@ -101,6 +101,7 @@ class ProfileController {
         profilePictureURL: full.profilePictureURL,
         location: full.location,
         bio: full.bio,
+        careerGoal: full.careerGoal,
         linkedInURL: full.linkedInURL,
         gitHubURL: full.gitHubURL,
         education: full.education,

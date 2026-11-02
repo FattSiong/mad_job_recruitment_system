@@ -12,6 +12,7 @@ class JobSeekerModel {
   final String? phoneNumber;
   final String? location;
   final String? bio;
+  final String? careerGoal; // also given to the AI Career Advisor and Skill Gap Analysis
   final String? linkedInURL;
   final String? gitHubURL;
 
@@ -28,6 +29,7 @@ class JobSeekerModel {
     this.phoneNumber,
     this.location,
     this.bio,
+    this.careerGoal,
     this.linkedInURL,
     this.gitHubURL,
     this.education = const [],
@@ -48,13 +50,27 @@ class JobSeekerModel {
       phoneNumber: json['phoneNumber'] as String?,
       location: json['location'] as String?,
       bio: json['bio'] as String?,
+      careerGoal: json['careerGoal'] as String?,
       linkedInURL: json['linkedInURL'] as String?,
       gitHubURL: json['gitHubURL'] as String?,
 
-      // Parse lists
-      education: eduList.map((e) => EducationModel.fromJson(e)).toList(),
-      workExperience: expList.map((e) => WorkExperienceModel.fromJson(e)).toList(),
+      // Parse lists, newest first (same order as the Education / Work Experience screens)
+      education: eduList.map((e) => EducationModel.fromJson(e)).toList()
+        ..sort((a, b) => _newestFirst(a.isCurrent, a.startDate, a.endDate,
+            b.isCurrent, b.startDate, b.endDate)),
+      workExperience: expList.map((e) => WorkExperienceModel.fromJson(e)).toList()
+        ..sort((a, b) => _newestFirst(a.isCurrent, a.startDate, a.endDate,
+            b.isCurrent, b.startDate, b.endDate)),
     );
+  }
+
+  /// Current entries first, then the latest start date, then the latest end date.
+  static int _newestFirst(bool aCurrent, DateTime aStart, DateTime? aEnd,
+      bool bCurrent, DateTime bStart, DateTime? bEnd) {
+    if (aCurrent != bCurrent) return aCurrent ? -1 : 1;
+    final byStart = bStart.compareTo(aStart);
+    if (byStart != 0) return byStart;
+    return (bEnd ?? bStart).compareTo(aEnd ?? aStart);
   }
 
   /// Null fields are sent too, so clearing a field in the app clears it in the database.
@@ -68,6 +84,7 @@ class JobSeekerModel {
       'phoneNumber': phoneNumber,
       'location': location,
       'bio': bio,
+      'careerGoal': careerGoal,
       'linkedInURL': linkedInURL,
       'gitHubURL': gitHubURL,
     };

@@ -323,7 +323,7 @@ class _SkillGapAnalysisScreenState extends State<SkillGapAnalysisScreen> {
   Widget _buildReadinessCard() {
     final r = _readiness;
     if (r == null) {
-      return SurfaceCard(children: const [
+      return const SurfaceCard(children: [
         Text('Unable to load your profile. Please try again later.',
             style: TextStyle(color: AppColors.textMuted)),
       ]);

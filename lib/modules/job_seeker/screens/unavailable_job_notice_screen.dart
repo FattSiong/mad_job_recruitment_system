@@ -7,6 +7,7 @@ class UnavailableJobNoticeScreen extends StatelessWidget {
   final String? jobTitle;
 
   const UnavailableJobNoticeScreen({
+    super.key,
     required this.isDeleted,
     this.jobTitle,
   });

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../../../core/utils/data_load_exception.dart';
 import '../../../core/utils/file_picker_helper.dart';
 import '../../../models/job_seeker_model.dart';
+import '../../../models/profile_check.dart';
 import '../../../models/skill_model.dart';
 import '../../../services/user_directory.dart';
 import 'profile_controller.dart';
@@ -16,6 +17,7 @@ class ProfileEdits {
   final String phone;
   final String location;
   final String bio;
+  final String careerGoal;
   final String linkedIn;
   final String gitHub;
 
@@ -24,6 +26,7 @@ class ProfileEdits {
     required this.phone,
     required this.location,
     required this.bio,
+    required this.careerGoal,
     required this.linkedIn,
     required this.gitHub,
   });
@@ -62,6 +65,54 @@ class MyProfileController extends ChangeNotifier {
   bool get isUploadingResume => _isUploadingResume;
   File? get newPhoto => _newPhoto;
   bool get photoRemoved => _removePhoto;
+
+  // ---------------------------------------------------------------------
+  // Profile checklist ("Profile 70% complete")
+  // ---------------------------------------------------------------------
+
+  /// Each [ProfileCheck] and whether it is filled in (saved data only).
+  Map<ProfileCheck, bool> get checklist {
+    final p = _profile;
+    bool filled(String? value) => value != null && value.trim().isNotEmpty;
+    return {
+      ProfileCheck.photo: filled(p?.profilePictureURL),
+      ProfileCheck.phone: filled(p?.phoneNumber),
+      ProfileCheck.location: filled(p?.location),
+      ProfileCheck.bio: filled(p?.bio),
+      ProfileCheck.careerGoal: filled(p?.careerGoal),
+      ProfileCheck.resume: filled(p?.resumeURL),
+      ProfileCheck.experience: p?.workExperience.isNotEmpty ?? false,
+      ProfileCheck.education: p?.education.isNotEmpty ?? false,
+      ProfileCheck.skills: _skills.isNotEmpty,
+    };
+  }
+
+  List<ProfileCheck> get missingItems =>
+      checklist.entries.where((e) => !e.value).map((e) => e.key).toList();
+
+  /// 0-100.
+  int get completionPercent {
+    final items = checklist;
+    final done = items.values.where((v) => v).length;
+    return (done * 100 / items.length).round();
+  }
+
+  /// True if [edits] (what is in the form) or the photo differ from the
+  /// saved profile, i.e. Cancel / Back would lose something.
+  bool hasUnsavedChanges(ProfileEdits edits) {
+    final p = _profile;
+    if (p == null || !_isEditing) return false;
+    String n(String? value) => (value ?? '').trim();
+    return _newPhoto != null ||
+        _removePhoto ||
+        n(edits.fullName) != n(p.fullName) ||
+        n(edits.phone) != n(p.phoneNumber) ||
+        n(edits.location) != n(p.location) ||
+        n(edits.bio) != n(p.bio) ||
+        n(edits.careerGoal) != n(p.careerGoal) ||
+        n(edits.linkedIn) != n(p.linkedInURL) ||
+        n(edits.gitHub) != n(p.gitHubURL);
+  }
 
   bool get hasPhoto =>
       _newPhoto != null ||
@@ -163,6 +214,7 @@ class MyProfileController extends ChangeNotifier {
         phoneNumber: orNull(edits.phone),
         location: orNull(edits.location),
         bio: orNull(edits.bio),
+        careerGoal: orNull(edits.careerGoal),
         linkedInURL: orNull(edits.linkedIn),
         gitHubURL: orNull(edits.gitHub),
         education: current.education,

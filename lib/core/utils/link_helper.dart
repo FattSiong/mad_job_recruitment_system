@@ -22,6 +22,19 @@ class LinkHelper {
     return uri;
   }
 
+  /// Form validator for a profile link that must be on [site]
+  /// (e.g. 'linkedin.com'). Empty is allowed. "linkedin.com/in/aisyah" and
+  /// "www.linkedin.com/in/aisyah" pass; "linkedin.com.fake.site" does not.
+  static String? validateSiteLink(String? value, {required String site, required String name}) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) return null;
+    final uri = toWebUri(text);
+    if (uri == null) return 'Enter a valid $name link';
+    final host = uri.host.toLowerCase();
+    if (host != site && !host.endsWith('.$site')) return 'Use a $site link';
+    return null;
+  }
+
   /// Opens [input] in the browser or app. Returns false if the link is not
   /// valid or nothing on the phone can open it (never throws).
   static Future<bool> openExternal(String input) async {
