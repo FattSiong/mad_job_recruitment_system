@@ -22,24 +22,51 @@ class InterviewService {
 
   // 👉 2. Employer starts the interview
   // This changes the status, records the start time, and generates the unique room code!
-  Future<String> startInterview(String interviewRoomID) async {
+  Future<String> startInterview(
+    String interviewRoomID, {
+    bool? aiAnalyticsEnabled,
+  }) async {
     try {
       // Generate a unique room code (You can replace this with an Agora token later if needed)
       final generatedRoomCode = 'room_${DateTime.now().millisecondsSinceEpoch}';
 
-      await _supabase
-          .from('InterviewRoom')
-          .update({
+      final Map<String, dynamic> updates = {
         'status': 'active',
         'roomCode': generatedRoomCode,
         'startedAt': DateTime.now().toIso8601String(), // Log exact start time
-      })
+        'employerHasLeft': false,
+        'seekerHasLeft': false,
+      };
+      if (aiAnalyticsEnabled != null) {
+        updates['aiAnalyticsEnabled'] = aiAnalyticsEnabled;
+      }
+
+      await _supabase
+          .from('InterviewRoom')
+          .update(updates)
           .eq('roomID', interviewRoomID);
 
       return generatedRoomCode;
     } catch (e) {
       print('Error starting interview: $e');
       throw Exception('Failed to start the interview.');
+    }
+  }
+
+  /// Updates whether Post-Interview AI Analytics recording is enabled for this room.
+  Future<bool> setAiAnalyticsEnabled(
+    String interviewRoomID,
+    bool enabled,
+  ) async {
+    try {
+      await _supabase
+          .from('InterviewRoom')
+          .update({'aiAnalyticsEnabled': enabled})
+          .eq('roomID', interviewRoomID);
+      return true;
+    } catch (e) {
+      print('Error updating AI analytics toggle: $e');
+      return false;
     }
   }
 
@@ -58,14 +85,31 @@ class InterviewService {
     }
   }
 
-  // 👉 4. Real-time listener for the Job Seeker's Lobby
-  // The seeker's app will quietly listen to this stream. When the employer triggers
-  // startInterview() above, this stream will instantly push the new 'active' status and roomCode!
+  // 👉 4. Real-time listener for the Job Seeker's Lobby & Call Screen
+  // Filter client-side in Dart to avoid Supabase Realtime camelCase `.eq('roomID', ...)` filter mismatches.
   Stream<List<Map<String, dynamic>>> listenToInterviewStatus(String interviewRoomID) {
     return _supabase
         .from('InterviewRoom')
         .stream(primaryKey: ['roomID'])
-        .eq('roomID', interviewRoomID);
+        .map(
+          (rows) => rows
+              .where((row) => row['roomID']?.toString() == interviewRoomID)
+              .toList(),
+        );
+  }
+
+  /// Fetches the latest room record directly from Supabase.
+  Future<Map<String, dynamic>?> getRoomById(String interviewRoomID) async {
+    try {
+      return await _supabase
+          .from('InterviewRoom')
+          .select()
+          .eq('roomID', interviewRoomID)
+          .maybeSingle();
+    } catch (e) {
+      print('Error fetching room by ID: $e');
+      return null;
+    }
   }
 
   Future<void> leaveInterview(String currentRoomID, bool isEmployer) async {

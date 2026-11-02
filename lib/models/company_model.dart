@@ -14,6 +14,19 @@ class CompanyModel {
   final DateTime? subscriptionEndsAt;
   final String? companyLogoURL;
 
+  bool get isSubscriptionExpired {
+    final normalized = currentPlanType.trim().toUpperCase();
+    if (normalized == 'FREE' || normalized.isEmpty) return false;
+    if (subscriptionEndsAt == null) return false;
+    return DateTime.now().isAfter(subscriptionEndsAt!);
+  }
+
+  bool get hasActiveSubscription {
+    final normalized = currentPlanType.trim().toUpperCase();
+    if (normalized == 'FREE' || normalized.isEmpty) return false;
+    return !isSubscriptionExpired;
+  }
+
   CompanyModel({
     this.companyID,
     required this.name,

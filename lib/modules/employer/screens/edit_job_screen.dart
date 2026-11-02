@@ -113,8 +113,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
   }
 
   bool get _hasActiveSubscription {
-    if (_jobCompany == null) return false;
-    return _jobCompany!.currentPlanType.toUpperCase() != 'FREE';
+    return _jobCompany?.hasActiveSubscription ?? false;
   }
 
   @override

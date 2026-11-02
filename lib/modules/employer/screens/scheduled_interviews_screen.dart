@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../models/interview_schedule_model.dart';
+import '../../../models/post_interview_report_model.dart';
+import 'post_interview_ai_report_screen.dart';
 import '../../../services/employer_service.dart';
 import '../../../services/interview_service.dart';
 import '../../community/screens/interview_lobby_screen.dart';
@@ -18,6 +20,7 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
   final _employerService = EmployerService();
   bool _isLoading = true;
   List<Map<String, dynamic>> _interviews = [];
+  Map<String, PostInterviewReportModel> _reportsByScheduleId = {};
 
   @override
   void initState() {
@@ -28,9 +31,16 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
   Future<void> _loadInterviews() async {
     setState(() => _isLoading = true);
     final data = await _employerService.getScheduledInterviews();
+    final scheduleIds = data
+        .map((e) => (e['scheduleID'] ?? '').toString())
+        .where((id) => id.isNotEmpty)
+        .toList();
+    final reportsMap = await _employerService
+        .getPostInterviewReportsForSchedules(scheduleIds);
 
     if (mounted) {
       setState(() {
+        _reportsByScheduleId = reportsMap;
         _interviews = data.where((item) {
           final applicant = item['JobApplicant'] ?? {};
           final job = applicant['Job'] ?? {};
@@ -58,6 +68,16 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
     }
   }
 
+  Future<void> _pushLobbyAndRefresh(
+    BuildContext navContext,
+    Route<dynamic> route,
+  ) async {
+    await Navigator.push(navContext, route);
+    if (mounted) {
+      await _loadInterviews();
+    }
+  }
+
   Future<void> _startInternalInterview(String? scheduleID) async {
     if (scheduleID == null) return;
 
@@ -78,7 +98,7 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
             roomData['interviewRoomID'] ?? roomData['roomID'] ?? roomData['id'];
 
         if (actualRoomID != null) {
-          Navigator.push(
+          await _pushLobbyAndRefresh(
             context,
             MaterialPageRoute(
               builder: (context) =>
@@ -602,6 +622,11 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
                   ? 'App Internal Interview'
                   : (schedule.meetingLink ?? 'No link provided'),
             ),
+            if (schedule.scheduleID != null &&
+                _reportsByScheduleId[schedule.scheduleID!] != null) ...[
+              const SizedBox(height: 14),
+              _buildAiReportBanner(_reportsByScheduleId[schedule.scheduleID!]!),
+            ],
             if (isPending) ...[
               const SizedBox(height: 16),
               Container(
@@ -820,6 +845,90 @@ class _ScheduledInterviewsScreenState extends State<ScheduledInterviewsScreen> {
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildAiReportBanner(PostInterviewReportModel report) {
+    final Color scoreCol = report.overallScore >= 75
+        ? const Color(0xFF2D8A5D)
+        : (report.overallScore >= 50
+            ? const Color(0xFFC28A22)
+            : const Color(0xFFC24E4E));
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F5FF),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE4D9FF)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.auto_awesome_rounded,
+                size: 18,
+                color: Color(0xFF6B4FD3),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'AI Report · ${report.recommendation}',
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF1B2433),
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: scoreCol.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '${report.overallScore}/100',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: scoreCol,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () async {
+                await _pushLobbyAndRefresh(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        PostInterviewAiReportScreen(initialReport: report),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.analytics_outlined, size: 17),
+              label: const Text('View AI Interview Report'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF6B4FD3),
+                backgroundColor: Colors.white,
+                side: const BorderSide(color: Color(0xFFD5C4FF)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

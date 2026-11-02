@@ -13,6 +13,8 @@ import '../../../shared_widgets/skill_chips.dart';
 import '../../chat/chat_navigation.dart';
 import '../../job_seeker/controllers/skill_controller.dart';
 import 'interview_scheduling_screen.dart';
+import '../../../models/post_interview_report_model.dart';
+import 'post_interview_ai_report_screen.dart';
 
 class ApplicantDetailScreen extends StatefulWidget {
   final Map<String, dynamic> applicantData;
@@ -47,6 +49,7 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
   String _scheduleCandidateStatus = 'pending';
   String? _scheduleRejectionReason;
   String? _schedulePreferredTime;
+  PostInterviewReportModel? _postInterviewReport;
 
   bool get _isJobDeleted => widget.jobStatus.toLowerCase() == 'deleted';
 
@@ -57,6 +60,7 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
     _loadAnswers();
     _checkIfScheduled();
     _loadSkills();
+    _loadPostInterviewReport();
   }
 
   Future<void> _loadSkills() async {
@@ -542,6 +546,10 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
                       : SkillChips(skills: _skills),
             ),
             const SizedBox(height: 18),
+            if (_postInterviewReport != null) ...[
+              _buildPostInterviewReportCard(_postInterviewReport!),
+              const SizedBox(height: 18),
+            ],
             if (aiScore != null ||
                 (widget.applicantData['aiFeedback'] ?? '')
                     .toString()
@@ -731,6 +739,188 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _loadPostInterviewReport() async {
+    final applicantId = (widget.applicantData['applicantID'] ?? '').toString();
+    if (applicantId.isEmpty) return;
+    final report =
+        await _employerService.getPostInterviewReportByApplicantId(applicantId);
+    if (!mounted) return;
+    setState(() => _postInterviewReport = report);
+  }
+
+  Widget _buildPostInterviewReportCard(PostInterviewReportModel report) {
+    final int overall = report.overallScore;
+    Color badgeFg = const Color(0xFFC28A22);
+    Color badgeBg = const Color(0xFFFEF3DC);
+    if (overall >= 75) {
+      badgeFg = const Color(0xFF2D8A5D);
+      badgeBg = const Color(0xFFE5F6ED);
+    } else if (overall < 50) {
+      badgeFg = const Color(0xFFC24E4E);
+      badgeBg = const Color(0xFFFDECEC);
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFF8F5FF), Color(0xFFEEF4FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFE2D8FF)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6B4FD3),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.analytics_outlined,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Post-Interview AI Report',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF1B2433),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${report.recommendation} · ${report.formattedDuration}',
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF687588),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: badgeBg,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '$overall / 100',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                    color: badgeFg,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildPostReportMiniChip('Role Fit ${report.contentScore}/100'),
+              _buildPostReportMiniChip('Delivery ${report.deliveryScore}/100'),
+              if (report.estimatedWpm > 0)
+                _buildPostReportMiniChip('~${report.estimatedWpm} WPM'),
+            ],
+          ),
+          if (report.summary.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text(
+                report.summary,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  height: 1.48,
+                  color: Color(0xFF334155),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        PostInterviewAiReportScreen(initialReport: report),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+              label: const Text(
+                'View Full AI Report & PDF',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF163B65),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPostReportMiniChip(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFD8E4F5)),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF163B65),
+        ),
       ),
     );
   }
