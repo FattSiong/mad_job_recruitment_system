@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/constants/supabase_constants.dart';
 import 'services/notification_service.dart';
+import 'services/password_recovery_service.dart';
 import 'services/push_service.dart';
 import 'shared_widgets/auth_gate.dart';
 
@@ -24,6 +25,9 @@ Future<void> main() async {
     url: SupabaseConstants.supabaseUrl,
     anonKey: SupabaseConstants.supabaseAnonKey,
   );
+
+  // Password reset link (myapp://reset-password) -> "Set a new password" screen.
+  PasswordRecoveryService.initialize();
 
   // Initialize push notifications and incoming call notification handling.
   await NotificationService.initialize();
