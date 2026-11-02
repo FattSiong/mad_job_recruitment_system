@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/job_model.dart';
+import '../controllers/application_controller.dart';
 import '../controllers/bookmarked_controller.dart';
 import 'job_application_screen.dart';
 import 'report_job_screen.dart';
+import '../../../core/theme/app_colors.dart';
 
 class JobDetailsScreen extends StatefulWidget {
   final JobModel job;
@@ -21,7 +23,12 @@ class JobDetailsScreen extends StatefulWidget {
 
 class _JobDetailsScreenState extends State<JobDetailsScreen> {
   final BookmarkedController _bookmarkController = BookmarkedController();
+  final ApplicationController _applicationController = ApplicationController();
   final ScrollController _scrollController = ScrollController();
+
+  // Fix #1: block applying twice, whichever screen the job was opened from
+  bool _hasApplied = false;
+  bool _isCheckingApplied = true;
 
   bool _isBookmarked = false;
   bool _isBookmarkUpdating = false;
@@ -33,6 +40,35 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     super.initState();
     _scrollController.addListener(_scrollListener);
     _checkBookmarkStatus();
+    _checkAppliedStatus();
+  }
+
+  Future<void> _checkAppliedStatus() async {
+    if (widget.disableApplyButton || widget.job.jobID == null) {
+      _isCheckingApplied = false; // runs synchronously inside initState, no setState needed
+      return;
+    }
+    final applied = await _applicationController.hasApplied(widget.job.jobID!);
+    if (mounted) {
+      setState(() {
+        _hasApplied = applied;
+        _isCheckingApplied = false;
+      });
+    }
+  }
+
+  bool get _alreadyApplied => widget.disableApplyButton || _hasApplied;
+
+  Future<void> _openApplication() async {
+    final applied = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => JobApplicationScreen(job: widget.job),
+      ),
+    );
+    if (applied == true && mounted) {
+      setState(() => _hasApplied = true);
+    }
   }
 
   @override
@@ -82,7 +118,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
         context,
         message: 'Failed to update bookmark.',
         icon: Icons.error_outline_rounded,
-        accentColor: const Color(0xFFE27D60),
+        accentColor: AppColors.coral,
       );
       return;
     }
@@ -94,7 +130,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
           ? Icons.bookmark_added_rounded
           : Icons.bookmark_remove_rounded,
       accentColor:
-      actualState ? const Color(0xFF1E8F8B) : const Color(0xFF687588),
+      actualState ? AppColors.teal : AppColors.textMuted,
     );
 
   }
@@ -243,7 +279,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF687588),
+                    color: AppColors.textMuted,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -252,7 +288,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF1B2433),
+                    color: AppColors.textDark,
                     height: 1.4,
                   ),
                 ),
@@ -284,7 +320,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
             style: const TextStyle(
               fontSize: 21,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF1B2433),
+              color: AppColors.textDark,
             ),
           ),
           if (subtitle != null) ...[
@@ -293,7 +329,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
               subtitle,
               style: const TextStyle(
                 fontSize: 14,
-                color: Color(0xFF687588),
+                color: AppColors.textMuted,
                 height: 1.4,
               ),
             ),
@@ -316,7 +352,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
             style: const TextStyle(
               fontSize: 15,
               height: 1.75,
-              color: Color(0xFF1B2433),
+              color: AppColors.textDark,
             ),
           );
 
@@ -337,7 +373,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                 style: const TextStyle(
                   fontSize: 15,
                   height: 1.75,
-                  color: Color(0xFF1B2433),
+                  color: AppColors.textDark,
                 ),
                 maxLines: _isDescriptionExpanded ? null : 8,
                 overflow:
@@ -355,7 +391,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                     });
                   },
                   style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF163B65),
+                    foregroundColor: AppColors.primary,
                     padding: EdgeInsets.zero,
                     minimumSize: const Size(0, 0),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -389,21 +425,21 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
             icon: Icons.attach_money_rounded,
             title: 'Salary',
             value: _formatSalaryOnly(),
-            color: const Color(0xFF163B65),
+            color: AppColors.primary,
           ),
           const SizedBox(height: 12),
           _buildInfoTile(
             icon: Icons.work_outline_rounded,
             title: 'Job Type',
             value: widget.job.jobType,
-            color: const Color(0xFF1E8F8B),
+            color: AppColors.teal,
           ),
           const SizedBox(height: 12),
           _buildInfoTile(
             icon: Icons.location_on_outlined,
             title: 'Location',
             value: widget.job.locationName ?? 'Location unavailable',
-            color: const Color(0xFFE27D60),
+            color: AppColors.coral,
           ),
           const SizedBox(height: 12),
           _buildInfoTile(
@@ -412,7 +448,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
             value: widget.job.minExperienceYears <= 0
                 ? 'No minimum experience required'
                 : '${widget.job.minExperienceYears} year(s) minimum',
-            color: const Color(0xFFE4A73B),
+            color: AppColors.statusPending,
           ),
         ],
       ),
@@ -424,7 +460,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     final bottomContentSpacing = 120.0;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FB),
+      backgroundColor: AppColors.background,
       body: Stack(
         children: [
           SafeArea(
@@ -447,7 +483,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                           padding: const EdgeInsets.all(24),
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [Color(0xFF163B65), Color(0xFF335D8A)],
+                              colors: [AppColors.primary, AppColors.primaryLight],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
@@ -586,18 +622,11 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
-                          onPressed: widget.disableApplyButton
+                          onPressed: (_alreadyApplied || _isCheckingApplied)
                               ? null
-                              : () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => JobApplicationScreen(job: widget.job),
-                              ),
-                            );
-                          },
+                              : _openApplication,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF163B65),
+                            backgroundColor: AppColors.primary,
                             foregroundColor: Colors.white,
                             disabledBackgroundColor: Colors.grey.shade300,
                             disabledForegroundColor: Colors.grey.shade600,
@@ -607,11 +636,17 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                               borderRadius: BorderRadius.circular(16),
                             ),
                           ),
-                          icon: Icon(
-                            widget.disableApplyButton ? Icons.check_circle_outline : Icons.send_rounded,
-                          ),
+                          icon: _isCheckingApplied
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : Icon(
+                                  _alreadyApplied ? Icons.check_circle_outline : Icons.send_rounded,
+                                ),
                           label: Text(
-                            widget.disableApplyButton ? 'Already Applied' : 'Apply Now',
+                            _alreadyApplied ? 'Already Applied' : 'Apply Now',
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,

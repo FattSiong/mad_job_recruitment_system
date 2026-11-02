@@ -1,9 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../models/reported_job_model.dart';
+import '../../../core/constants/table_constants.dart';
+import '../../../core/utils/session_helper.dart';
 
 class ReportController {
   final _supabase = Supabase.instance.client;
-  String get _currentSeekerID => Supabase.instance.client.auth.currentUser!.id;
+  String get _currentSeekerID => SessionHelper.requireUserId();
 
   Future<bool> submitJobReport({
     required String jobId,
@@ -20,11 +23,11 @@ class ReportController {
       );
 
       // 2. Insert using toJson()
-      await _supabase.from('ReportedJob').insert(newReport.toJson());
+      await _supabase.from(TableConstants.reportedJob).insert(newReport.toJson());
 
       return true;
     } catch (e) {
-      print('Error submitting report: $e');
+      debugPrint('Error submitting report: $e');
       return false;
     }
   }

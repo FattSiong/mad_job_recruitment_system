@@ -16,75 +16,43 @@ class JobCard extends StatefulWidget {
 
 class _JobCardState extends State<JobCard> {
   final BookmarkedController _bookmarkedController = BookmarkedController();
-  bool _isBookmarked = false;
-  bool _isLoading = true;
+  bool _isUpdating = false;
 
   @override
   void initState() {
     super.initState();
-    _checkInitialBookmarkState();
-
-    // 👉 ADDED: Listen to the global notifier so the card updates no matter what screen you are on
-    BookmarkedController.bookmarkNotifier.addListener(_onGlobalBookmarkChanged);
-  }
-
-  // 👉 ADDED: This triggers whenever a bookmark is toggled anywhere in the app
-  void _onGlobalBookmarkChanged() {
-    if (mounted) {
-      _checkInitialBookmarkState();
-    }
-  }
-
-  @override
-  void dispose() {
-    // 👉 ADDED: Always clean up the listener to prevent memory leaks
-    BookmarkedController.bookmarkNotifier.removeListener(_onGlobalBookmarkChanged);
-    super.dispose();
-  }
-
-  Future<void> _checkInitialBookmarkState() async {
-    if (widget.job.jobID == null) return;
-
-    final isBookmarked = await _bookmarkedController.isJobBookmarked(widget.job.jobID!);
-    if (mounted) {
-      setState(() {
-        _isBookmarked = isBookmarked;
-        _isLoading = false;
-      });
-    }
+    // One shared query for all cards (no-op if already loaded)
+    _bookmarkedController.ensureBookmarksLoaded();
   }
 
   Future<void> _handleBookmarkTap() async {
-    if (widget.job.jobID == null || _isLoading) return;
+    final jobId = widget.job.jobID;
+    if (jobId == null || _isUpdating) return;
 
-    // Save the old state to pass into the controller
-    bool previousState = _isBookmarked;
+    final previousState = BookmarkedController.bookmarkedIds.value.contains(jobId);
+    setState(() => _isUpdating = true);
 
-    setState(() {
-      _isBookmarked = !_isBookmarked;
-      _isLoading = true;
-    });
+    final newState = await _bookmarkedController.toggleBookmark(jobId, previousState);
 
-    final newState = await _bookmarkedController.toggleBookmark(widget.job.jobID!, previousState);
+    if (!mounted) return;
+    setState(() => _isUpdating = false);
 
-    if (mounted) {
-      setState(() {
-        _isBookmarked = newState;
-        _isLoading = false;
-      });
-
+    if (newState == previousState) {
       SnackBarHelper.showStyled(
         context,
-        message: _isBookmarked ? 'Job bookmarked!' : 'Bookmark removed.',
-        icon: _isBookmarked
-            ? Icons.bookmark_added_rounded
-            : Icons.bookmark_remove_rounded,
-        accentColor: _isBookmarked
-            ? const Color(0xFF1E8F8B)
-            : const Color(0xFF687588),
+        message: 'Could not update bookmark. Please try again.',
+        icon: Icons.error_outline_rounded,
+        accentColor: AppColors.coral,
       );
-
+      return;
     }
+
+    SnackBarHelper.showStyled(
+      context,
+      message: newState ? 'Job bookmarked!' : 'Bookmark removed.',
+      icon: newState ? Icons.bookmark_added_rounded : Icons.bookmark_remove_rounded,
+      accentColor: newState ? AppColors.teal : AppColors.textMuted,
+    );
   }
 
   String _formatSalary(String range, String? type) {
@@ -119,10 +87,17 @@ class _JobCardState extends State<JobCard> {
                   ),
                   GestureDetector(
                     onTap: _handleBookmarkTap,
-                    child: Icon(
-                      _isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                      color: _isBookmarked ? AppColors.primaryBlue : Colors.grey.shade500,
-                      size: 26,
+                    // Rebuilds only this icon when the shared bookmark set changes
+                    child: ValueListenableBuilder<Set<String>>(
+                      valueListenable: BookmarkedController.bookmarkedIds,
+                      builder: (context, ids, _) {
+                        final isBookmarked = ids.contains(widget.job.jobID);
+                        return Icon(
+                          isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+                          color: isBookmarked ? AppColors.primary : Colors.grey.shade500,
+                          size: 26,
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -168,17 +143,17 @@ class _JobCardState extends State<JobCard> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.primaryBlue.withValues(alpha: 0.1),
+        color: AppColors.primary.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: AppColors.primaryBlue),
+          Icon(icon, size: 14, color: AppColors.primary),
           const SizedBox(width: 4),
           Text(
             label,
-            style: const TextStyle(fontSize: 12, color: AppColors.primaryBlue, fontWeight: FontWeight.w600),
+            style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600),
           ),
         ],
       ),

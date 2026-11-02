@@ -412,3 +412,32 @@ entrypoint = "./functions/check-expirations/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/check-expirations/*.html" ]
+
+[functions.career-advisor]
+enabled = true
+# The function verifies the user's token itself (supabase.auth.getUser),
+# which also works with the new sb_publishable_ API keys.
+verify_jwt = false
+import_map = "./functions/career-advisor/deno.json"
+entrypoint = "./functions/career-advisor/index.ts"
+
+[functions.mock-interview]
+enabled = true
+# Verifies the user's token inside the function (works with sb_publishable_ keys).
+verify_jwt = false
+import_map = "./functions/mock-interview/deno.json"
+entrypoint = "./functions/mock-interview/index.ts"
+
+[functions.send-push]
+enabled = true
+# Called only by the database trigger; checks the x-push-secret header itself.
+verify_jwt = false
+import_map = "./functions/send-push/deno.json"
+entrypoint = "./functions/send-push/index.ts"
+
+[functions.skill-gap-analysis]
+enabled = true
+# Verifies the user's token inside the function (works with sb_publishable_ keys).
+verify_jwt = false
+import_map = "./functions/skill-gap-analysis/deno.json"
+entrypoint = "./functions/skill-gap-analysis/index.ts"

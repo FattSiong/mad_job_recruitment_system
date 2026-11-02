@@ -1,0 +1,35 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'data_load_exception.dart';
+
+/// Thrown when an action needs a logged-in user but the session has ended
+/// (signed out on another device, refresh token expired, etc.).
+/// It is a [DataLoadException], so screens that already show load errors
+/// display this message without extra code.
+class SessionExpiredException extends DataLoadException {
+  SessionExpiredException() : super('Your session has expired. Please log in again.');
+}
+
+class SessionHelper {
+  SessionHelper._();
+
+  static bool _manualSignOut = false;
+
+  /// ID of the logged-in user, or throws [SessionExpiredException].
+  static String requireUserId() {
+    final id = Supabase.instance.client.auth.currentUser?.id;
+    if (id == null) throw SessionExpiredException();
+    return id;
+  }
+
+  /// Call just before the user taps Logout, so the dashboard doesn't show
+  /// "session expired" for a sign-out the user asked for.
+  static void markManualSignOut() => _manualSignOut = true;
+
+  /// Returns true (once) if the last sign-out was started by the user.
+  static bool consumeManualSignOut() {
+    final wasManual = _manualSignOut;
+    _manualSignOut = false;
+    return wasManual;
+  }
+}

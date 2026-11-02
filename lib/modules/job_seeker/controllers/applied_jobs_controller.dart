@@ -1,16 +1,26 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/utils/data_load_exception.dart';
 import '../../../models/job_applicant_model.dart';
 import '../../../models/job_model.dart';
+import '../../../core/constants/table_constants.dart';
+import '../../../core/utils/session_helper.dart';
 
 class AppliedJobsController {
   final _supabase = Supabase.instance.client;
-  String get _currentSeekerID => Supabase.instance.client.auth.currentUser!.id;
+  String get _currentSeekerID => SessionHelper.requireUserId();
+
+  /// Bump this to make the Applied and Interviews tabs reload
+  /// (after applying for a job, or when the My Jobs tab is opened).
+  static final ValueNotifier<int> refreshSignal = ValueNotifier(0);
+
+  static void notifyChanged() => refreshSignal.value++;
 
   /// Fetches all jobs the user has applied for
   Future<List<Map<String, dynamic>>> fetchAppliedJobs() async {
     try {
       final response = await _supabase
-          .from('JobApplicant')
+          .from(TableConstants.jobApplicant)
           .select('*, Job (*, Company(name))')
           .eq('seekerID', _currentSeekerID)
           .order('appliedAt', ascending: false);
@@ -33,8 +43,10 @@ class AppliedJobsController {
         };
       }).toList();
     } catch (e) {
-      print('Error fetching applied jobs: $e');
-      return [];
+      debugPrint('Error fetching applied jobs: $e');
+      throw DataLoadException(
+        'Unable to load your applications. Please check your connection and try again.',
+      );
     }
   }
 }

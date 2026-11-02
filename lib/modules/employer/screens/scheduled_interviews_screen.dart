@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../../models/interveiw_schedule_model.dart';
+import '../../../models/interview_schedule_model.dart';
 import '../../../services/employer_service.dart';
 import '../../../services/interview_service.dart';
 import '../../community/screens/interview_lobby_screen.dart';

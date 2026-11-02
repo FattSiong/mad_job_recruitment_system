@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "320858595433",
+    "project_id": "final-year-project-207",
+    "storage_bucket": "final-year-project-207.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:320858595433:android:fc5208e0a80228b567c2f8",
+        "android_client_info": {
+          "package_name": "com.bolehworks.job_recruitment_system"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDw88iNtdFJxI-iH9apYXbFNbjGjqObvnA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
