@@ -43,6 +43,10 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
   String? _conversationID;
   String? _conversationTitle;
   bool _isLoadingHistory = false;
+
+  /// Increases on every conversation switch, so a slow, older load can't
+  /// show its messages under the conversation the user opened afterwards.
+  int _historyRequest = 0;
   bool _isSending = false;
   bool _hasMessageText = false;
 
@@ -72,6 +76,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
   // ---------------------------------------------------------------------
 
   Future<void> _openConversation(String conversationID, {String? title}) async {
+    final request = ++_historyRequest;
     setState(() {
       _isLoadingHistory = true;
       _conversationID = conversationID;
@@ -80,7 +85,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
     });
 
     final messages = await _controller.fetchMessages(conversationID);
-    if (!mounted) return;
+    if (!mounted || request != _historyRequest) return; // a newer tap won
 
     setState(() {
       _messages.addAll(messages);
@@ -91,7 +96,9 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
 
   void _startNewConversation() {
     if (_isSending) return;
+    _historyRequest++; // ignore any conversation still loading
     setState(() {
+      _isLoadingHistory = false;
       _conversationID = null;
       _conversationTitle = null;
       _messages.clear();

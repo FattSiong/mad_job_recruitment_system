@@ -242,8 +242,15 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
     await _stopRecorderOnly();
     final path = await _recorder.stop() ?? _recordingPath;
 
+    // The user may have left the screen while the recorder was stopping.
+    if (!mounted) {
+      await _deleteRecordingFile();
+      return;
+    }
+
     if (path == null || _elapsed < _minAnswerLength) {
       await _deleteRecordingFile();
+      if (!mounted) return;
       setState(() => _stage = _answers.containsKey(_current.index) ? _Stage.reviewed : _Stage.ready);
       _showError('That answer was too short. Tap the mic and try again.');
       return;

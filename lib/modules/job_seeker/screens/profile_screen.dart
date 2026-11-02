@@ -6,11 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/file_picker_helper.dart';
 import '../../../core/utils/file_preview_helper.dart';
+import '../../../core/utils/link_helper.dart';
 import '../../../core/utils/session_helper.dart';
 import '../../../models/education_model.dart';
 import '../../../models/job_seeker_model.dart';
@@ -146,18 +146,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _launchURL(String urlString) async {
-    final Uri url = Uri.parse(
-      urlString.startsWith('http') ? urlString : 'https://$urlString',
-    );
-
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      if (mounted) {
-        _showStyledSnackBar(
-          message: 'Could not launch URL',
-          icon: Icons.error_outline_rounded,
-          accentColor: AppColors.errorRed,
-        );
-      }
+    final opened = await LinkHelper.openExternal(urlString);
+    if (!opened && mounted) {
+      _showStyledSnackBar(
+        message: LinkHelper.toWebUri(urlString) == null
+            ? 'This link doesn\'t look right. Please check it in Edit Profile.'
+            : 'Could not open this link.',
+        icon: Icons.error_outline_rounded,
+        accentColor: AppColors.errorRed,
+      );
     }
   }
 

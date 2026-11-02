@@ -4,30 +4,56 @@ import '../../../models/reported_job_model.dart';
 import '../../../core/constants/table_constants.dart';
 import '../../../core/utils/session_helper.dart';
 
+/// Outcome of reporting a job.
+enum JobReportResult { submitted, alreadyReported, failed }
+
 class ReportController {
   final _supabase = Supabase.instance.client;
   String get _currentSeekerID => SessionHelper.requireUserId();
 
-  Future<bool> submitJobReport({
+  /// Sends a report on a job to the admins. A seeker can have only one open
+  /// (pending) report per job, so the same job can't be reported repeatedly.
+  Future<JobReportResult> submitJobReport({
     required String jobId,
     required String category,
     String? details,
   }) async {
     try {
-      // 1. Package the data into the Model
+      final seekerID = _currentSeekerID;
+
+      if (await _hasOpenReport(jobId, seekerID)) {
+        return JobReportResult.alreadyReported;
+      }
+
       final newReport = ReportedJobModel(
         jobID: jobId,
-        seekerID: _currentSeekerID,
+        seekerID: seekerID,
         reportCategory: category,
         additionalDetails: (details != null && details.trim().isNotEmpty) ? details.trim() : null,
       );
-
-      // 2. Insert using toJson()
       await _supabase.from(TableConstants.reportedJob).insert(newReport.toJson());
-
-      return true;
+      return JobReportResult.submitted;
     } catch (e) {
       debugPrint('Error submitting report: $e');
+      return JobReportResult.failed;
+    }
+  }
+
+  /// True if this seeker already has a report on this job that the admins
+  /// haven't dealt with yet (status empty or "pending").
+  Future<bool> _hasOpenReport(String jobId, String seekerID) async {
+    try {
+      final rows = await _supabase
+          .from(TableConstants.reportedJob)
+          .select('jobID')
+          .eq('jobID', jobId)
+          .eq('seekerID', seekerID)
+          .or('status.is.null,status.ilike.%pending%')
+          .limit(1);
+      return (rows as List).isNotEmpty;
+    } catch (e) {
+      // e.g. no read access to reports: don't block the report.
+      debugPrint('Report duplicate check skipped: $e');
       return false;
     }
   }

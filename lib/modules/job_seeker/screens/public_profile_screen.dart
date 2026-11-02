@@ -1,10 +1,10 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/file_preview_helper.dart';
+import '../../../core/utils/link_helper.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/job_seeker_model.dart';
 import '../../../models/work_experience_model.dart';
@@ -60,16 +60,16 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   }
 
   Future<void> _launchURL(String urlString) async {
-    final Uri url = Uri.parse(urlString.startsWith('http') ? urlString : 'https://$urlString');
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      if (mounted) {
-        SnackBarHelper.showStyled(
-          context,
-          message: 'Could not launch URL',
-          icon: Icons.error_outline_rounded,
-          accentColor: AppColors.errorRed,
-        );
-      }
+    final opened = await LinkHelper.openExternal(urlString);
+    if (!opened && mounted) {
+      SnackBarHelper.showStyled(
+        context,
+        message: LinkHelper.toWebUri(urlString) == null
+            ? 'This link isn\'t a valid web address.'
+            : 'Could not open this link.',
+        icon: Icons.error_outline_rounded,
+        accentColor: AppColors.errorRed,
+      );
     }
   }
 

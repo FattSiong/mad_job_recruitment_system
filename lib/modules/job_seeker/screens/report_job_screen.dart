@@ -65,15 +65,17 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
 
     setState(() => _isSubmitting = true);
 
-    final success = await _reportController.submitJobReport(
+    final result = await _reportController.submitJobReport(
       jobId: widget.job.jobID!,
       category: _selectedCategory!,
       details: _detailsController.text,
     );
 
-    if (mounted) {
-      setState(() => _isSubmitting = false);
-      if (success) {
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+
+    switch (result) {
+      case JobReportResult.submitted:
         SnackBarHelper.showStyled(
           context,
           message: 'Report submitted successfully.',
@@ -81,14 +83,22 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
           accentColor: AppColors.teal,
         );
         Navigator.pop(context); // Go back to job details
-      } else {
+      case JobReportResult.alreadyReported:
+        SnackBarHelper.showStyled(
+          context,
+          message: 'You have already reported this job. Our team will review it soon.',
+          icon: Icons.info_outline_rounded,
+          accentColor: AppColors.coral,
+          duration: const Duration(seconds: 3),
+        );
+        Navigator.pop(context);
+      case JobReportResult.failed:
         SnackBarHelper.showStyled(
           context,
           message: 'Failed to submit report. Please try again.',
           icon: Icons.error_outline_rounded,
           accentColor: AppColors.coral,
         );
-      }
     }
   }
 

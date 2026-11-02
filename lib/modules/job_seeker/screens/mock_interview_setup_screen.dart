@@ -107,6 +107,7 @@ class _MockInterviewSetupScreenState extends State<MockInterviewSetupScreen> {
     FocusScope.of(context).unfocus();
 
     if (!await _ensureMicrophonePermission()) return;
+    if (!mounted) return; // left the screen during the permission prompt
 
     setState(() => _isStarting = true);
     try {
