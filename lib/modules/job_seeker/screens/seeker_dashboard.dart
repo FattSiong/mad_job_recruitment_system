@@ -88,22 +88,20 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     _loadName();
   }
 
-  /// The session ended (expired, or signed out elsewhere): go back to Login.
-  /// For a normal Logout the profile screen navigates too; whichever runs
-  /// first wins and the other sees `mounted == false`.
+  /// The session ended on its own (expired, or signed out on another device):
+  /// go back to Login. A normal Logout is handled by the profile screen, which
+  /// opens Login itself, so it is ignored here (otherwise Login opens twice).
   void _handleSignedOut(bool wasManual) {
-    if (!mounted) return;
+    if (wasManual || !mounted) return;
 
     final messenger = ScaffoldMessenger.of(context);
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
       (route) => false,
     );
-    if (!wasManual) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Your session has expired. Please log in again.')),
-      );
-    }
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Your session has expired. Please log in again.')),
+    );
   }
 
   Future<void> _loadName() async {
