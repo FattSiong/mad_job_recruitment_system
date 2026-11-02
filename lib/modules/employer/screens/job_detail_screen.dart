@@ -1117,31 +1117,6 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
               color: Color(0xFF4F5D70),
             ),
           ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _buildApplicantsMetaChip(
-                icon: Icons.description_outlined,
-                text: 'PDF Resume analysis',
-                color: const Color(0xFF163B65),
-                backgroundColor: Colors.white,
-              ),
-              _buildApplicantsMetaChip(
-                icon: Icons.psychology_outlined,
-                text: 'Skills & experience',
-                color: const Color(0xFF163B65),
-                backgroundColor: Colors.white,
-              ),
-              _buildApplicantsMetaChip(
-                icon: Icons.quiz_outlined,
-                text: 'Screening answers',
-                color: const Color(0xFF163B65),
-                backgroundColor: Colors.white,
-              ),
-            ],
-          ),
           const SizedBox(height: 18),
           if (_isRankingWithAi)
             Container(

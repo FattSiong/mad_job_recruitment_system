@@ -166,14 +166,6 @@ class EmployerProfileTab extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             _buildProfileTile(
-              icon: Icons.auto_awesome_outlined,
-              title: 'AI Interview Report (Draft)',
-              subtitle: 'Temporary FYP documentation preview',
-              color: const Color(0xFF6B4FD3),
-              onTap: onOpenPostInterviewAiReportDraft,
-            ),
-            const SizedBox(height: 12),
-            _buildProfileTile(
               icon: Icons.app_registration,
               title: 'Register Company',
               subtitle: 'Create a new profile',

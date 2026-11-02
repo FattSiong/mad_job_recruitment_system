@@ -22,8 +22,11 @@ class _InterviewLobbyScreenState extends State<InterviewLobbyScreen> {
   bool _isStarting = false;
   bool _postInterviewAiAnalyticsEnabled = false;
 
-  void _enterVideoCallRoom(String generatedRoomCode) {
-    Navigator.pushReplacement(
+  Future<void> _enterVideoCallRoom(String generatedRoomCode) async {
+    if (mounted && _isStarting) {
+      setState(() => _isStarting = false);
+    }
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => InterviewCallScreen(
@@ -33,6 +36,9 @@ class _InterviewLobbyScreenState extends State<InterviewLobbyScreen> {
         ),
       ),
     );
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -348,13 +354,18 @@ class _InterviewLobbyScreenState extends State<InterviewLobbyScreen> {
       isLoading: _isStarting,
       onPressed: () async {
         setState(() => _isStarting = true);
-        if (isActive && streamRoomCode != null) {
-          _enterVideoCallRoom(streamRoomCode);
-        } else {
-          final newCode = await _interviewService.startInterview(widget.roomID);
-          _enterVideoCallRoom(newCode);
+        try {
+          if (isActive && streamRoomCode != null) {
+            await _enterVideoCallRoom(streamRoomCode.toString());
+          } else {
+            final newCode = await _interviewService.startInterview(widget.roomID);
+            await _enterVideoCallRoom(newCode);
+          }
+        } finally {
+          if (mounted && _isStarting) {
+            setState(() => _isStarting = false);
+          }
         }
-        if (mounted) setState(() => _isStarting = false);
       },
     );
   }

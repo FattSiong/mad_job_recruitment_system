@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/agora_constants.dart';
 import '../../../services/interview_service.dart';
@@ -28,37 +27,66 @@ class _InterviewCallScreenState extends State<InterviewCallScreen> {
   int? _remoteUid;
   bool _localUserJoined = false;
   bool _engineReady = false;
+  bool _engineReleased = false;
+  bool _isExiting = false;
   bool _isMicrophoneMuted = false;
   bool _isCameraOff = false;
   String? _initializationError;
   late final RtcEngine _engine;
 
   StreamSubscription? _roomSubscription;
+  Timer? _roomPoller;
 
   @override
   void initState() {
     super.initState();
     initAgora();
 
-    _roomSubscription = Supabase.instance.client
-        .from('InterviewRoom')
-        .stream(primaryKey: ['roomID'])
-        .eq('roomID', widget.interviewID)
-        .listen((data) {
-      if (data.isNotEmpty && mounted) {
-        final status = data.first['status'];
-
-        if (status == 'waiting' && !widget.isEmployer) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('The host ended the meeting. Returning to lobby.'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-          _onCallEnded();
+    if (!widget.isEmployer) {
+      _roomSubscription = InterviewService()
+          .listenToInterviewStatus(widget.interviewID)
+          .listen((data) {
+        if (data.isNotEmpty && mounted && !_isExiting) {
+          _evaluateRoomRowForHostEnd(data.first);
         }
-      }
-    });
+      });
+
+      // Fallback periodic check in case Supabase Realtime publication isn't enabled on InterviewRoom
+      _roomPoller = Timer.periodic(const Duration(seconds: 3), (_) {
+        if (!_isExiting && mounted) {
+          _checkIfRoomEndedByHost();
+        }
+      });
+    }
+  }
+
+  bool _isRoomEndedRow(Map<String, dynamic> row) {
+    final status = (row['status'] ?? '').toString().toLowerCase();
+    final roomCode = row['roomCode']?.toString().trim();
+
+    if (status == 'waiting' || status == 'pending' || status == 'completed') {
+      return true;
+    }
+    if (roomCode == null || roomCode.isEmpty || roomCode != widget.roomCode) {
+      return true;
+    }
+    return false;
+  }
+
+  void _evaluateRoomRowForHostEnd(Map<String, dynamic> row) {
+    if (_isExiting || widget.isEmployer || !mounted) return;
+    if (_isRoomEndedRow(row)) {
+      final status = (row['status'] ?? '').toString().toLowerCase();
+      _handleHostForceEndedCall(isCompleted: status == 'completed');
+    }
+  }
+
+  Future<void> _checkIfRoomEndedByHost() async {
+    if (_isExiting || widget.isEmployer || !mounted) return;
+    final row = await InterviewService().getRoomById(widget.interviewID);
+    if (row != null && mounted && !_isExiting) {
+      _evaluateRoomRowForHostEnd(row);
+    }
   }
 
   Future<void> initAgora() async {
@@ -129,6 +157,15 @@ class _InterviewCallScreenState extends State<InterviewCallScreen> {
                 _remoteUid = null;
               });
             }
+            if (!widget.isEmployer && !_isExiting) {
+              // Immediately check if the employer permanently ended/reset the meeting
+              _checkIfRoomEndedByHost();
+              Future.delayed(const Duration(milliseconds: 600), () {
+                if (mounted && !_isExiting) {
+                  _checkIfRoomEndedByHost();
+                }
+              });
+            }
           },
         ),
       );
@@ -165,47 +202,184 @@ class _InterviewCallScreenState extends State<InterviewCallScreen> {
     }
   }
 
+  Future<void> _cleanupEngine() async {
+    if (!_engineReady || _engineReleased) return;
+    _engineReleased = true;
+    try {
+      await _engine.stopPreview();
+    } catch (_) {}
+    try {
+      await _engine.leaveChannel();
+    } catch (_) {}
+    try {
+      await _engine.release();
+    } catch (_) {}
+  }
+
   @override
   void dispose() {
+    _roomPoller?.cancel();
     _roomSubscription?.cancel();
-    if (_engineReady) {
+    if (_engineReady && !_engineReleased) {
+      _engineReleased = true;
       _engine.leaveChannel();
       _engine.release();
     }
     super.dispose();
   }
 
-  void _onCallEnded() async {
+  Future<void> _handleHostForceEndedCall({bool isCompleted = false}) async {
+    if (_isExiting || !mounted) return;
+    _isExiting = true;
+
+    _roomPoller?.cancel();
+    _roomPoller = null;
+    await _roomSubscription?.cancel();
+    _roomSubscription = null;
+
+    if (mounted) {
+      setState(() {
+        _remoteUid = null;
+        _localUserJoined = false;
+      });
+    }
+
+    // Force-disconnect audio/video immediately
+    await _cleanupEngine();
+
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => PopScope(
+        canPop: false,
+        child: Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFDECEC),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Icon(
+                    Icons.call_end_rounded,
+                    color: Color(0xFFC24E4E),
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  isCompleted
+                      ? 'Interview Completed'
+                      : 'Meeting Ended by Employer',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF1B2433),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  isCompleted
+                      ? 'The employer has concluded this interview and closed the room. Your call has been disconnected.'
+                      : 'The employer has ended the meeting and reset the interview room. Your call has been disconnected.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    height: 1.45,
+                    color: Color(0xFF687588),
+                  ),
+                ),
+                const SizedBox(height: 22),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF163B65),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: const Text(
+                      'Return to Lobby',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  Future<void> _exitCallAsSeeker() async {
+    if (_isExiting) return;
+    _isExiting = true;
+    _roomPoller?.cancel();
+    _roomPoller = null;
+    await _roomSubscription?.cancel();
+    _roomSubscription = null;
+    await InterviewService().leaveInterview(widget.interviewID, false);
+    await _cleanupEngine();
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  Future<void> _onCallEnded() async {
+    if (_isExiting) return;
+
     if (widget.isEmployer) {
-      showDialog(
+      final action = await showDialog<String>(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Leave or End Meeting?'),
+        builder: (dialogContext) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+          ),
+          title: const Text(
+            'Leave or End Meeting?',
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
           content: const Text(
             'Do you want to temporarily leave the room, or permanently end the interview for everyone?',
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.of(dialogContext).pop('cancel'),
               child: const Text(
                 'Cancel',
                 style: TextStyle(color: Colors.grey),
               ),
             ),
             TextButton(
-              onPressed: () async {
-                Navigator.pop(context);
-                await InterviewService().leaveInterview(widget.interviewID, true);
-                if (mounted) Navigator.pop(context);
-              },
+              onPressed: () => Navigator.of(dialogContext).pop('leave'),
               child: const Text('Leave Temporarily'),
             ),
             ElevatedButton(
-              onPressed: () async {
-                Navigator.pop(context);
-                await InterviewService().forceEndInterview(widget.interviewID);
-                if (mounted) Navigator.pop(context);
-              },
+              onPressed: () => Navigator.of(dialogContext).pop('end'),
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               child: const Text(
                 'End Meeting & Reset Room',
@@ -215,11 +389,25 @@ class _InterviewCallScreenState extends State<InterviewCallScreen> {
           ],
         ),
       );
-    } else {
-      await InterviewService().leaveInterview(widget.interviewID, false);
-      if (mounted) {
-        Navigator.pop(context);
+
+      if (!mounted || action == null || action == 'cancel') return;
+
+      _isExiting = true;
+      await _roomSubscription?.cancel();
+      _roomSubscription = null;
+
+      if (action == 'leave') {
+        await InterviewService().leaveInterview(widget.interviewID, true);
+      } else if (action == 'end') {
+        await InterviewService().forceEndInterview(widget.interviewID);
       }
+
+      await _cleanupEngine();
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } else {
+      await _exitCallAsSeeker();
     }
   }
 
@@ -266,23 +454,31 @@ class _InterviewCallScreenState extends State<InterviewCallScreen> {
       );
     }
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF111827),
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Positioned.fill(child: _buildRemoteStage()),
-            _buildTopOverlay(),
-            Positioned(
-              top: 76,
-              right: 16,
-              child: _buildLocalPreview(),
-            ),
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: _buildControlDock(),
-            ),
-          ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          _onCallEnded();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF111827),
+        body: SafeArea(
+          child: Stack(
+            children: [
+              Positioned.fill(child: _buildRemoteStage()),
+              _buildTopOverlay(),
+              Positioned(
+                top: 76,
+                right: 16,
+                child: _buildLocalPreview(),
+              ),
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: _buildControlDock(),
+              ),
+            ],
+          ),
         ),
       ),
     );
