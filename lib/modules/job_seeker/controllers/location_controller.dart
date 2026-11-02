@@ -1,6 +1,10 @@
-import 'dart:math' show asin, cos, sqrt;
+import 'dart:math' show asin, cos, sqrt, pi;
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/utils/data_load_exception.dart';
+import '../../../core/utils/salary_utils.dart';
 import '../../../models/job_model.dart';
+import '../../../core/constants/table_constants.dart';
 
 class LocationController {
   final _supabase = Supabase.instance.client;
@@ -20,13 +24,27 @@ class LocationController {
     return 12742 * asin(sqrt(a)) * 1000;
   }
 
-  List<int> _extractSalaryNumbers(String text) {
-    final parts = text
-        .split(RegExp(r'[^0-9]'))
-        .where((s) => s.isNotEmpty)
-        .toList();
-
-    return parts.map((s) => int.tryParse(s) ?? 0).toList();
+  /// Smallest latitude/longitude box that contains the search circle, so the
+  /// database only returns jobs near the map centre (exact distance is still
+  /// checked afterwards with [_calculateDistance]).
+  ({double minLat, double maxLat, double minLng, double maxLng}) _boundingBox(
+    double lat,
+    double lng,
+    double radiusInMeters,
+  ) {
+    // Same Earth radius as _calculateDistance (6371 km), plus a 1% safety margin
+    const metersPerDegreeLat = 6371000 * pi / 180;
+    final paddedRadius = radiusInMeters * 1.01;
+    final latDelta = paddedRadius / metersPerDegreeLat;
+    final cosLat = cos(lat * pi / 180).abs();
+    // Near the poles cos() -> 0; fall back to the full longitude range
+    final lngDelta = cosLat < 1e-6 ? 180.0 : paddedRadius / (metersPerDegreeLat * cosLat);
+    return (
+      minLat: lat - latDelta,
+      maxLat: lat + latDelta,
+      minLng: lng - lngDelta,
+      maxLng: lng + lngDelta,
+    );
   }
 
   DateTime? _getFilterDate(String? datePosted) {
@@ -61,15 +79,29 @@ class LocationController {
       }) async {
     try {
       var queryBuilder = _supabase
-          .from('Job')
+          .from(TableConstants.job)
           .select('*, Company(name)')
           .eq('status', 'active')
           .not('latitude', 'is', null)
           .not('longitude', 'is', null);
 
-      if (query.isNotEmpty) {
+      // Only fetch jobs inside the search area (was: every job in the database)
+      final box = _boundingBox(centerLat, centerLng, radiusInMeters);
+      queryBuilder = queryBuilder
+          .gte('latitude', box.minLat)
+          .lte('latitude', box.maxLat)
+          .gte('longitude', box.minLng)
+          .lte('longitude', box.maxLng);
+
+      // Characters like , ( ) . : would break the PostgREST "or" filter, so keep
+      // only letters, numbers, spaces and a few safe symbols (fix #5).
+      final safeQuery = query
+          .replaceAll(RegExp(r'[^A-Za-z0-9\s+#&/-]'), ' ')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+      if (safeQuery.isNotEmpty) {
         queryBuilder = queryBuilder.or(
-          'title.ilike.%$query%,description.ilike.%$query%',
+          'title.ilike.%$safeQuery%,description.ilike.%$safeQuery%',
         );
       }
 
@@ -96,6 +128,11 @@ class LocationController {
           return false;
         }
 
+        // Hide jobs past their expiry date (fix #6)
+        if (job.isExpired) {
+          return false;
+        }
+
         final distance = _calculateDistance(
           centerLat,
           centerLng,
@@ -105,31 +142,18 @@ class LocationController {
 
         final isWithinDistance = distance <= radiusInMeters;
 
-        bool isSalaryMatched = true;
-        if (salary != null && salary != 'Any' && salary != 'All') {
-          final inputNumbers = _extractSalaryNumbers(salary);
-
-          if (inputNumbers.isNotEmpty) {
-            final userInput = inputNumbers.first;
-            final jobRange = _extractSalaryNumbers(job.salaryRange);
-
-            if (jobRange.length >= 2) {
-              final min = jobRange[0];
-              final max = jobRange[1];
-              isSalaryMatched = userInput >= min && userInput <= max;
-            } else if (jobRange.length == 1) {
-              isSalaryMatched = userInput >= jobRange[0];
-            }
-          }
-        }
+        // Same minimum-salary rule as the Home dashboard (see SalaryUtils)
+        final isSalaryMatched = SalaryUtils.meetsMinimum(job.salaryRange, salary);
 
         return isWithinDistance && isSalaryMatched;
       }).toList();
 
       return filteredJobs;
     } catch (e) {
-      print('Error fetching nearby jobs: $e');
-      return [];
+      debugPrint('Error fetching nearby jobs: $e');
+      throw DataLoadException(
+        'Unable to load nearby jobs. Please check your connection and try again.',
+      );
     }
   }
 }

@@ -4,21 +4,35 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:image_cropper/image_cropper.dart';
-import 'package:intl/intl.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/snackbar_helper.dart';
-import '../../../services/auth_service.dart';
-import '../../../core/screens/temp_main_screen.dart';
+import '../../../core/utils/file_picker_helper.dart';
 import '../../../core/utils/file_preview_helper.dart';
+import '../../../core/utils/session_helper.dart';
 import '../../../models/education_model.dart';
 import '../../../models/job_seeker_model.dart';
+import '../../../models/skill_model.dart';
 import '../../../models/work_experience_model.dart';
 import '../../../services/auth_service.dart';
 import '../../../shared_widgets/login_screen.dart';
+import '../../../shared_widgets/skill_chips.dart';
 import '../controllers/profile_controller.dart';
+import '../controllers/skill_controller.dart';
+import '../widgets/profile/profile_qr_dialog.dart';
+import '../widgets/profile/profile_record_card.dart';
+import '../widgets/profile/profile_sheet_helpers.dart';
+import 'add_skill_screen.dart';
+import 'education_screen.dart';
+import 'work_experience_screen.dart';
+import 'ai_career_advisor_screen.dart';
+import 'mock_interview_setup_screen.dart';
+import 'skill_gap_analysis_screen.dart';
+import 'guidance_reports_screen.dart';
+import 'ai_resume_assistant_screen.dart';
+import 'build_resume_screen.dart';
+import 'career_tools_mockup_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -28,17 +42,19 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  static const Color _primary = Color(0xFF163B65);
-  static const Color _textPrimary = Color(0xFF1B2433);
-  static const Color _textMuted = Color(0xFF687588);
-  static const Color _surfaceAlt = Color(0xFFF7F9FC);
-  static const Color _border = Color(0xFFE1E8F0);
+  static const Color _primary = AppColors.primary;
+  static const Color _textPrimary = AppColors.textDark;
+  static const Color _textMuted = AppColors.textMuted;
+  static const Color _surfaceAlt = AppColors.surfaceAlt;
+  static const Color _border = AppColors.border;
 
   final ProfileController _controller = ProfileController();
+  final SkillController _skillController = SkillController();
 
   final GlobalKey<FormState> _profileFormKey = GlobalKey<FormState>();
 
   JobSeekerModel? _profile;
+  List<SkillModel> _skills = [];
   bool _isLoading = true;
   bool _isUploading = false;
   bool _isEditing = false;
@@ -73,7 +89,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadProfile() async {
     setState(() => _isLoading = true);
-    final profile = await _controller.fetchProfile();
+    final results = await Future.wait([
+      _controller.fetchProfile(),
+      _fetchSkillsSafely(),
+    ]);
+    final profile = results[0] as JobSeekerModel?;
+    _skills = results[1] as List<SkillModel>;
 
     if (mounted) {
       setState(() {
@@ -83,6 +104,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
       _populateControllers();
     }
+  }
+
+  /// Skills failing to load shouldn't stop the rest of the profile from showing.
+  Future<List<SkillModel>> _fetchSkillsSafely() async {
+    try {
+      return await _skillController.fetchMySkills();
+    } catch (_) {
+      return _skills;
+    }
+  }
+
+  Future<void> _openSkillsScreen() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AddSkillScreen()),
+    );
+    final skills = await _fetchSkillsSafely();
+    if (mounted) setState(() => _skills = skills);
+  }
+
+  Widget _buildSkillsSection() {
+    if (_skills.isEmpty) {
+      return _buildEmptyInfoCard('No skills added yet.');
+    }
+    return _buildSurfaceCard(child: SkillChips(skills: _skills));
   }
 
   void _populateControllers() {
@@ -123,6 +169,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() => _isUploading = true);
 
       final file = File(result.files.single.path!);
+      final sizeError = await FilePickerHelper.checkSize(file, FileLimits.resumeMB);
+      if (sizeError != null) {
+        if (mounted) {
+          setState(() => _isUploading = false);
+          _showStyledSnackBar(
+            message: sizeError,
+            icon: Icons.info_outline_rounded,
+            accentColor: AppColors.errorRed,
+          );
+        }
+        return;
+      }
       final String? newUrl = await _controller.uploadResume(file);
 
       if (mounted) {
@@ -204,13 +262,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  String _formatDateRange(DateTime start, DateTime? end, bool isCurrent) {
-    final formatter = DateFormat('MMM yyyy');
-    final startStr = formatter.format(start);
-    final endStr = isCurrent ? 'Present' : (end != null ? formatter.format(end) : 'N/A');
-    return '$startStr - $endStr';
-  }
-
   String _getFirstName() {
     if (_profile == null) return 'there';
     final fullName = _profile!.fullName.trim();
@@ -269,6 +320,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
 
     if (croppedFile == null || !mounted) return;
+
+    final sizeError = await FilePickerHelper.checkSize(File(croppedFile.path), FileLimits.imageMB);
+    if (sizeError != null) {
+      if (!mounted) return;
+      _showStyledSnackBar(
+        message: sizeError,
+        icon: Icons.info_outline_rounded,
+        accentColor: AppColors.errorRed,
+      );
+      return;
+    }
 
     setState(() {
       _newProfileImage = File(croppedFile.path);
@@ -378,9 +440,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           if (onAddPressed != null && _isEditing)
             TextButton.icon(
               onPressed: onAddPressed,
-              icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+              icon: const Icon(Icons.edit_note_rounded, size: 20),
               label: const Text(
-                'Add',
+                'Manage',
                 style: TextStyle(fontWeight: FontWeight.w700),
               ),
               style: TextButton.styleFrom(
@@ -398,7 +460,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF163B65), Color(0xFF335D8A)],
+          colors: [AppColors.primary, AppColors.primaryLight],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -435,7 +497,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _buildHeroActionButton(
                   icon: Icons.qr_code_rounded,
                   tooltip: 'Show QR',
-                  onTap: _showQRCodeDialog,
+                  onTap: () => showProfileQrDialog(context, _profile!.seekerID),
                 ),
             ],
           ),
@@ -637,6 +699,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const BuildResumeScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.description_outlined),
+              label: const Text('Build Resume'),
+              style: _secondaryButtonStyle().copyWith(
+                foregroundColor: WidgetStateProperty.all(_primary),
+                side: WidgetStateProperty.all(
+                  const BorderSide(color: AppColors.borderActive),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
           if (_profile!.resumeURL != null) ...[
             Row(
               children: [
@@ -734,7 +818,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
               style: _secondaryButtonStyle().copyWith(
                 foregroundColor: WidgetStateProperty.all(_primary),
                 side: WidgetStateProperty.all(
-                  const BorderSide(color: Color(0xFFB8D1EE)),
+                  const BorderSide(color: AppColors.borderActive),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const AiResumeAssistantScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.auto_awesome_rounded),
+              label: const Text('AI Resume Assistant'),
+              style: _secondaryButtonStyle().copyWith(
+                foregroundColor: WidgetStateProperty.all(_primary),
+                side: WidgetStateProperty.all(
+                  const BorderSide(color: AppColors.borderActive),
                 ),
               ),
             ),
@@ -744,155 +850,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildExperienceCard(WorkExperienceModel exp) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: _buildSurfaceCard(
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: _primary.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(Icons.work_outline_rounded, color: _primary, size: 24),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    exp.jobTitle,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                      color: _textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    exp.companyName,
-                    style: const TextStyle(
-                      color: _textMuted,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _formatDateRange(exp.startDate, exp.endDate, exp.isCurrent),
-                    style: TextStyle(
-                      color: Colors.grey.shade500,
-                      fontSize: 13,
-                    ),
-                  ),
-                  if (exp.description != null && exp.description!.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      exp.description!,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        color: _textPrimary,
-                        height: 1.45,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            if (_isEditing && exp.experienceID != null)
-              IconButton(
-                icon: const Icon(Icons.delete_outline_rounded, color: AppColors.errorRed),
-                onPressed: () => _controller.deleteWorkExperience(
-                  context: context,
-                  experienceId: exp.experienceID!,
-                  onSuccess: _loadProfile,
-                ),
-              ),
-          ],
-        ),
-      ),
+  /// Asks before deleting a profile record.
+  void _showResult(bool ok, String success, String failure) {
+    _showStyledSnackBar(
+      message: ok ? success : failure,
+      icon: ok ? Icons.check_circle_outline_rounded : Icons.error_outline_rounded,
+      accentColor: ok ? AppColors.successGreen : AppColors.errorRed,
     );
   }
 
-  Widget _buildEducationCard(EducationModel edu) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: _buildSurfaceCard(
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(Icons.school_outlined, color: Colors.orange, size: 24),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    edu.fieldOfStudy != null && edu.fieldOfStudy!.isNotEmpty
-                        ? '${edu.degree} - ${edu.fieldOfStudy}'
-                        : edu.degree,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                      color: _textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    edu.institutionName,
-                    style: const TextStyle(
-                      color: _textMuted,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _formatDateRange(edu.startDate, edu.endDate, edu.isCurrent),
-                    style: TextStyle(
-                      color: Colors.grey.shade500,
-                      fontSize: 13,
-                    ),
-                  ),
-                  if (edu.description != null && edu.description!.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      edu.description!,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        color: _textPrimary,
-                        height: 1.45,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            if (_isEditing && edu.educationID != null)
-              IconButton(
-                icon: const Icon(Icons.delete_outline_rounded, color: AppColors.errorRed),
-                onPressed: () => _controller.deleteEducation(
-                  context: context,
-                  educationId: edu.educationID!,
-                  onSuccess: _loadProfile,
-                ),
-              ),
-          ],
-        ),
-      ),
+  Future<void> _openRecordsScreen(Widget screen) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+    if (mounted) _loadProfile();
+  }
+
+  Widget _experienceCard(WorkExperienceModel exp) {
+    return ProfileRecordCard(
+      icon: Icons.work_outline_rounded,
+      iconColor: _primary,
+      title: exp.jobTitle,
+      subtitle: exp.companyName,
+      dateRange: formatProfileDateRange(exp.startDate, exp.endDate, exp.isCurrent),
+      description: exp.description,
+    );
+  }
+
+  Widget _educationCard(EducationModel edu) {
+    return ProfileRecordCard(
+      icon: Icons.school_outlined,
+      iconColor: Colors.orange,
+      title: edu.fieldOfStudy != null && edu.fieldOfStudy!.isNotEmpty
+          ? '${edu.degree} - ${edu.fieldOfStudy}'
+          : edu.degree,
+      subtitle: edu.institutionName,
+      dateRange: formatProfileDateRange(edu.startDate, edu.endDate, edu.isCurrent),
+      description: edu.description,
     );
   }
 
@@ -956,12 +948,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (!mounted) return;
 
-    final didUpdate = await _controller.updateProfileBasics(
-      context: context,
-      updatedModel: updatedModel,
-    );
+    final didUpdate = await _controller.updateProfileBasics(updatedModel);
 
     if (!mounted) return;
+    _showResult(didUpdate, 'Profile updated successfully!', 'Failed to update profile.');
 
     setState(() {
       _isSavingProfile = false;
@@ -975,6 +965,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _logout() async {
+    SessionHelper.markManualSignOut();
     await AuthService().signOut();
 
     if (!mounted) return;
@@ -985,13 +976,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _buildCareerToolButton({
+    required String label,
+    required IconData icon,
+    required CareerToolMockupType type,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) =>
+                    switch (type) {
+                      CareerToolMockupType.aiCareerAdvisor => const AiCareerAdvisorScreen(),
+                      CareerToolMockupType.mockInterview => const MockInterviewSetupScreen(),
+                      CareerToolMockupType.skillGapAnalysis => const SkillGapAnalysisScreen(),
+                      CareerToolMockupType.guidanceReports => const GuidanceReportsScreen(),
+                    },
+              ),
+            );
+          },
+          icon: Icon(icon),
+          label: Text(label),
+          style: _secondaryButtonStyle().copyWith(
+            foregroundColor: WidgetStateProperty.all(_primary),
+            side: WidgetStateProperty.all(
+              const BorderSide(color: AppColors.borderActive),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FB),
+      backgroundColor: AppColors.background,
       body: _isLoading
           ? const Center(
-        child: CircularProgressIndicator(color: AppColors.primaryBlue),
+        child: CircularProgressIndicator(color: AppColors.primary),
       )
           : _profile == null
           ? const Center(
@@ -1003,7 +1031,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           : SafeArea(
         child: RefreshIndicator(
           onRefresh: _loadProfile,
-          color: AppColors.primaryBlue,
+          color: AppColors.primary,
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
@@ -1139,26 +1167,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
 
+
+
                 _buildSectionHeader('Resume Document'),
                 _buildResumeSection(),
 
+                _buildSectionHeader('Career Tools'),
+                _buildCareerToolButton(
+                  label: 'AI Career Advisor',
+                  icon: Icons.smart_toy_outlined,
+                  type: CareerToolMockupType.aiCareerAdvisor,
+                ),
+                _buildCareerToolButton(
+                  label: 'Mock Interview',
+                  icon: Icons.record_voice_over_outlined,
+                  type: CareerToolMockupType.mockInterview,
+                ),
+                _buildCareerToolButton(
+                  label: 'Skill Gap Analysis',
+                  icon: Icons.insights_outlined,
+                  type: CareerToolMockupType.skillGapAnalysis,
+                ),
+                _buildCareerToolButton(
+                  label: 'Guidance Reports',
+                  icon: Icons.assignment_outlined,
+                  type: CareerToolMockupType.guidanceReports,
+                ),
+
+                _buildSectionHeader(
+                  'Skills',
+                  onAddPressed: _openSkillsScreen,
+                ),
+                _buildSkillsSection(),
+
                 _buildSectionHeader(
                   'Work Experience',
-                  onAddPressed: () => _showAddExperienceSheet(context),
+                  onAddPressed: () => _openRecordsScreen(const WorkExperienceScreen()),
                 ),
                 if (_profile!.workExperience.isEmpty)
                   _buildEmptyInfoCard('No work experience added yet.')
                 else
-                  ..._profile!.workExperience.map(_buildExperienceCard),
+                  ..._profile!.workExperience.map(_experienceCard),
 
                 _buildSectionHeader(
                   'Education',
-                  onAddPressed: () => _showAddEducationSheet(context),
+                  onAddPressed: () => _openRecordsScreen(const EducationScreen()),
                 ),
                 if (_profile!.education.isEmpty)
                   _buildEmptyInfoCard('No education details added yet.')
                 else
-                  ..._profile!.education.map(_buildEducationCard),
+                  ..._profile!.education.map(_educationCard),
 
                 if (!_isEditing) ...[
                   const SizedBox(height: 28),
@@ -1256,754 +1314,4 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _showQRCodeDialog() {
-    if (_profile == null) return;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text(
-          'My Profile QR',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: _textPrimary,
-          ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Let recruiters scan this to view your resume and experience.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: _textMuted,
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: 220,
-              height: 220,
-              child: QrImageView(
-                data: 'profile:${_profile!.seekerID}',
-                version: QrVersions.auto,
-                backgroundColor: Colors.white,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            style: TextButton.styleFrom(foregroundColor: _primary),
-            child: const Text(
-              'Close',
-              style: TextStyle(fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<DateTime?> _pickDate(BuildContext context, DateTime? initialDate) async {
-    return await showDatePicker(
-      context: context,
-      initialDate: initialDate ?? DateTime.now(),
-      firstDate: DateTime(1970),
-      lastDate: DateTime(2100),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(primary: AppColors.primaryBlue),
-          ),
-          child: child!,
-        );
-      },
-    );
-  }
-
-  InputDecoration _sheetInputDecoration(String label, IconData icon) {
-    return InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(icon, color: Colors.grey.shade600, size: 20),
-      filled: true,
-      fillColor: Colors.grey.shade50,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey.shade300),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey.shade300),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.primaryBlue, width: 2),
-      ),
-    );
-  }
-
-  void _showAddExperienceSheet(BuildContext context) {
-    final formKey = GlobalKey<FormState>();
-    final titleController = TextEditingController();
-    final companyController = TextEditingController();
-    final descController = TextEditingController();
-    DateTime? startDate;
-    DateTime? endDate;
-    bool isCurrentRole = false;
-    String? startDateErrorText;
-    String? endDateErrorText;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            child: Form(
-              key: formKey,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade300,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    const Text(
-                      'Add Work Experience',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    TextFormField(
-                      controller: titleController,
-                      decoration: _sheetInputDecoration('Job Title*', Icons.work),
-                      validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: companyController,
-                      decoration: _sheetInputDecoration('Company Name*', Icons.business),
-                      validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: InkWell(
-                            onTap: () async {
-                              final date = await _pickDate(context, startDate);
-                              if (date != null) {
-                                setModalState(() {
-                                  startDate = date;
-                                  startDateErrorText = null;
-                                });
-                              }
-                            },
-                            child: InputDecorator(
-                              decoration: _sheetInputDecoration(
-                                'Start Date*',
-                                Icons.calendar_today,
-                              ).copyWith(
-                                errorText: startDateErrorText,
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: startDateErrorText != null
-                                        ? AppColors.errorRed
-                                        : Colors.grey.shade300,
-                                  ),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: startDateErrorText != null
-                                        ? AppColors.errorRed
-                                        : AppColors.primaryBlue,
-                                    width: 1.5,
-                                  ),
-                                ),
-                                errorBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(color: AppColors.errorRed),
-                                ),
-                                focusedErrorBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(
-                                    color: AppColors.errorRed,
-                                    width: 1.5,
-                                  ),
-                                ),
-                              ),
-                              child: Text(
-                                startDate == null
-                                    ? 'Select'
-                                    : DateFormat('yMd').format(startDate!),
-                                style: TextStyle(
-                                  color: startDate == null
-                                      ? Colors.grey.shade600
-                                      : Colors.black87,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: InkWell(
-                            onTap: isCurrentRole
-                                ? null
-                                : () async {
-                              final date = await _pickDate(context, endDate);
-                              if (date != null) {
-                                setModalState(() {
-                                  endDate = date;
-                                  endDateErrorText = null;
-                                });
-                              }
-
-                            },
-                            child: InputDecorator(
-                              decoration: _sheetInputDecoration(
-                                'End Date',
-                                Icons.calendar_today,
-                              ).copyWith(
-                                filled: true,
-                                fillColor: isCurrentRole
-                                    ? Colors.grey.shade200
-                                    : Colors.grey.shade50,
-                                errorText: endDateErrorText,
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: endDateErrorText != null
-                                        ? AppColors.errorRed
-                                        : Colors.grey.shade300,
-                                  ),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: endDateErrorText != null
-                                        ? AppColors.errorRed
-                                        : AppColors.primaryBlue,
-                                    width: 1.5,
-                                  ),
-                                ),
-                                errorBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(color: AppColors.errorRed),
-                                ),
-                                focusedErrorBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(
-                                    color: AppColors.errorRed,
-                                    width: 1.5,
-                                  ),
-                                ),
-                              ),
-                              child: Text(
-                                isCurrentRole
-                                    ? 'Present'
-                                    : (endDate == null
-                                    ? 'Select'
-                                    : DateFormat('yMd').format(endDate!)),
-                                style: TextStyle(
-                                  color: (endDate == null && !isCurrentRole)
-                                      ? Colors.grey.shade600
-                                      : Colors.black87,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Checkbox(
-                          value: isCurrentRole,
-                          activeColor: AppColors.primaryBlue,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          onChanged: (v) {
-                            setModalState(() {
-                              isCurrentRole = v ?? false;
-                              if (isCurrentRole) {
-                                endDate = null;
-                                endDateErrorText = null;
-                              }
-                            });
-                          },
-                        ),
-                        const Text(
-                          'I currently work here',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: descController,
-                      decoration: _sheetInputDecoration(
-                        'Description',
-                        Icons.description,
-                      ),
-                      maxLines: 4,
-                    ),
-                    const SizedBox(height: 32),
-                    ElevatedButton(
-                      onPressed: () {
-                        if (formKey.currentState!.validate()) {
-                          setModalState(() {
-                            if (startDate == null) {
-                              startDateErrorText = 'Required';
-                            } else {
-                              startDateErrorText = null;
-                            }
-
-                            if (startDate != null) {
-                              if (!isCurrentRole && endDate == null) {
-                                endDateErrorText = 'Required';
-                              } else if (!isCurrentRole &&
-                                  endDate != null &&
-                                  endDate!.isBefore(startDate!)) {
-                                endDateErrorText = 'Invalid end date';
-                              } else {
-                                endDateErrorText = null;
-                              }
-                            } else {
-                              endDateErrorText = null;
-                            }
-                          });
-
-                          if (startDateErrorText != null || endDateErrorText != null) return;
-
-                          final newExp = WorkExperienceModel(
-                            seekerID: '',
-                            companyName: companyController.text.trim(),
-                            jobTitle: titleController.text.trim(),
-                            startDate: startDate!,
-                            endDate: endDate,
-                            isCurrent: isCurrentRole,
-                            description: descController.text.trim(),
-                          );
-
-                          Navigator.pop(context);
-                          _controller.addWorkExperience(
-                            context: context,
-                            experience: newExp,
-                            onSucess: _loadProfile,
-                          );
-                        } else if (startDate == null) {
-                          setModalState(() {});
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primaryBlue,
-                        minimumSize: const Size(double.infinity, 54),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        'Add Experience',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showAddEducationSheet(BuildContext context) {
-    final formKey = GlobalKey<FormState>();
-    final institutionController = TextEditingController();
-    final fieldOfStudyController = TextEditingController();
-    final descController = TextEditingController();
-    DateTime? startDate;
-    DateTime? endDate;
-    bool isCurrent = false;
-    String? startDateErrorText;
-    String? endDateErrorText;
-
-
-    final List<String> degreeOptions = [
-      'High School / SPM',
-      'Certificate',
-      'Diploma',
-      "Bachelor's Degree",
-      "Master's Degree",
-      'Doctorate / PhD',
-      'Other',
-    ];
-    String? selectedDegree;
-
-    bool isDiplomaOrAbove(String? degree) {
-      return degree == 'Diploma' ||
-          degree == "Bachelor's Degree" ||
-          degree == "Master's Degree" ||
-          degree == 'Doctorate / PhD';
-    }
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            child: Form(
-              key: formKey,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade300,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    const Text(
-                      'Add Education',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    TextFormField(
-                      controller: institutionController,
-                      decoration: _sheetInputDecoration(
-                        'Institution Name*',
-                        Icons.school,
-                      ),
-                      validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      decoration: _sheetInputDecoration(
-                        'Degree/Qualification*',
-                        Icons.history_edu,
-                      ),
-                      initialValue: selectedDegree,
-                      items: degreeOptions.map((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(value),
-                        );
-                      }).toList(),
-                      onChanged: (newValue) {
-                        setModalState(() {
-                          selectedDegree = newValue;
-                          if (!isDiplomaOrAbove(newValue)) {
-                            fieldOfStudyController.clear();
-                          }
-                        });
-                      },
-                      validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-                    ),
-                    const SizedBox(height: 16),
-                    if (isDiplomaOrAbove(selectedDegree)) ...[
-                      TextFormField(
-                        controller: fieldOfStudyController,
-                        decoration: _sheetInputDecoration(
-                          'Field of Study*',
-                          Icons.menu_book,
-                        ),
-                        validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-                    Row(
-                      children: [
-                        Expanded(
-                          child: InkWell(
-                            onTap: () async {
-                              final date = await _pickDate(context, startDate);
-                              if (date != null) {
-                                setModalState(() {
-                                  startDate = date;
-                                  startDateErrorText = null;
-                                });
-                              }
-                            },
-                            child: InputDecorator(
-                              decoration: _sheetInputDecoration(
-                                'Start Date*',
-                                Icons.calendar_today,
-                              ).copyWith(
-                                errorText: startDateErrorText,
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: startDateErrorText != null
-                                        ? AppColors.errorRed
-                                        : Colors.grey.shade300,
-                                  ),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: startDateErrorText != null
-                                        ? AppColors.errorRed
-                                        : AppColors.primaryBlue,
-                                    width: 1.5,
-                                  ),
-                                ),
-                                errorBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(color: AppColors.errorRed),
-                                ),
-                                focusedErrorBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(
-                                    color: AppColors.errorRed,
-                                    width: 1.5,
-                                  ),
-                                ),
-                              ),
-                              child: Text(
-                                startDate == null
-                                    ? 'Select'
-                                    : DateFormat('yMd').format(startDate!),
-                                style: TextStyle(
-                                  color: startDate == null
-                                      ? Colors.grey.shade600
-                                      : Colors.black87,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: InkWell(
-                            onTap: isCurrent
-                                ? null
-                                : () async {
-                              final date = await _pickDate(context, endDate);
-                              if (date != null) {
-                                setModalState(() {
-                                  endDate = date;
-                                  endDateErrorText = null;
-                                });
-                              }
-                            },
-                            child: InputDecorator(
-                              decoration: _sheetInputDecoration(
-                                'End Date',
-                                Icons.calendar_today,
-                              ).copyWith(
-                                filled: true,
-                                fillColor: isCurrent
-                                    ? Colors.grey.shade200
-                                    : Colors.grey.shade50,
-                                errorText: endDateErrorText,
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: endDateErrorText != null
-                                        ? AppColors.errorRed
-                                        : Colors.grey.shade300,
-                                  ),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: endDateErrorText != null
-                                        ? AppColors.errorRed
-                                        : AppColors.primaryBlue,
-                                    width: 1.5,
-                                  ),
-                                ),
-                                errorBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(color: AppColors.errorRed),
-                                ),
-                                focusedErrorBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(
-                                    color: AppColors.errorRed,
-                                    width: 1.5,
-                                  ),
-                                ),
-                              ),
-                              child: Text(
-                                isCurrent
-                                    ? 'Current'
-                                    : (endDate == null
-                                    ? 'Select'
-                                    : DateFormat('yMd').format(endDate!)),
-                                style: TextStyle(
-                                  color: (endDate == null && !isCurrent)
-                                      ? Colors.grey.shade600
-                                      : Colors.black87,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Checkbox(
-                          value: isCurrent,
-                          activeColor: AppColors.primaryBlue,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          onChanged: (v) {
-                            setModalState(() {
-                              isCurrent = v ?? false;
-                              if (isCurrent) {
-                                endDate = null;
-                                endDateErrorText = null;
-                              }
-                            });
-                          },
-                        ),
-                        const Text(
-                          'I am currently studying here',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: descController,
-                      decoration: _sheetInputDecoration(
-                        'Description / Achievements',
-                        Icons.description,
-                      ),
-                      maxLines: 4,
-                    ),
-                    const SizedBox(height: 32),
-                    ElevatedButton(
-                      onPressed: () {
-                        if (formKey.currentState!.validate()) {
-                          setModalState(() {
-                            if (startDate == null) {
-                              startDateErrorText = 'Required';
-                            } else {
-                              startDateErrorText = null;
-                            }
-
-                            if (startDate != null) {
-                              if (!isCurrent && endDate == null) {
-                                endDateErrorText = 'Required';
-                              } else if (!isCurrent &&
-                                  endDate != null &&
-                                  endDate!.isBefore(startDate!)) {
-                                endDateErrorText = 'Invalid end date';
-                              } else {
-                                endDateErrorText = null;
-                              }
-                            } else {
-                              endDateErrorText = null;
-                            }
-                          });
-
-                          if (startDateErrorText != null || endDateErrorText != null) return;
-
-                          final newEdu = EducationModel(
-                            institutionName: institutionController.text.trim(),
-                            degree: selectedDegree!,
-                            fieldOfStudy: isDiplomaOrAbove(selectedDegree)
-                                ? fieldOfStudyController.text.trim()
-                                : null,
-                            description: descController.text.trim(),
-                            startDate: startDate!,
-                            endDate: endDate,
-                            isCurrent: isCurrent,
-                          );
-
-                          Navigator.pop(context);
-                          _controller.addEducation(
-                            context: context,
-                            education: newEdu,
-                            onSucess: _loadProfile,
-                          );
-                        } else if (startDate == null) {
-                          setModalState(() {});
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primaryBlue,
-                        minimumSize: const Size(double.infinity, 54),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        'Add Education',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }

@@ -89,7 +89,7 @@ class JobModel {
       companyID: json['companyID'] as String,
       employerID: json['employerID'] as String,
       title: json['title'] as String,
-      description: json['description'] as String,
+      description: json['description'] as String? ?? '',
       latitude: json['latitude'] != null ? (json['latitude'] as num).toDouble() : null,
       longitude: json['longitude'] != null ? (json['longitude'] as num).toDouble() : null,
       salaryRange: json['salaryRange'] as String,

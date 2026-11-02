@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../models/job_model.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../controllers/report_controller.dart';
+import '../../../core/theme/app_colors.dart';
 
 class ReportJobScreen extends StatefulWidget {
   final JobModel job;
@@ -14,12 +15,12 @@ class ReportJobScreen extends StatefulWidget {
 
 class _ReportJobScreenState extends State<ReportJobScreen> {
   // Theme Colors
-  static const Color _primary = Color(0xFF163B65);
-  static const Color _primarySoft = Color(0xFFDCEBFB);
-  static const Color _textPrimary = Color(0xFF1B2433);
-  static const Color _textMuted = Color(0xFF687588);
-  static const Color _surfaceAlt = Color(0xFFF7F9FC);
-  static const Color _border = Color(0xFFE1E8F0);
+  static const Color _primary = AppColors.primary;
+  static const Color _primarySoft = AppColors.primarySoft;
+  static const Color _textPrimary = AppColors.textDark;
+  static const Color _textMuted = AppColors.textMuted;
+  static const Color _surfaceAlt = AppColors.surfaceAlt;
+  static const Color _border = AppColors.border;
 
   final ReportController _reportController = ReportController();
   final TextEditingController _detailsController = TextEditingController();
@@ -47,7 +48,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
         context,
         message: 'Please select a reason for reporting.',
         icon: Icons.info_outline_rounded,
-        accentColor: const Color(0xFFE27D60),
+        accentColor: AppColors.coral,
       );
       return;
     }
@@ -57,7 +58,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
         context,
         message: 'Please provide details when selecting Other.',
         icon: Icons.info_outline_rounded,
-        accentColor: const Color(0xFFE27D60),
+        accentColor: AppColors.coral,
       );
       return;
     }
@@ -77,7 +78,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
           context,
           message: 'Report submitted successfully.',
           icon: Icons.check_circle_outline_rounded,
-          accentColor: const Color(0xFF1E8F8B),
+          accentColor: AppColors.teal,
         );
         Navigator.pop(context); // Go back to job details
       } else {
@@ -85,7 +86,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
           context,
           message: 'Failed to submit report. Please try again.',
           icon: Icons.error_outline_rounded,
-          accentColor: const Color(0xFFE27D60),
+          accentColor: AppColors.coral,
         );
       }
     }
@@ -129,7 +130,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
           color: isSelected ? _primarySoft : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? const Color(0xFFB8D1EE) : _border,
+            color: isSelected ? AppColors.borderActive : _border,
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -160,7 +161,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FB),
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
           children: [
@@ -178,7 +179,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
                             padding: const EdgeInsets.all(24),
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
-                                colors: [Color(0xFF163B65), Color(0xFF335D8A)],
+                                colors: [AppColors.primary, AppColors.primaryLight],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                               ),

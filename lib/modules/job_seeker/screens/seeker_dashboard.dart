@@ -1,12 +1,22 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/data_load_exception.dart';
+import '../../../core/utils/session_helper.dart';
 import '../../../models/job_model.dart';
+import '../../../shared_widgets/login_screen.dart';
 import '../../community/screens/chat_list_screen.dart';
 import '../../community/screens/community_dashboard.dart';
+import '../controllers/applied_jobs_controller.dart';
 import '../controllers/job_discovery_controller.dart';
+import '../controllers/profile_controller.dart';
+import '../widgets/dashboard/job_search_panel.dart';
 import '../widgets/job_card.dart';
+import '../widgets/job_filters.dart';
+import '../widgets/load_error_view.dart';
 import 'job_details_screen.dart';
 import 'job_map_screen.dart';
 import 'location_search_screen.dart';
@@ -24,7 +34,6 @@ class SeekerDashboard extends StatefulWidget {
 class _SeekerDashboardState extends State<SeekerDashboard> {
   final TextEditingController _keywordController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
-  final TextEditingController _salaryInputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final JobDiscoveryController _controller = JobDiscoveryController();
 
@@ -32,28 +41,39 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
 
   List<JobModel> _jobs = [];
   bool _isLoading = true;
+  String? _loadError; // shown instead of "No jobs" when loading fails
+  String? _fullName;
   bool _isFetchingMore = false;
+  bool _loadMoreFailed = false;
   int _currentIndex = 0;
-  int _visibleJobCount = 0;
 
-  String _selectedJobType = 'All';
-  String _selectedDatePosted = 'All time';
-  String _selectedSalary = 'Any';
+  // Real pagination: only one page is downloaded at a time
+  JobSearchFilters _activeFilters = const JobSearchFilters();
+  int _nextOffset = 0;
+  bool _hasMoreJobs = false;
+  int _requestId = 0; // ignores results from an older search that finishes late
+
+  String _selectedJobType = JobFilterOptions.anyJobType;
+  String _selectedDatePosted = JobFilterOptions.anyDate;
+  String _selectedSalary = JobFilterOptions.anySalary;
 
   User? get _currentUser => Supabase.instance.client.auth.currentUser;
+
+  StreamSubscription<AuthState>? _authSubscription;
 
   bool get _hasActiveFilters =>
       _keywordController.text.isNotEmpty ||
           _locationController.text.isNotEmpty ||
-          _selectedJobType != 'All' ||
-          _selectedDatePosted != 'All time' ||
-          _selectedSalary != 'Any';
+          _selectedJobType != JobFilterOptions.anyJobType ||
+          _selectedDatePosted != JobFilterOptions.anyDate ||
+          _selectedSalary != JobFilterOptions.anySalary;
 
-  List<JobModel> get _visibleJobs => _jobs.take(_visibleJobCount).toList();
-
-  bool get _hasMoreJobs => _visibleJobCount < _jobs.length;
+  List<JobModel> get _visibleJobs => _jobs;
 
   String get _firstName {
+    final name = _fullName?.trim() ?? '';
+    if (name.isNotEmpty) return name.split(RegExp(r'\s+')).first;
+
     final email = _currentUser?.email ?? '';
     if (email.isEmpty) return 'there';
     return email.split('@').first;
@@ -62,22 +82,56 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
   @override
   void initState() {
     super.initState();
+    SessionHelper.consumeManualSignOut(); // fresh login: clear any old flag
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen(
+      (data) {
+        if (data.event == AuthChangeEvent.signedOut) _handleSignedOut();
+      },
+      onError: (Object e) => debugPrint('Auth state error: $e'),
+    );
     _scrollController.addListener(_handleScroll);
     _loadJobs();
+    _loadName();
+  }
+
+  /// The session ended (expired, or signed out elsewhere): go back to Login.
+  /// For a normal Logout the profile screen navigates too; whichever runs
+  /// first wins and the other sees `mounted == false`.
+  void _handleSignedOut() {
+    final wasManual = SessionHelper.consumeManualSignOut();
+    if (!mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
+    if (!wasManual) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Your session has expired. Please log in again.')),
+      );
+    }
+  }
+
+  Future<void> _loadName() async {
+    final name = await ProfileController().fetchFullName();
+    if (mounted && name != null) setState(() => _fullName = name);
   }
 
   @override
   void dispose() {
+    _authSubscription?.cancel();
     _scrollController.removeListener(_handleScroll);
     _scrollController.dispose();
     _keywordController.dispose();
     _locationController.dispose();
-    _salaryInputController.dispose();
     super.dispose();
   }
 
   void _onTabTapped(int index) {
     setState(() => _currentIndex = index);
+    // My Jobs tab: reload Applied + Interviews so statuses are up to date
+    if (index == 1) AppliedJobsController.notifyChanged();
   }
 
   void _handleScroll() {
@@ -91,62 +145,82 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     }
   }
 
+  /// Loads the next page from the database (no artificial delay).
   Future<void> _loadMoreJobs() async {
-    if (!_hasMoreJobs || _isFetchingMore) return;
+    if (!_hasMoreJobs || _isFetchingMore || _isLoading || _loadMoreFailed) return;
 
-    // 1. Tell the UI we are fetching more, which triggers the bottom CircularProgressIndicator
+    final requestId = _requestId;
+    setState(() => _isFetchingMore = true);
+
+    try {
+      final page = await _controller.fetchJobsPage(
+        filters: _activeFilters,
+        offset: _nextOffset,
+        pageSize: _pageSize,
+      );
+      if (!mounted || requestId != _requestId) return;
+      setState(() {
+        _jobs = [..._jobs, ...page.jobs];
+        _nextOffset = page.nextOffset;
+        _hasMoreJobs = page.hasMore;
+        _isFetchingMore = false;
+      });
+    } on DataLoadException {
+      if (!mounted || requestId != _requestId) return;
+      setState(() {
+        _isFetchingMore = false;
+        _loadMoreFailed = true; // footer shows "Tap to retry"
+      });
+    }
+  }
+
+  void _retryLoadMore() {
+    setState(() => _loadMoreFailed = false);
+    _loadMoreJobs();
+  }
+
+  /// Starts a new list (first page) for [filters].
+  Future<void> _startNewList(JobSearchFilters filters) async {
+    final requestId = ++_requestId;
     setState(() {
-      _isFetchingMore = true;
-    });
-
-    // 2. Add a slight artificial delay (e.g., 800 milliseconds) so the user actually sees the loading process
-    await Future.delayed(const Duration(milliseconds: 800));
-
-    if (!mounted) return;
-
-    // 3. Load the next 10 jobs and hide the spinner
-    setState(() {
-      final nextCount = _visibleJobCount + _pageSize;
-      _visibleJobCount = nextCount > _jobs.length ? _jobs.length : nextCount;
+      _isLoading = true;
+      _loadError = null;
+      _loadMoreFailed = false;
       _isFetchingMore = false;
+      _activeFilters = filters;
     });
+
+    try {
+      final page = await _controller.fetchJobsPage(filters: filters, pageSize: _pageSize);
+      if (!mounted || requestId != _requestId) return;
+      setState(() {
+        _jobs = page.jobs;
+        _nextOffset = page.nextOffset;
+        _hasMoreJobs = page.hasMore;
+        _isLoading = false;
+      });
+    } on DataLoadException catch (e) {
+      if (!mounted || requestId != _requestId) return;
+      setState(() {
+        _jobs = [];
+        _hasMoreJobs = false;
+        _loadError = e.message;
+        _isLoading = false;
+      });
+    }
   }
 
-  Future<void> _loadJobs() async {
-    setState(() => _isLoading = true);
-
-    final fetchedJobs = await _controller.fetchActiveJobs();
-
-    if (!mounted) return;
-
-    setState(() {
-      _jobs = fetchedJobs;
-      _visibleJobCount =
-      fetchedJobs.length > _pageSize ? _pageSize : fetchedJobs.length;
-      _isLoading = false;
-    });
-  }
+  Future<void> _loadJobs() => _startNewList(const JobSearchFilters());
 
   Future<void> _performSearch() async {
     FocusScope.of(context).unfocus();
-    setState(() => _isLoading = true);
-
-    final searchResults = await _controller.searchJobs(
+    await _startNewList(JobSearchFilters(
       query: _keywordController.text.trim(),
       location: _locationController.text.trim(),
       jobType: _selectedJobType,
       datePosted: _selectedDatePosted,
       salary: _selectedSalary,
-    );
-
-    if (!mounted) return;
-
-    setState(() {
-      _jobs = searchResults;
-      _visibleJobCount =
-      searchResults.length > _pageSize ? _pageSize : searchResults.length;
-      _isLoading = false;
-    });
+    ));
   }
 
   Future<void> _refreshJobs() async {
@@ -159,9 +233,9 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
 
   Future<void> _resetFilters() async {
     setState(() {
-      _selectedJobType = 'All';
-      _selectedDatePosted = 'All time';
-      _selectedSalary = 'Any';
+      _selectedJobType = JobFilterOptions.anyJobType;
+      _selectedDatePosted = JobFilterOptions.anyDate;
+      _selectedSalary = JobFilterOptions.anySalary;
       _keywordController.clear();
       _locationController.clear();
     });
@@ -189,265 +263,43 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     }
   }
 
-  void _showFilterOptions(String filterType) {
-    List<String> options = [];
-    String currentValue = '';
-
-    if (filterType == 'Date posted') {
-      options = [
-        'All time',
-        'Last 24 hours',
-        'Last 3 days',
-        'Last 7 days',
-        'Last 14 days',
-      ];
-      currentValue = _selectedDatePosted;
-    } else if (filterType == 'Job type') {
-      options = ['All', 'Full-time', 'Part-time'];
-      currentValue = _selectedJobType;
-    } else if (filterType == 'Salary') {
-      options = ['Any', 'RM1000', 'RM2000', 'RM3000', 'RM4000', 'RM5000'];
-      currentValue = _selectedSalary;
-      _salaryInputController.text =
-          _selectedSalary.replaceAll(RegExp(r'[^0-9]'), '');
+  String _currentFilterValue(String filterType) {
+    switch (filterType) {
+      case JobFilterOptions.datePosted:
+        return _selectedDatePosted;
+      case JobFilterOptions.jobType:
+        return _selectedJobType;
+      default:
+        return _selectedSalary;
     }
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 16,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 42,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  'Filter by $filterType',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1B2433),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                if (filterType == 'Salary') ...[
-                  const Text(
-                    'Enter custom minimum salary',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF687588),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _salaryInputController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      hintText: 'e.g. 3500',
-                      prefixIcon: const Padding(
-                        padding: EdgeInsetsDirectional.only(start: 16, end: 8),
-                        child: Align(
-                          widthFactor: 1,
-                          heightFactor: 1,
-                          child: Text(
-                            'RM',
-                            style: TextStyle(color: Color(0xFF687588)),
-                          ),
-                        ),
-                      ),
-                      prefixIconConstraints: const BoxConstraints(
-                        minWidth: 0,
-                        minHeight: 0,
-                      ),
-                      filled: true,
-                      fillColor: const Color(0xFFF7F9FC),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(
-                          color: AppColors.primaryBlue,
-                          width: 1.5,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () {
-                            _salaryInputController.clear();
-                            setState(() => _selectedSalary = 'Any');
-                            Navigator.pop(context);
-                            _performSearch();
-                          },
-                          child: const Text('Clear'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () {
-                            final typed = _salaryInputController.text.trim();
-                            if (typed.isNotEmpty) {
-                              final salary = int.tryParse(typed);
-                              if (salary == null || salary <= 0) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Please enter a valid salary amount.')),
-                                );
-                                return;
-                              }
-                            }
-                            setState(() {
-                              _selectedSalary = typed.isNotEmpty ? 'RM $typed' : 'Any';
-                            });
-                            Navigator.pop(context);
-                            _performSearch();
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF163B65),
-                            foregroundColor: Colors.white,
-                          ),
-                          child: const Text('Apply'),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  const Divider(),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Or select a suggested range',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF687588),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  RadioGroup<String>(
-                    groupValue: currentValue,
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() => _selectedSalary = value);
-                      Navigator.pop(context);
-                      _performSearch();
-                    },
-                    child: Column(
-                      children: options
-                          .map(
-                            (option) => RadioListTile<String>(
-                          value: option,
-                          title: Text(option),
-                          activeColor: AppColors.primaryBlue,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      )
-                          .toList(),
-                    ),
-                  ),
-                ] else ...[
-                  RadioGroup<String>(
-                    groupValue: currentValue,
-                    onChanged: (value) {
-                      if (value == null) return;
-
-                      setState(() {
-                        if (filterType == 'Date posted') {
-                          _selectedDatePosted = value;
-                        } else if (filterType == 'Job type') {
-                          _selectedJobType = value;
-                        }
-                      });
-
-                      Navigator.pop(context);
-                      _performSearch();
-                    },
-                    child: Column(
-                      children: options
-                          .map(
-                            (option) => RadioListTile<String>(
-                          value: option,
-                          title: Text(option),
-                          activeColor: AppColors.primaryBlue,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      )
-                          .toList(),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        );
-      },
-    );
   }
 
-  Widget _buildFilterChip(String label, String value, String defaultValue) {
-    final isActive = value != defaultValue;
-
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(
-        label: Text(isActive ? value : label),
-        selected: isActive,
-        onSelected: (_) => _showFilterOptions(label),
-        selectedColor: const Color(0xFFDCEBFB),
-        backgroundColor: Colors.white,
-        labelStyle: TextStyle(
-          color: isActive ? const Color(0xFF163B65) : const Color(0xFF1B2433),
-          fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-          side: BorderSide(
-            color: isActive
-                ? const Color(0xFFB8D1EE)
-                : const Color(0xFFE1E8F0),
-          ),
-        ),
-      ),
+  Future<void> _showFilterOptions(String filterType) async {
+    final value = await showJobFilterSheet(
+      context,
+      filterType: filterType,
+      currentValue: _currentFilterValue(filterType),
     );
+    if (value == null || !mounted) return;
+
+    setState(() {
+      switch (filterType) {
+        case JobFilterOptions.datePosted:
+          _selectedDatePosted = value;
+        case JobFilterOptions.jobType:
+          _selectedJobType = value;
+        default:
+          _selectedSalary = value;
+      }
+    });
+    _performSearch();
   }
 
   Widget _buildHomeTab() {
     return SafeArea(
       child: RefreshIndicator(
         onRefresh: _refreshJobs,
-        color: AppColors.primaryBlue,
+        color: AppColors.primary,
         child: CustomScrollView(
           controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
@@ -459,7 +311,21 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                   [
                     _buildHeroHeader(),
                     const SizedBox(height: 24),
-                    _buildSearchPanel(),
+                    JobSearchPanel(
+                      keywordController: _keywordController,
+                      locationController: _locationController,
+                      selectedDatePosted: _selectedDatePosted,
+                      selectedJobType: _selectedJobType,
+                      selectedSalary: _selectedSalary,
+                      onSearch: _performSearch,
+                      onReset: _resetFilters,
+                      onOpenLocation: _openLocationSearch,
+                      onClearLocation: () {
+                        _locationController.clear();
+                        _performSearch();
+                      },
+                      onFilterTap: _showFilterOptions,
+                    ),
                     const SizedBox(height: 24),
                     _buildResultsHeader(),
                     const SizedBox(height: 12),
@@ -471,8 +337,13 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
               const SliverFillRemaining(
                 hasScrollBody: false,
                 child: Center(
-                  child: CircularProgressIndicator(color: AppColors.primaryBlue),
+                  child: CircularProgressIndicator(color: AppColors.primary),
                 ),
+              )
+            else if (_loadError != null)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: LoadErrorView(message: _loadError!, onRetry: _refreshJobs),
               )
             else if (_jobs.isEmpty)
               SliverFillRemaining(
@@ -494,7 +365,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
-                            color: Color(0xFF1B2433),
+                            color: AppColors.textDark,
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -504,7 +375,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                           style: TextStyle(
                             fontSize: 14,
                             height: 1.45,
-                            color: Color(0xFF687588),
+                            color: AppColors.textMuted,
                           ),
                         ),
                       ],
@@ -520,13 +391,27 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                         (context, index) {
                       // 👉 Check if we are at the very bottom slot
                       if (index == _visibleJobs.length) {
+                        if (_loadMoreFailed) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            child: Center(
+                              child: TextButton.icon(
+                                onPressed: _retryLoadMore,
+                                icon: const Icon(Icons.refresh_rounded),
+                                label: const Text("Couldn't load more jobs. Tap to retry"),
+                              ),
+                            ),
+                          );
+                        }
                         if (_hasMoreJobs) {
-                          // Show loading spinner if there are more jobs to fetch
+                          // The footer is visible, so fetch the next page
+                          // (also covers short lists that can't be scrolled)
+                          WidgetsBinding.instance.addPostFrameCallback((_) => _loadMoreJobs());
                           return const Padding(
                             padding: EdgeInsets.symmetric(vertical: 20),
                             child: Center(
                               child: CircularProgressIndicator(
-                                color: AppColors.primaryBlue,
+                                color: AppColors.primary,
                               ),
                             ),
                           );
@@ -579,7 +464,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF163B65), Color(0xFF335D8A)],
+          colors: [AppColors.primary, AppColors.primaryLight],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -650,118 +535,6 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     );
   }
 
-  Widget _buildSearchPanel() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Search smarter',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF1B2433),
-            ),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Refine by role, location, job type, posted date, and salary.',
-            style: TextStyle(fontSize: 14, color: Color(0xFF687588)),
-          ),
-          const SizedBox(height: 18),
-          TextField(
-            controller: _keywordController,
-            textInputAction: TextInputAction.search,
-            onSubmitted: (_) => _performSearch(),
-            decoration: _searchInputDecoration(
-              hint: 'Job title, keywords, or company',
-              icon: Icons.search,
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _locationController,
-            readOnly: true,
-            onTap: _openLocationSearch,
-            decoration: _searchInputDecoration(
-              hint: 'City, state, or postcode',
-              icon: Icons.location_on_outlined,
-              suffix: _locationController.text.isNotEmpty
-                  ? IconButton(
-                onPressed: () {
-                  _locationController.clear();
-                  _performSearch();
-                },
-                icon: const Icon(Icons.close, size: 18),
-              )
-                  : IconButton(
-                onPressed: _openLocationSearch,
-                icon: const Icon(Icons.arrow_forward_ios, size: 16),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _performSearch,
-                  icon: const Icon(Icons.search),
-                  label: const Text('Search Jobs'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF163B65),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              OutlinedButton.icon(
-                onPressed: _resetFilters,
-                icon: const Icon(Icons.restart_alt),
-                label: const Text('Reset'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF163B65),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 15,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  side: const BorderSide(color: Color(0xFFB8D1EE)),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _buildFilterChip(
-                  'Date posted',
-                  _selectedDatePosted,
-                  'All time',
-                ),
-                _buildFilterChip('Job type', _selectedJobType, 'All'),
-                _buildFilterChip('Salary', _selectedSalary, 'Any'),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildResultsHeader() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -774,7 +547,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF1B2433),
+                  color: AppColors.textDark,
                 ),
               ),
             ),
@@ -790,10 +563,10 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
               icon: const Icon(Icons.map, size: 18),
               label: const Text('Nearby Jobs'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF163B65),
+                foregroundColor: AppColors.primary,
                 padding:
                 const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                side: const BorderSide(color: Color(0xFFB8D1EE)),
+                side: const BorderSide(color: AppColors.borderActive),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
@@ -806,7 +579,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
           _hasActiveFilters
               ? 'Showing filtered roles based on your current search.'
               : 'Fresh opportunities selected from active postings.',
-          style: const TextStyle(fontSize: 14, color: Color(0xFF687588)),
+          style: const TextStyle(fontSize: 14, color: AppColors.textMuted),
         ),
         const SizedBox(height: 12),
         Container(
@@ -822,12 +595,12 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                 width: 38,
                 height: 38,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFDCEBFB),
+                  color: AppColors.primarySoft,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(
                   Icons.work_outline_rounded,
-                  color: Color(0xFF163B65),
+                  color: AppColors.primary,
                   size: 20,
                 ),
               ),
@@ -836,11 +609,11 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                 child: Text(
                   _isLoading
                       ? 'Searching opportunities for you...'
-                      : '${_jobs.length} jobs available',
+                      : '${_jobs.length}${_hasMoreJobs ? '+' : ''} jobs available',
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF1B2433),
+                    color: AppColors.textDark,
                   ),
                 ),
               ),
@@ -872,33 +645,6 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     );
   }
 
-  InputDecoration _searchInputDecoration({
-    required String hint,
-    required IconData icon,
-    Widget? suffix,
-  }) {
-    return InputDecoration(
-      hintText: hint,
-      prefixIcon: Icon(icon, color: const Color(0xFF687588)),
-      suffixIcon: suffix,
-      filled: true,
-      fillColor: const Color(0xFFF7F9FC),
-      contentPadding: const EdgeInsets.symmetric(vertical: 16),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: BorderSide(color: Colors.grey.shade300),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: BorderSide(color: Colors.grey.shade300),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: const BorderSide(color: AppColors.primaryBlue, width: 1.5),
-      ),
-    );
-  }
-
   Widget _buildHeaderIconButton({
     required IconData icon,
     required String tooltip,
@@ -925,7 +671,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FB),
+      backgroundColor: AppColors.background,
       body: IndexedStack(
         index: _currentIndex,
         children: [
@@ -940,7 +686,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
         selectedIndex: _currentIndex,
         onDestinationSelected: _onTabTapped,
         backgroundColor: Colors.white,
-        indicatorColor: const Color(0xFFDCEBFB),
+        indicatorColor: AppColors.primarySoft,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.dashboard_outlined),

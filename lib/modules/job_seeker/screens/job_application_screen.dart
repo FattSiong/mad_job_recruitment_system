@@ -20,12 +20,12 @@ class JobApplicationScreen extends StatefulWidget {
 }
 
 class _JobApplicationScreenState extends State<JobApplicationScreen> {
-  static const Color _primary = Color(0xFF163B65);
-  static const Color _primarySoft = Color(0xFFDCEBFB);
-  static const Color _textPrimary = Color(0xFF1B2433);
-  static const Color _textMuted = Color(0xFF687588);
-  static const Color _surfaceAlt = Color(0xFFF7F9FC);
-  static const Color _border = Color(0xFFE1E8F0);
+  static const Color _primary = AppColors.primary;
+  static const Color _primarySoft = AppColors.primarySoft;
+  static const Color _textPrimary = AppColors.textDark;
+  static const Color _textMuted = AppColors.textMuted;
+  static const Color _surfaceAlt = AppColors.surfaceAlt;
+  static const Color _border = AppColors.border;
 
   final ApplicationController _appController = ApplicationController();
   final PageController _pageController = PageController();
@@ -45,6 +45,12 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
   void initState() {
     super.initState();
     _loadApplicationData();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadApplicationData() async {
@@ -74,13 +80,23 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     return true;
   }
 
+  void _showFileTooLarge(String message) {
+    if (!mounted) return;
+    SnackBarHelper.showStyled(
+      context,
+      message: message,
+      icon: Icons.info_outline_rounded,
+      accentColor: AppColors.coral,
+    );
+  }
+
   Future<void> _submitApplication() async {
     if (_resumeSelection == 'new' && _newResumeFile == null) {
       SnackBarHelper.showStyled(
         context,
         message: 'Please select a resume file to upload.',
         icon: Icons.info_outline_rounded,
-        accentColor: const Color(0xFFE27D60),
+        accentColor: AppColors.coral,
       );
       return;
     }
@@ -90,40 +106,47 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
         context,
         message: 'No existing resume found. Please upload a new one.',
         icon: Icons.info_outline_rounded,
-        accentColor: const Color(0xFFE27D60),
+        accentColor: AppColors.coral,
       );
       return;
     }
 
     setState(() => _isSubmitting = true);
 
-    final success = await _appController.submitApplication(
-      jobId: widget.job.jobID!,
-      answers: _answers,
-      existingResumeUrl:
-      _resumeSelection == 'existing' ? _existingResumeUrl : null,
-      newResumeFile: _newResumeFile,
-    );
+    try {
+      // Uploads files first, then saves the application + answers in one transaction
+      await _appController.submitApplication(
+        jobId: widget.job.jobID!,
+        answers: _answers,
+        existingResumeUrl:
+        _resumeSelection == 'existing' ? _existingResumeUrl : null,
+        newResumeFile: _resumeSelection == 'new' ? _newResumeFile : null,
+      );
 
-    if (!mounted) return;
-
-    setState(() => _isSubmitting = false);
-
-    if (success) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
       SnackBarHelper.showStyled(
         context,
         message: 'Application submitted successfully!',
         icon: Icons.check_circle_outline_rounded,
-        accentColor: const Color(0xFF1E8F8B),
+        accentColor: AppColors.teal,
       );
-      Navigator.pop(context);
-    } else {
+      Navigator.pop(context, true); // tells JobDetailsScreen the user has applied
+    } on ApplicationException catch (e) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
       SnackBarHelper.showStyled(
         context,
-        message: 'Failed to submit application.',
-        icon: Icons.error_outline_rounded,
-        accentColor: const Color(0xFFE27D60),
+        message: e.message,
+        icon: e.code == 'already_applied'
+            ? Icons.info_outline_rounded
+            : Icons.error_outline_rounded,
+        accentColor: AppColors.coral,
+        duration: const Duration(seconds: 3),
       );
+      if (e.code == 'already_applied' || e.code == 'job_unavailable') {
+        Navigator.pop(context, e.code == 'already_applied');
+      }
     }
   }
 
@@ -208,7 +231,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
               color: isDone || isActive ? _primarySoft : Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: isDone || isActive ? const Color(0xFFB8D1EE) : _border,
+                color: isDone || isActive ? AppColors.borderActive : _border,
               ),
             ),
             child: Center(
@@ -312,6 +335,8 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                             'css',
                             'txt',
                           ],
+                          maxSizeMB: FileLimits.answerFileMB,
+                          onTooLarge: _showFileTooLarge,
                         );
 
                         if (pickedFile != null) {
@@ -323,7 +348,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                       style: _secondaryButtonStyle().copyWith(
                         foregroundColor: WidgetStateProperty.all(_primary),
                         side: WidgetStateProperty.all(
-                          const BorderSide(color: Color(0xFFB8D1EE)),
+                          const BorderSide(color: AppColors.borderActive),
                         ),
                       ),
                     ),
@@ -335,7 +360,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                         currentAnswer.path.split('/').last,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          color: Color(0xFF1E8F8B),
+                          color: AppColors.teal,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -420,7 +445,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: selected ? const Color(0xFFB8D1EE) : _border,
+            color: selected ? AppColors.borderActive : _border,
             width: selected ? 2 : 1,
           ),
         ),
@@ -530,6 +555,8 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
 
                     final pickedFile = await FilePickerHelper.pickFile(
                       allowedExtensions: ['pdf', 'doc', 'docx', 'rtf', 'txt'],
+                      maxSizeMB: FileLimits.resumeMB,
+                      onTooLarge: _showFileTooLarge,
                     );
 
                     if (pickedFile != null) {
@@ -562,9 +589,9 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
-        backgroundColor: Color(0xFFF4F7FB),
+        backgroundColor: AppColors.background,
         body: Center(
-          child: CircularProgressIndicator(color: AppColors.primaryBlue),
+          child: CircularProgressIndicator(color: AppColors.primary),
         ),
       );
     }
@@ -574,7 +601,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     final progress = (_currentPage + 1) / totalPages;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FB),
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -604,7 +631,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                             padding: EdgeInsets.all(headerPadding),
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
-                                colors: [Color(0xFF163B65), Color(0xFF335D8A)],
+                                colors: [AppColors.primary, AppColors.primaryLight],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                               ),
@@ -815,7 +842,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                                 message:
                                     'Please answer all pre-screening questions before continuing.',
                                 icon: Icons.info_outline_rounded,
-                                accentColor: const Color(0xFFE27D60),
+                                accentColor: AppColors.coral,
                               );
                               return;
                             }

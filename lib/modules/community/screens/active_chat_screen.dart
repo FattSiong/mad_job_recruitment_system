@@ -401,6 +401,42 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
     return '$firstName is in this conversation';
   }
 
+  Future<void> _showReportUserConfirmation() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Block User?'),
+          content: Text(
+            'Are you sure you want to block ${widget.otherUserName}?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.errorRed,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Block'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${widget.otherUserName} has been reported.'),
+        ),
+      );
+    }
+  }
+
   Widget _buildActionButton({
     required IconData icon,
     required VoidCallback onPressed,
@@ -804,6 +840,11 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
                 builder: (context) => SharedAttachmentsSheet(roomID: widget.roomID),
               );
             },
+          ),
+          _buildActionButton(
+            icon: Icons.report_gmailerrorred_rounded,
+            iconColor: AppColors.errorRed,
+            onPressed: _showReportUserConfirmation,
           ),
           const SizedBox(width: 8),
         ],

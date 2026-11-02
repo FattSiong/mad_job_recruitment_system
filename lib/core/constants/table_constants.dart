@@ -25,4 +25,11 @@ class TableConstants {
   static const String workExperience = 'WorkExperience';
   static const String education = 'Education';
   static const String calls = 'Calls';
+  static const String skill = 'Skill';
+  static const String advisorConversation = 'AdvisorConversation';
+  static const String advisorMessage = 'AdvisorMessage';
+  static const String mockInterviewRecord = 'MockInterviewRecord';
+  static const String mockInterviewAnswer = 'MockInterviewAnswer';
+  static const String skillGapAnalysisRecord = 'SkillGapAnalysisRecord';
+  static const String guidanceReport = 'GuidanceReport';
 }

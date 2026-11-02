@@ -6,9 +6,13 @@ import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/utils/storage_url_helper.dart';
+import '../../../models/skill_model.dart';
 import '../../../services/community_service.dart';
 import '../../../services/employer_service.dart';
+import '../../../shared_widgets/skill_chips.dart';
 import '../../community/screens/active_chat_screen.dart';
+import '../../job_seeker/controllers/skill_controller.dart';
 import 'interview_scheduling_screen.dart';
 
 class ApplicantDetailScreen extends StatefulWidget {
@@ -29,6 +33,10 @@ class ApplicantDetailScreen extends StatefulWidget {
 
 class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
   final EmployerService _employerService = EmployerService();
+  final SkillController _skillController = SkillController();
+
+  List<SkillModel> _skills = [];
+  bool _isLoadingSkills = true;
 
   List<Map<String, dynamic>> _answers = [];
   bool _isLoadingAnswers = true;
@@ -49,6 +57,19 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
     _currentStatus = widget.applicantData['applicationStatus'] ?? 'pending';
     _loadAnswers();
     _checkIfScheduled();
+    _loadSkills();
+  }
+
+  Future<void> _loadSkills() async {
+    final seekerId = widget.applicantData['seekerID'] as String?;
+    final skills = seekerId == null
+        ? <SkillModel>[]
+        : await _skillController.fetchSkillsForSeeker(seekerId);
+    if (!mounted) return;
+    setState(() {
+      _skills = skills;
+      _isLoadingSkills = false;
+    });
   }
 
   Future<void> _checkIfScheduled() async {
@@ -153,7 +174,8 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
       final file = File(savePath);
 
       if (!await file.exists()) {
-        final response = await http.get(Uri.parse(url));
+        // Resumes / answer files are private: download through a signed URL
+        final response = await http.get(Uri.parse(await StorageUrlHelper.resolve(url)));
         await file.writeAsBytes(response.bodyBytes);
       }
 
@@ -539,6 +561,27 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
                   ),
                 ],
               ),
+            ),
+            const SizedBox(height: 18),
+            _buildSectionCard(
+              title: 'Skills',
+              subtitle: 'Skills the candidate listed on their profile.',
+              child: _isLoadingSkills
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(8),
+                        child: CircularProgressIndicator(color: Color(0xFF163B65)),
+                      ),
+                    )
+                  : _skills.isEmpty
+                      ? const Text(
+                          'No skills listed.',
+                          style: TextStyle(
+                            color: Color(0xFF687588),
+                            fontStyle: FontStyle.italic,
+                          ),
+                        )
+                      : SkillChips(skills: _skills),
             ),
             const SizedBox(height: 18),
             if (aiScore != null ||

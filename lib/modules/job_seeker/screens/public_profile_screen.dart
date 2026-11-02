@@ -8,7 +8,10 @@ import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/job_seeker_model.dart';
 import '../../../models/work_experience_model.dart';
 import '../../../models/education_model.dart';
+import '../../../models/skill_model.dart';
+import '../../../shared_widgets/skill_chips.dart';
 import '../controllers/profile_controller.dart';
+import '../controllers/skill_controller.dart';
 
 class PublicProfileScreen extends StatefulWidget {
   final String seekerId;
@@ -21,13 +24,16 @@ class PublicProfileScreen extends StatefulWidget {
 
 class _PublicProfileScreenState extends State<PublicProfileScreen> {
   // Theme Colors matching profile_screen.dart
-  static const Color _primary = Color(0xFF163B65);
-  static const Color _textPrimary = Color(0xFF1B2433);
-  static const Color _textMuted = Color(0xFF687588);
-  static const Color _surfaceAlt = Color(0xFFF7F9FC);
+  static const Color _primary = AppColors.primary;
+  static const Color _textPrimary = AppColors.textDark;
+  static const Color _textMuted = AppColors.textMuted;
+  static const Color _surfaceAlt = AppColors.surfaceAlt;
 
   final ProfileController _controller = ProfileController();
+  final SkillController _skillController = SkillController();
   JobSeekerModel? _profile;
+  List<SkillModel> _skills = [];
+  bool _contactVisible = false;
   bool _isLoading = true;
 
   @override
@@ -37,10 +43,16 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   }
 
   Future<void> _loadPublicProfile() async {
-    final profile = await _controller.fetchPublicProfile(widget.seekerId);
+    final responses = await Future.wait([
+      _controller.fetchPublicProfile(widget.seekerId),
+      _skillController.fetchSkillsForSeeker(widget.seekerId),
+    ]);
+    final result = responses[0] as ({JobSeekerModel profile, bool contactVisible})?;
     if (mounted) {
       setState(() {
-        _profile = profile;
+        _profile = result?.profile;
+        _skills = responses[1] as List<SkillModel>;
+        _contactVisible = result?.contactVisible ?? false;
         _isLoading = false;
       });
     }
@@ -135,7 +147,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF163B65), Color(0xFF335D8A)],
+          colors: [AppColors.primary, AppColors.primaryLight],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -419,9 +431,9 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FB),
+      backgroundColor: AppColors.background,
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primaryBlue))
+          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
           : _profile == null
           ? const Center(child: Text('Profile not found.', style: TextStyle(color: _textPrimary)))
           : SafeArea(
@@ -438,6 +450,28 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (!_contactVisible)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 20),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: _surfaceAlt,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.lock_outline_rounded, color: _textMuted, size: 20),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Contact details and resume are only visible to employers.',
+                                style: TextStyle(color: _textMuted, fontSize: 13, height: 1.35),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     _buildField(
                       label: 'Email',
                       value: _profile!.email,
@@ -526,6 +560,12 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                     ],
                   ),
                 ),
+              ],
+
+              // Skills Section
+              if (_skills.isNotEmpty) ...[
+                _buildSectionHeader('Skills'),
+                _buildSurfaceCard(child: SkillChips(skills: _skills)),
               ],
 
               // 👉 Work Experience Section
