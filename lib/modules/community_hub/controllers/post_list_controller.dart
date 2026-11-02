@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/table_constants.dart';
 import '../../../models/chat_room_model.dart';
 import '../../../models/feed_post_model.dart';
-import '../../chat/controllers/chat_user_directory.dart';
+import '../../../services/user_directory.dart';
 
 /// Which posts a [PostListController] shows.
 enum PostListMode {
@@ -132,7 +132,7 @@ class PostListController extends ChangeNotifier {
   }
 
   Future<List<FeedPostModel>> _toModels(List<Map<String, dynamic>> rows) async {
-    final authors = await ChatUserDirectory.fetch(rows.map((r) => r['authorID']?.toString() ?? ''));
+    final authors = await UserDirectory.fetch(rows.map((r) => r['authorID']?.toString() ?? ''));
     return rows.map((row) {
       final authorID = row['authorID']?.toString() ?? '';
       return FeedPostModel.fromJson(

@@ -73,6 +73,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
 
   @override
   void dispose() {
+    _applicationController.dispose();
     _scrollController.removeListener(_scrollListener);
     _scrollController.dispose();
     super.dispose();

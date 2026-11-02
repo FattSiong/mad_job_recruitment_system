@@ -12,7 +12,8 @@ import '../../../models/call_model.dart';
 import '../../../models/chat_room_model.dart';
 import '../../../models/message_model.dart';
 import '../../../services/call_service.dart';
-import 'chat_user_directory.dart';
+import '../../../services/push_service.dart';
+import '../../../services/user_directory.dart';
 
 /// Data for one conversation: live messages, sending text / files / voice,
 /// read receipts, deleting, shared attachments and starting a call.
@@ -64,6 +65,7 @@ class ChatRoomController extends ChangeNotifier {
   // ---------------------------------------------------------------------
 
   void start() {
+    PushService.activeChatRoomID = roomID; // no pop-ups for this chat while open
     _subscription?.cancel();
     _isLoading = _messages.isEmpty;
     _error = null;
@@ -308,7 +310,7 @@ class ChatRoomController extends ChangeNotifier {
   }
 
   static Future<ChatParticipant> fetchParticipant(String userID) =>
-      ChatUserDirectory.fetchOne(userID);
+      UserDirectory.fetchOne(userID);
 
   // ---------------------------------------------------------------------
 
@@ -319,6 +321,7 @@ class ChatRoomController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    if (PushService.activeChatRoomID == roomID) PushService.activeChatRoomID = null;
     _readDebounce?.cancel();
     _subscription?.cancel();
     super.dispose();

@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/data_load_exception.dart';
@@ -57,9 +56,9 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
   String _selectedDatePosted = JobFilterOptions.anyDate;
   String _selectedSalary = JobFilterOptions.anySalary;
 
-  User? get _currentUser => Supabase.instance.client.auth.currentUser;
+  String? get _currentUserId => SessionHelper.currentUserId;
 
-  StreamSubscription<AuthState>? _authSubscription;
+  StreamSubscription<Object>? _authSubscription;
 
   bool get _hasActiveFilters =>
       _keywordController.text.isNotEmpty ||
@@ -74,7 +73,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     final name = _fullName?.trim() ?? '';
     if (name.isNotEmpty) return name.split(RegExp(r'\s+')).first;
 
-    final email = _currentUser?.email ?? '';
+    final email = SessionHelper.currentEmail ?? '';
     if (email.isEmpty) return 'there';
     return email.split('@').first;
   }
@@ -83,12 +82,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
   void initState() {
     super.initState();
     SessionHelper.consumeManualSignOut(); // fresh login: clear any old flag
-    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen(
-      (data) {
-        if (data.event == AuthChangeEvent.signedOut) _handleSignedOut();
-      },
-      onError: (Object e) => debugPrint('Auth state error: $e'),
-    );
+    _authSubscription = SessionHelper.onSessionEnded(_handleSignedOut);
     _scrollController.addListener(_handleScroll);
     _loadJobs();
     _loadName();
@@ -97,8 +91,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
   /// The session ended (expired, or signed out elsewhere): go back to Login.
   /// For a normal Logout the profile screen navigates too; whichever runs
   /// first wins and the other sees `mounted == false`.
-  void _handleSignedOut() {
-    final wasManual = SessionHelper.consumeManualSignOut();
+  void _handleSignedOut(bool wasManual) {
     if (!mounted) return;
 
     final messenger = ScaffoldMessenger.of(context);
@@ -625,7 +618,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
   }
 
   Widget _buildMessagesTab() {
-    if (_currentUser == null) {
+    if (_currentUserId == null) {
       return const Center(child: Text('Not logged in'));
     }
 
@@ -706,9 +699,9 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
   }
 
   Widget _buildCommunityTab() {
-    if (_currentUser == null) {
+    if (_currentUserId == null) {
       return const Center(child: Text('Not logged in'));
     }
-    return CommunityHubScreen(currentUserID: _currentUser!.id);
+    return CommunityHubScreen(currentUserID: _currentUserId!);
   }
 }

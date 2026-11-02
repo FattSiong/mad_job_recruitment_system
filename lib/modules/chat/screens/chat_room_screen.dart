@@ -9,12 +9,11 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/chat_room_model.dart';
 import '../../../models/message_model.dart';
-import '../../../services/push_service.dart';
 import '../../community/screens/standard_call_screen.dart';
 import '../chat_formatters.dart';
 import '../controllers/chat_room_controller.dart';
 import '../controllers/voice_recorder_controller.dart';
-import '../widgets/chat_avatar.dart';
+import '../../../shared_widgets/user_avatar.dart';
 import '../widgets/chat_composer.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/shared_attachments_sheet.dart';
@@ -41,12 +40,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   void initState() {
     super.initState();
     _controller.start();
-    PushService.activeChatRoomID = widget.roomID; // no pop-ups for this chat while open
   }
 
   @override
   void dispose() {
-    if (PushService.activeChatRoomID == widget.roomID) PushService.activeChatRoomID = null;
     _recorder.dispose();
     _controller.dispose();
     _textController.dispose();
@@ -251,7 +248,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         titleSpacing: 0,
         title: Row(
           children: [
-            ChatAvatar(user: widget.otherUser, size: 42),
+            UserAvatar(user: widget.otherUser, size: 42),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -364,7 +361,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ChatAvatar(user: widget.otherUser, size: 72),
+              UserAvatar(user: widget.otherUser, size: 72),
               const SizedBox(height: 16),
               Text(
                 'Say hello to ${widget.otherUser.displayName}',

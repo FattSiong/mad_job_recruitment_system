@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/table_constants.dart';
+import '../../../core/utils/data_load_exception.dart';
 import '../../../models/advisor_conversation_model.dart';
 import '../../../models/advisor_message_model.dart';
 import '../../../core/utils/session_helper.dart';
@@ -30,11 +31,121 @@ class AdvisorException implements Exception {
   String toString() => message;
 }
 
-class CareerAdvisorController {
+/// AI Career Advisor: the open conversation (state for the chat screen)
+/// plus loading, sending and deleting conversations.
+class CareerAdvisorController extends ChangeNotifier {
   final _supabase = Supabase.instance.client;
   String get _currentSeekerID => SessionHelper.requireUserId();
 
   static const int maxMessageLength = 2000;
+
+  // ---------------------------------------------------------------------
+  // State of the open conversation
+  // ---------------------------------------------------------------------
+
+  final List<AdvisorMessageModel> _messages = [];
+  String? _conversationID;
+  String? _conversationTitle;
+  bool _isLoadingHistory = false;
+  bool _isSending = false;
+  bool _disposed = false;
+
+  /// Increases on every conversation switch, so a slow, older load can't
+  /// show its messages under the conversation the user opened afterwards.
+  int _historyRequest = 0;
+
+  List<AdvisorMessageModel> get messages => List.unmodifiable(_messages);
+  String? get conversationID => _conversationID;
+  String? get conversationTitle => _conversationTitle;
+  bool get isLoadingHistory => _isLoadingHistory;
+  bool get isSending => _isSending;
+
+  /// Shows a past conversation. Returns an error message, or null.
+  Future<String?> openConversation(String conversationID, {String? title}) async {
+    final request = ++_historyRequest;
+    _isLoadingHistory = true;
+    _conversationID = conversationID;
+    _conversationTitle = title;
+    _messages.clear();
+    _notify();
+
+    try {
+      final messages = await fetchMessages(conversationID);
+      if (request != _historyRequest) return null; // a newer tap won
+      _messages.addAll(messages);
+      return null;
+    } on DataLoadException catch (e) {
+      if (request != _historyRequest) return null;
+      return e.message;
+    } finally {
+      if (request == _historyRequest) {
+        _isLoadingHistory = false;
+        _notify();
+      }
+    }
+  }
+
+  /// Clears the screen for a new conversation (ignored while sending).
+  void startNewConversation() {
+    if (_isSending) return;
+    _historyRequest++; // ignore any conversation still loading
+    _isLoadingHistory = false;
+    _conversationID = null;
+    _conversationTitle = null;
+    _messages.clear();
+    _notify();
+  }
+
+  /// Sends [text] in the open conversation (or starts one).
+  /// The question shows straight away; on failure it is removed again and
+  /// the error is thrown as [AdvisorException] so the screen can give the
+  /// text back to the user.
+  Future<void> send(String text) async {
+    if (_isSending) return;
+    final question = text.trim();
+    if (question.isEmpty) {
+      throw AdvisorException('empty_message', 'Please enter a question for the advisor.');
+    }
+
+    final pending = AdvisorMessageModel.pending(question);
+    _messages.add(pending);
+    _isSending = true;
+    _notify();
+
+    try {
+      final result = await sendMessage(message: question, conversationID: _conversationID);
+      final index = _messages.indexOf(pending);
+      if (index != -1) _messages[index] = result.userMessage;
+      _messages.add(result.reply);
+      _conversationTitle ??=
+          question.length > 50 ? '${question.substring(0, 50)}…' : question;
+      _conversationID = result.conversationID;
+    } on AdvisorException catch (e) {
+      _messages.remove(pending);
+      if (e.code == 'conversation_not_found') {
+        _isSending = false;
+        startNewConversation();
+      }
+      rethrow;
+    } finally {
+      _isSending = false;
+      _notify();
+    }
+  }
+
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  // ---------------------------------------------------------------------
+  // Data
+  // ---------------------------------------------------------------------
 
   /// Sends a question to the `career-advisor` Edge Function.
   /// Pass [conversationID] = null to start a new conversation.
@@ -117,6 +228,7 @@ class CareerAdvisorController {
   }
 
   /// All messages of one conversation, oldest first.
+  /// Throws [DataLoadException] if they can't be loaded.
   Future<List<AdvisorMessageModel>> fetchMessages(String conversationID) async {
     try {
       final response = await _supabase
@@ -131,7 +243,9 @@ class CareerAdvisorController {
           .toList();
     } catch (e) {
       debugPrint('Error fetching advisor messages: $e');
-      return [];
+      throw DataLoadException(
+        'Unable to load this conversation. Please check your connection and try again.',
+      );
     }
   }
 

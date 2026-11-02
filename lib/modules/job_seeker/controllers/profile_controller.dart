@@ -9,12 +9,21 @@ import '../../../models/education_model.dart';
 import '../../../models/job_seeker_model.dart';
 import '../../../models/work_experience_model.dart';
 import '../../../core/utils/session_helper.dart';
+import '../../../services/auth_service.dart';
 
+/// Job seeker profile data.
+///
+/// Convention used by all job seeker controllers:
+/// - loads throw [DataLoadException] (or [SessionExpiredException]) with a
+///   message the screen can show, so "failed" never looks like "empty";
+/// - writes return true/false (or null for uploads) and the screen shows
+///   the success or failure message.
 class ProfileController {
   final _supabase = Supabase.instance.client;
   static const String _profilePicturesBucket = 'profile_pictures';
 
-  Future<JobSeekerModel?> fetchProfile() async {
+  /// The logged-in seeker's profile with work experience and education.
+  Future<JobSeekerModel> fetchProfile() async {
     try {
       final userId = SessionHelper.requireUserId();
       final response = await _supabase
@@ -24,13 +33,18 @@ class ProfileController {
           .single();
 
       return JobSeekerModel.fromJson(response);
+    } on DataLoadException {
+      rethrow; // session expired
     } catch (e) {
       debugPrint('Error fetching profile: $e');
-      return null;
+      throw DataLoadException(
+        'Unable to load your profile. Please check your connection and try again.',
+      );
     }
   }
 
   /// Full name of the logged-in job seeker (for the dashboard greeting).
+  /// Optional decoration, so it returns null instead of throwing.
   Future<String?> fetchFullName() async {
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -50,6 +64,8 @@ class ProfileController {
   /// Profile shown after scanning a QR code (fix #8).
   /// Email, phone and resume are only included for employers, admins and the owner;
   /// [contactVisible] tells the screen whether they were hidden.
+  /// Returns null if there is no such profile; throws [DataLoadException]
+  /// if it couldn't be loaded.
   Future<({JobSeekerModel profile, bool contactVisible})?> fetchPublicProfile(
     String targetSeekerId,
   ) async {
@@ -60,7 +76,8 @@ class ProfileController {
           .from(TableConstants.jobSeeker)
           .select('*, WorkExperience(*), Education(*)')
           .eq('seekerID', targetSeekerId)
-          .single();
+          .maybeSingle();
+      if (response == null) return null;
       final full = JobSeekerModel.fromJson(response);
 
       String? viewerRole;
@@ -93,7 +110,9 @@ class ProfileController {
       return (profile: limited, contactVisible: false);
     } catch (e) {
       debugPrint('Error fetching public profile: $e');
-      return null;
+      throw DataLoadException(
+        'Unable to load this profile. Please check your connection and try again.',
+      );
     }
   }
 
@@ -176,8 +195,7 @@ class ProfileController {
 
   /// The seeker's work experience, most recent first.
   Future<List<WorkExperienceModel>> fetchWorkExperiences() async {
-    final userId = _supabase.auth.currentUser?.id;
-    if (userId == null) return [];
+    final userId = SessionHelper.requireUserId(); // throws if signed out
     try {
       final response = await _supabase
           .from(TableConstants.workExperience)
@@ -198,8 +216,7 @@ class ProfileController {
 
   /// The seeker's education, most recent first.
   Future<List<EducationModel>> fetchEducation() async {
-    final userId = _supabase.auth.currentUser?.id;
-    if (userId == null) return [];
+    final userId = SessionHelper.requireUserId(); // throws if signed out
     try {
       final response = await _supabase
           .from(TableConstants.education)
@@ -300,5 +317,12 @@ class ProfileController {
       debugPrint('Error deleting education: $e');
       return false;
     }
+  }
+
+  /// Logs out. Marked as manual so the dashboard doesn't show
+  /// "session expired" for a logout the user asked for.
+  Future<void> signOut() async {
+    SessionHelper.markManualSignOut();
+    await AuthService().signOut();
   }
 }

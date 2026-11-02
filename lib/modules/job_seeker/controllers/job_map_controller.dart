@@ -5,7 +5,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../core/utils/data_load_exception.dart';
 import '../../../models/nearby_job_model.dart';
-import '../widgets/job_filters.dart';
+import '../../../core/constants/job_filter_options.dart';
 import 'location_controller.dart';
 
 /// Why the map couldn't use the phone's location.

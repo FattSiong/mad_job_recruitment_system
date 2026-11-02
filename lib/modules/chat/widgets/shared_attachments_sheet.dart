@@ -5,7 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/file_preview_helper.dart';
 import '../../../models/message_model.dart';
 import '../chat_formatters.dart';
-import 'full_screen_image_viewer.dart';
+import '../../../shared_widgets/full_screen_image_viewer.dart';
 
 /// Photos and files shared in a chat.
 Future<void> showSharedAttachmentsSheet(

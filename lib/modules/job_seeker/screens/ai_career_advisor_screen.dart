@@ -39,20 +39,18 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
-  final List<AdvisorMessageModel> _messages = [];
-  String? _conversationID;
-  String? _conversationTitle;
-  bool _isLoadingHistory = false;
+  // Conversation state lives in the controller (MVC); these read it.
+  List<AdvisorMessageModel> get _messages => _controller.messages;
+  String? get _conversationTitle => _controller.conversationTitle;
+  bool get _isLoadingHistory => _controller.isLoadingHistory;
+  bool get _isSending => _controller.isSending;
 
-  /// Increases on every conversation switch, so a slow, older load can't
-  /// show its messages under the conversation the user opened afterwards.
-  int _historyRequest = 0;
-  bool _isSending = false;
   bool _hasMessageText = false;
 
   @override
   void initState() {
     super.initState();
+    _controller.addListener(_onControllerChanged);
     _messageController.addListener(() {
       final hasText = _messageController.text.trim().isNotEmpty;
       if (hasText != _hasMessageText) {
@@ -66,9 +64,15 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
 
   @override
   void dispose() {
+    _controller.removeListener(_onControllerChanged);
+    _controller.dispose();
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onControllerChanged() {
+    if (mounted) setState(() {});
   }
 
   // ---------------------------------------------------------------------
@@ -76,39 +80,29 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
   // ---------------------------------------------------------------------
 
   Future<void> _openConversation(String conversationID, {String? title}) async {
-    final request = ++_historyRequest;
-    setState(() {
-      _isLoadingHistory = true;
-      _conversationID = conversationID;
-      _conversationTitle = title;
-      _messages.clear();
-    });
-
-    final messages = await _controller.fetchMessages(conversationID);
-    if (!mounted || request != _historyRequest) return; // a newer tap won
-
-    setState(() {
-      _messages.addAll(messages);
-      _isLoadingHistory = false;
-    });
+    final error = await _controller.openConversation(conversationID, title: title);
+    if (!mounted) return;
+    if (error != null) {
+      SnackBarHelper.showStyled(
+        context,
+        message: error,
+        icon: Icons.error_outline_rounded,
+        accentColor: AppColors.errorRed,
+        duration: const Duration(seconds: 3),
+      );
+      return;
+    }
     _scrollToBottom();
   }
 
   void _startNewConversation() {
     if (_isSending) return;
-    _historyRequest++; // ignore any conversation still loading
-    setState(() {
-      _isLoadingHistory = false;
-      _conversationID = null;
-      _conversationTitle = null;
-      _messages.clear();
-      _messageController.clear();
-    });
+    _controller.startNewConversation();
+    _messageController.clear();
   }
 
   Future<void> _sendMessage([String? presetText]) async {
     if (_isSending) return;
-
     final text = (presetText ?? _messageController.text).trim();
 
     // Use case A2: ignore empty input and prompt the user
@@ -122,47 +116,21 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
       return;
     }
 
-    // Show the user's message straight away
-    final pending = AdvisorMessageModel.pending(text);
-    setState(() {
-      _messages.add(pending);
-      _isSending = true;
-      _messageController.clear();
-    });
+    _messageController.clear();
+    final sending = _controller.send(text); // the question shows straight away
     _scrollToBottom();
 
     try {
-      final result = await _controller.sendMessage(
-        message: text,
-        conversationID: _conversationID,
-      );
+      await sending;
       if (!mounted) return;
-
-      setState(() {
-        final index = _messages.indexOf(pending);
-        if (index != -1) _messages[index] = result.userMessage;
-        _messages.add(result.reply);
-        _conversationTitle ??= text.length > 50 ? '${text.substring(0, 50)}…' : text;
-        _conversationID = result.conversationID;
-        _isSending = false;
-      });
       _scrollToBottom();
     } on AdvisorException catch (e) {
       if (!mounted) return;
-
-      // Use case A1: remove the unsent message, give the text back, show error
-      setState(() {
-        _messages.remove(pending);
-        _isSending = false;
-        if (_messageController.text.trim().isEmpty) {
-          _messageController.text = text;
-          _messageController.selection =
-              TextSelection.collapsed(offset: text.length);
-        }
-      });
-
-      if (e.code == 'conversation_not_found') _startNewConversation();
-
+      // Use case A1: give the text back and show the error
+      if (_messageController.text.trim().isEmpty) {
+        _messageController.text = text;
+        _messageController.selection = TextSelection.collapsed(offset: text.length);
+      }
       SnackBarHelper.showStyled(
         context,
         message: e.message,
@@ -210,7 +178,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
       ),
       builder: (sheetContext) => _ConversationHistorySheet(
         controller: _controller,
-        currentConversationID: _conversationID,
+        currentConversationID: _controller.conversationID,
         onSelected: (conversation) {
           Navigator.pop(sheetContext);
           _openConversation(
@@ -219,7 +187,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
           );
         },
         onDeleted: (conversationID) {
-          if (conversationID == _conversationID) _startNewConversation();
+          if (conversationID == _controller.conversationID) _startNewConversation();
         },
       ),
     );

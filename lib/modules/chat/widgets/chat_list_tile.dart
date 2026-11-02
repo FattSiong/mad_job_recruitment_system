@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../models/chat_room_model.dart';
 import '../chat_formatters.dart';
-import 'chat_avatar.dart';
+import '../../../shared_widgets/user_avatar.dart';
 
 /// One conversation on the chat list.
 class ChatListTile extends StatelessWidget {
@@ -33,7 +33,7 @@ class ChatListTile extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              ChatAvatar(user: room.otherUser, size: 54),
+              UserAvatar(user: room.otherUser, size: 54),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(

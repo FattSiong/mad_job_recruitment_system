@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/data_load_exception.dart';
 import '../../../core/utils/file_preview_helper.dart';
 import '../../../core/utils/link_helper.dart';
 import '../../../core/utils/snackbar_helper.dart';
@@ -13,6 +14,7 @@ import '../../../models/skill_model.dart';
 import '../../../shared_widgets/skill_chips.dart';
 import '../controllers/profile_controller.dart';
 import '../controllers/skill_controller.dart';
+import '../widgets/load_error_view.dart';
 
 class PublicProfileScreen extends StatefulWidget {
   final String seekerId;
@@ -36,6 +38,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   List<SkillModel> _skills = [];
   bool _contactVisible = false;
   bool _isLoading = true;
+  String? _loadError;
 
   @override
   void initState() {
@@ -44,16 +47,30 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   }
 
   Future<void> _loadPublicProfile() async {
-    final responses = await Future.wait([
-      _controller.fetchPublicProfile(widget.seekerId),
-      _skillController.fetchSkillsForSeeker(widget.seekerId),
-    ]);
-    final result = responses[0] as ({JobSeekerModel profile, bool contactVisible})?;
-    if (mounted) {
+    if (!_isLoading) {
+      // Try Again (the first load starts with _isLoading already true).
+      setState(() {
+        _isLoading = true;
+        _loadError = null;
+      });
+    }
+    try {
+      final responses = await Future.wait([
+        _controller.fetchPublicProfile(widget.seekerId),
+        _skillController.fetchSkillsForSeeker(widget.seekerId),
+      ]);
+      final result = responses[0] as ({JobSeekerModel profile, bool contactVisible})?;
+      if (!mounted) return;
       setState(() {
         _profile = result?.profile;
         _skills = responses[1] as List<SkillModel>;
         _contactVisible = result?.contactVisible ?? false;
+        _isLoading = false;
+      });
+    } on DataLoadException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadError = e.message;
         _isLoading = false;
       });
     }
@@ -447,6 +464,8 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
       backgroundColor: AppColors.background,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          : _loadError != null
+          ? LoadErrorView(message: _loadError!, onRetry: _loadPublicProfile)
           : _profile == null
           ? const Center(child: Text('Profile not found.', style: TextStyle(color: _textPrimary)))
           : SafeArea(

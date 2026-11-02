@@ -11,19 +11,17 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/file_picker_helper.dart';
 import '../../../core/utils/file_preview_helper.dart';
 import '../../../core/utils/link_helper.dart';
-import '../../../core/utils/session_helper.dart';
 import '../../../models/education_model.dart';
 import '../../../models/job_seeker_model.dart';
 import '../../../models/skill_model.dart';
 import '../../../models/work_experience_model.dart';
-import '../../../services/auth_service.dart';
 import '../../../shared_widgets/login_screen.dart';
 import '../../../shared_widgets/skill_chips.dart';
-import '../controllers/profile_controller.dart';
-import '../controllers/skill_controller.dart';
+import '../controllers/my_profile_controller.dart';
 import '../widgets/profile/profile_qr_dialog.dart';
 import '../widgets/profile/profile_record_card.dart';
 import '../widgets/profile/profile_sheet_helpers.dart';
+import '../widgets/load_error_view.dart';
 import 'add_skill_screen.dart';
 import 'education_screen.dart';
 import 'work_experience_screen.dart';
@@ -49,19 +47,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
   static const Color _surfaceAlt = AppColors.surfaceAlt;
   static const Color _border = AppColors.border;
 
-  final ProfileController _controller = ProfileController();
-  final SkillController _skillController = SkillController();
+  /// Profile state (profile, skills, edit mode, saving) lives here (MVC).
+  final MyProfileController _myProfile = MyProfileController();
 
   final GlobalKey<FormState> _profileFormKey = GlobalKey<FormState>();
 
-  JobSeekerModel? _profile;
-  List<SkillModel> _skills = [];
-  bool _isLoading = true;
-  bool _isUploading = false;
-  bool _isEditing = false;
-  bool _isSavingProfile = false;
-  File? _newProfileImage;
-  bool _removePhoto = false; // user chose "Remove photo" (applied on Save)
+  // Read-only views of the controller state used by the UI below.
+  JobSeekerModel? get _profile => _myProfile.profile;
+  List<SkillModel> get _skills => _myProfile.skills;
+  bool get _isLoading => _myProfile.isLoading;
+  bool get _isUploading => _myProfile.isUploadingResume;
+  bool get _isEditing => _myProfile.isEditing;
+  bool get _isSavingProfile => _myProfile.isSaving;
+  File? get _newProfileImage => _myProfile.newPhoto;
+  bool get _removePhoto => _myProfile.photoRemoved;
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -74,7 +73,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
+    _myProfile.addListener(_onProfileChanged);
     _loadProfile();
+  }
+
+  void _onProfileChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -86,35 +90,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _bioController.dispose();
     _linkedinController.dispose();
     _githubController.dispose();
+    _myProfile.removeListener(_onProfileChanged);
+    _myProfile.dispose();
     super.dispose();
   }
 
   Future<void> _loadProfile() async {
-    setState(() => _isLoading = true);
-    final results = await Future.wait([
-      _controller.fetchProfile(),
-      _fetchSkillsSafely(),
-    ]);
-    final profile = results[0] as JobSeekerModel?;
-    _skills = results[1] as List<SkillModel>;
-
-    if (mounted) {
-      setState(() {
-        _profile = profile;
-        _isLoading = false;
-        _newProfileImage = null;
-      });
-      _populateControllers();
-    }
-  }
-
-  /// Skills failing to load shouldn't stop the rest of the profile from showing.
-  Future<List<SkillModel>> _fetchSkillsSafely() async {
-    try {
-      return await _skillController.fetchMySkills();
-    } catch (_) {
-      return _skills;
-    }
+    await _myProfile.load();
+    if (mounted) _populateControllers();
   }
 
   Future<void> _openSkillsScreen() async {
@@ -122,8 +105,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context,
       MaterialPageRoute(builder: (_) => const AddSkillScreen()),
     );
-    final skills = await _fetchSkillsSafely();
-    if (mounted) setState(() => _skills = skills);
+    if (mounted) await _myProfile.refreshSkills();
   }
 
   Widget _buildSkillsSection() {
@@ -164,49 +146,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
       allowedExtensions: FileLimits.resumeExtensions,
     );
 
-    if (result != null && result.files.single.path != null) {
-      if (!FileLimits.isAllowedResume(result.files.single.path!)) {
-        _showStyledSnackBar(
-          message: 'Please choose a ${FileLimits.resumeTypesLabel} file.',
-          icon: Icons.info_outline_rounded,
-          accentColor: AppColors.errorRed,
-        );
-        return;
-      }
-      setState(() => _isUploading = true);
+    final path = result?.files.single.path;
+    if (path == null) return; // cancelled
 
-      final file = File(result.files.single.path!);
-      final sizeError = await FilePickerHelper.checkSize(file, FileLimits.resumeMB);
-      if (sizeError != null) {
-        if (mounted) {
-          setState(() => _isUploading = false);
-          _showStyledSnackBar(
-            message: sizeError,
-            icon: Icons.info_outline_rounded,
-            accentColor: AppColors.errorRed,
-          );
-        }
-        return;
-      }
-      final String? newUrl = await _controller.uploadResume(file);
-
-      if (mounted) {
-        if (newUrl != null) {
-          _showStyledSnackBar(
-            message: 'Resume uploaded successfully!',
-            icon: Icons.check_circle_outline_rounded,
-            accentColor: AppColors.successGreen,
-          );
-          _loadProfile();
-        } else {
-          _showStyledSnackBar(
-            message: 'Failed to upload resume.',
-            icon: Icons.error_outline_rounded,
-            accentColor: AppColors.errorRed,
-          );
-        }
-        setState(() => _isUploading = false);
-      }
+    final error = await _myProfile.uploadResume(File(path));
+    if (!mounted) return;
+    if (error == null) {
+      _populateControllers();
+      _showStyledSnackBar(
+        message: 'Resume uploaded successfully!',
+        icon: Icons.check_circle_outline_rounded,
+        accentColor: AppColors.successGreen,
+      );
+    } else {
+      _showStyledSnackBar(
+        message: error,
+        icon: Icons.error_outline_rounded,
+        accentColor: AppColors.errorRed,
+      );
     }
   }
 
@@ -306,9 +263,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return null;
   }
 
-  bool get _hasPhoto =>
-      _newProfileImage != null ||
-      (!_removePhoto && (_profile?.profilePictureURL?.isNotEmpty ?? false));
+  bool get _hasPhoto => _myProfile.hasPhoto;
 
   /// Camera / library / remove options for the profile photo (edit mode).
   Future<void> _showPhotoOptions() async {
@@ -367,10 +322,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       case 'gallery':
         await _pickProfileImage(ImageSource.gallery);
       case 'remove':
-        setState(() {
-          _newProfileImage = null;
-          _removePhoto = true;
-        });
+        _myProfile.removePhoto();
     }
   }
 
@@ -441,10 +393,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
-    setState(() {
-      _newProfileImage = File(croppedFile.path);
-      _removePhoto = false;
-    });
+    _myProfile.setNewPhoto(File(croppedFile.path));
   }
 
   Widget _buildProfileAvatar({
@@ -1014,81 +963,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
-    setState(() => _isSavingProfile = true);
-
-    final String? oldPictureUrl = _profile!.profilePictureURL;
-    String? profilePictureUrl = _removePhoto ? null : oldPictureUrl;
-    if (_newProfileImage != null) {
-      final uploadedUrl = await _controller.uploadProfilePicture(_newProfileImage!);
-      if (uploadedUrl == null) {
-        if (mounted) {
-          _showStyledSnackBar(
-            message: 'Failed to upload profile photo.',
-            icon: Icons.error_outline_rounded,
-            accentColor: AppColors.errorRed,
-          );
-          setState(() => _isSavingProfile = false);
-        }
-        return;
-      }
-      profilePictureUrl = uploadedUrl;
-    }
-
-    final updatedModel = JobSeekerModel(
-      seekerID: _profile!.seekerID,
-      fullName: _nameController.text.trim(),
-      email: _profile!.email,
-      resumeURL: _profile!.resumeURL,
-      profilePictureURL: profilePictureUrl,
-      phoneNumber: _phoneController.text.trim().isEmpty
-          ? null
-          : _phoneController.text.trim(),
-      location: _locationController.text.trim().isEmpty
-          ? null
-          : _locationController.text.trim(),
-      bio: _bioController.text.trim().isEmpty
-          ? null
-          : _bioController.text.trim(),
-      linkedInURL: _linkedinController.text.trim().isEmpty
-          ? null
-          : _linkedinController.text.trim(),
-      gitHubURL: _githubController.text.trim().isEmpty
-          ? null
-          : _githubController.text.trim(),
-      education: _profile!.education,
-      workExperience: _profile!.workExperience,
-    );
-
+    final error = await _myProfile.save(ProfileEdits(
+      fullName: _nameController.text,
+      phone: _phoneController.text,
+      location: _locationController.text,
+      bio: _bioController.text,
+      linkedIn: _linkedinController.text,
+      gitHub: _githubController.text,
+    ));
     if (!mounted) return;
 
-    final didUpdate = await _controller.updateProfileBasics(updatedModel);
-
-    if (!mounted) return;
-    _showResult(didUpdate, 'Profile updated successfully!', 'Failed to update profile.');
-
-    setState(() {
-      _isSavingProfile = false;
-      if (didUpdate) {
-        _profile = updatedModel;
-        _isEditing = false;
-        _newProfileImage = null;
-        _removePhoto = false;
-        _populateControllers();
-      }
-    });
-
-    // The old photo is no longer used (replaced or removed): clean it up.
-    if (didUpdate &&
-        oldPictureUrl != null &&
-        oldPictureUrl.isNotEmpty &&
-        oldPictureUrl != profilePictureUrl) {
-      _controller.deleteProfilePictureFile(oldPictureUrl);
-    }
+    if (error == null) _populateControllers();
+    _showResult(error == null, 'Profile updated successfully!', error ?? '');
   }
 
   Future<void> _logout() async {
-    SessionHelper.markManualSignOut();
-    await AuthService().signOut();
+    await _myProfile.signOut();
 
     if (!mounted) return;
 
@@ -1144,12 +1034,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: CircularProgressIndicator(color: AppColors.primary),
       )
           : _profile == null
-          ? const Center(
-        child: Text(
-          'Failed to load profile.',
-          style: TextStyle(color: _textPrimary),
-        ),
-      )
+          ? LoadErrorView(
+              message: _myProfile.loadError ?? 'Failed to load profile.',
+              onRetry: _loadProfile,
+            )
           : SafeArea(
         child: RefreshIndicator(
           onRefresh: _loadProfile,
@@ -1363,7 +1251,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       floatingActionButton: (!_isEditing && _profile != null)
           ? FloatingActionButton.extended(
-        onPressed: () => setState(() => _isEditing = true),
+        onPressed: _myProfile.startEditing,
         icon: const Icon(Icons.edit_rounded, color: Colors.white),
         label: const Text(
           'Edit Profile',
@@ -1397,9 +1285,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onPressed: _isSavingProfile
                       ? null
                       : () {
-                    setState(() => _isEditing = false);
-                    _newProfileImage = null;
-                    _removePhoto = false;
+                    _myProfile.cancelEditing();
                     _populateControllers();
                   },
                   style: _secondaryButtonStyle(),

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../models/post_comment_model.dart';
-import '../../chat/widgets/chat_avatar.dart';
+import '../../../shared_widgets/user_avatar.dart';
 import '../community_formatters.dart';
 
 enum CommentAction { edit, delete, report }
@@ -31,7 +31,7 @@ class CommentTile extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ChatAvatar(user: comment.author, size: isReply ? 30 : 36),
+        UserAvatar(user: comment.author, size: isReply ? 30 : 36),
         const SizedBox(width: 10),
         Expanded(
           child: Container(

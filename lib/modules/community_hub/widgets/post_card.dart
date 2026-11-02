@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../models/feed_post_model.dart';
-import '../../chat/widgets/chat_avatar.dart';
+import '../../../shared_widgets/user_avatar.dart';
 import '../community_formatters.dart';
 import 'post_media_view.dart';
 
@@ -96,7 +96,7 @@ class _PostCardState extends State<PostCard> {
   Widget _buildHeader() {
     return Row(
       children: [
-        ChatAvatar(user: post.author, size: 46),
+        UserAvatar(user: post.author, size: 46),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
