@@ -428,6 +428,13 @@ verify_jwt = false
 import_map = "./functions/mock-interview/deno.json"
 entrypoint = "./functions/mock-interview/index.ts"
 
+[functions.send-push]
+enabled = true
+# Called only by the database trigger; checks the x-push-secret header itself.
+verify_jwt = false
+import_map = "./functions/send-push/deno.json"
+entrypoint = "./functions/send-push/index.ts"
+
 [functions.skill-gap-analysis]
 enabled = true
 # Verifies the user's token inside the function (works with sb_publishable_ keys).

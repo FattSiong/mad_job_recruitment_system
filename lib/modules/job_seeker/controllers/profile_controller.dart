@@ -123,6 +123,20 @@ class ProfileController {
     }
   }
 
+  /// Deletes an old profile photo from storage (best effort: a leftover file
+  /// is harmless, so errors are only logged).
+  Future<void> deleteProfilePictureFile(String publicUrl) async {
+    try {
+      const marker = '/$_profilePicturesBucket/';
+      final index = publicUrl.indexOf(marker);
+      if (index == -1) return;
+      final path = Uri.decodeComponent(publicUrl.substring(index + marker.length).split('?').first);
+      await _supabase.storage.from(_profilePicturesBucket).remove([path]);
+    } catch (e) {
+      debugPrint('Could not delete old profile photo: $e');
+    }
+  }
+
   Future<String?> uploadProfilePicture(File file) async {
     try {
       final userId = SessionHelper.requireUserId();

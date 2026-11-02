@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/constants/table_constants.dart';
+import 'push_service.dart';
 
 class AuthService {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -97,6 +98,8 @@ class AuthService {
 
   // 4. Sign Out Function
   Future<void> signOut() async {
+    // Stop this phone from receiving the user's chat notifications.
+    await PushService.unregisterCurrentDevice();
     await _supabase.auth.signOut();
   }
 }
