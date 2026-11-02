@@ -89,12 +89,12 @@ class ResumeBuilderController extends ChangeNotifier {
     }
 
     return ResumeModel(
-      fullName: profile?.fullName ?? '',
-      email: profile?.email ?? '',
-      phone: profile?.phoneNumber ?? '',
-      address: profile?.location ?? '',
-      education: [...?profile?.education]..sort(_newestEducationFirst),
-      experience: [...?profile?.workExperience]..sort(_newestExperienceFirst),
+      fullName: profile.fullName,
+      email: profile.email ?? '',
+      phone: profile.phoneNumber ?? '',
+      address: profile.location ?? '',
+      education: [...profile.education]..sort(_newestEducationFirst),
+      experience: [...profile.workExperience]..sort(_newestExperienceFirst),
       skills: skills.map((s) => ResumeSkill(s.skillName, s.proficiency)).toList(),
     );
   }

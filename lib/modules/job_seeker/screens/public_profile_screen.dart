@@ -1,10 +1,11 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/data_load_exception.dart';
 import '../../../core/utils/file_preview_helper.dart';
+import '../../../core/utils/link_helper.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/job_seeker_model.dart';
 import '../../../models/work_experience_model.dart';
@@ -13,6 +14,9 @@ import '../../../models/skill_model.dart';
 import '../../../shared_widgets/skill_chips.dart';
 import '../controllers/profile_controller.dart';
 import '../controllers/skill_controller.dart';
+import '../widgets/load_error_view.dart';
+import '../../../shared_widgets/hero_icon_button.dart';
+import '../../../shared_widgets/surface_card.dart';
 
 class PublicProfileScreen extends StatefulWidget {
   final String seekerId;
@@ -25,10 +29,6 @@ class PublicProfileScreen extends StatefulWidget {
 
 class _PublicProfileScreenState extends State<PublicProfileScreen> {
   // Theme Colors matching profile_screen.dart
-  static const Color _primary = AppColors.primary;
-  static const Color _textPrimary = AppColors.textDark;
-  static const Color _textMuted = AppColors.textMuted;
-  static const Color _surfaceAlt = AppColors.surfaceAlt;
 
   final ProfileController _controller = ProfileController();
   final SkillController _skillController = SkillController();
@@ -36,6 +36,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   List<SkillModel> _skills = [];
   bool _contactVisible = false;
   bool _isLoading = true;
+  String? _loadError;
 
   @override
   void initState() {
@@ -44,32 +45,44 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   }
 
   Future<void> _loadPublicProfile() async {
-    final responses = await Future.wait([
-      _controller.fetchPublicProfile(widget.seekerId),
-      _skillController.fetchSkillsForSeeker(widget.seekerId),
-    ]);
-    final result = responses[0] as ({JobSeekerModel profile, bool contactVisible})?;
-    if (mounted) {
+    if (!_isLoading) {
+      // Try Again (the first load starts with _isLoading already true).
+      setState(() {
+        _isLoading = true;
+        _loadError = null;
+      });
+    }
+    try {
+      final responses = await Future.wait([
+        _controller.fetchPublicProfile(widget.seekerId),
+        _skillController.fetchSkillsForSeeker(widget.seekerId),
+      ]);
+      final result = responses[0] as ({JobSeekerModel profile, bool contactVisible})?;
+      if (!mounted) return;
       setState(() {
         _profile = result?.profile;
         _skills = responses[1] as List<SkillModel>;
         _contactVisible = result?.contactVisible ?? false;
         _isLoading = false;
       });
+    } on DataLoadException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadError = e.message;
+        _isLoading = false;
+      });
     }
   }
 
   Future<void> _launchURL(String urlString) async {
-    final Uri url = Uri.parse(urlString.startsWith('http') ? urlString : 'https://$urlString');
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      if (mounted) {
-        SnackBarHelper.showStyled(
-          context,
-          message: 'Could not launch URL',
-          icon: Icons.error_outline_rounded,
-          accentColor: AppColors.errorRed,
-        );
-      }
+    final opened = await LinkHelper.openExternal(urlString);
+    if (!opened && mounted) {
+      SnackBarHelper.showError(
+        context,
+        LinkHelper.toWebUri(urlString) == null
+            ? 'This link isn\'t a valid web address.'
+            : 'Could not open this link.',
+      );
     }
   }
 
@@ -103,18 +116,6 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     return null;
   }
 
-  Widget _buildSurfaceCard({required Widget child, EdgeInsetsGeometry padding = const EdgeInsets.all(22)}) {
-    return Container(
-      width: double.infinity,
-      padding: padding,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: child,
-    );
-  }
-
   Widget _buildSectionHeader(String title) {
     return Padding(
       padding: const EdgeInsets.only(top: 26, bottom: 14),
@@ -123,30 +124,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
         style: const TextStyle(
           fontSize: 22,
           fontWeight: FontWeight.bold,
-          color: _textPrimary,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeroActionButton({
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback onTap,
-  }) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.white.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: SizedBox(
-            width: 42,
-            height: 42,
-            child: Icon(icon, color: Colors.white, size: 20),
-          ),
+          color: AppColors.textDark,
         ),
       ),
     );
@@ -169,7 +147,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
         children: [
           Row(
             children: [
-              _buildHeroActionButton(
+              HeroIconButton(
                 icon: Icons.arrow_back_rounded,
                 tooltip: 'Back',
                 onTap: () => Navigator.pop(context),
@@ -266,7 +244,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: _surfaceAlt,
+              color: AppColors.surfaceAlt,
               borderRadius: BorderRadius.circular(14),
             ),
             child: Center(child: icon),
@@ -280,7 +258,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                   label,
                   style: const TextStyle(
                     fontSize: 13,
-                    color: _textMuted,
+                    color: AppColors.textMuted,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -293,7 +271,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                     style: TextStyle(
                       fontSize: 15,
                       height: 1.45,
-                      color: isLink ? _primary : _textPrimary,
+                      color: isLink ? AppColors.primary : AppColors.textDark,
                       fontWeight: isLink ? FontWeight.w600 : FontWeight.w500,
                       decoration: isLink ? TextDecoration.underline : TextDecoration.none,
                     ),
@@ -310,7 +288,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   Widget _buildExperienceCard(WorkExperienceModel exp) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      child: _buildSurfaceCard(
+      child: SurfaceCard(
         padding: const EdgeInsets.all(20),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -318,10 +296,10 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: _primary.withValues(alpha: 0.10),
+                color: AppColors.primary.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: const Icon(Icons.work_outline_rounded, color: _primary, size: 24),
+              child: const Icon(Icons.work_outline_rounded, color: AppColors.primary, size: 24),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -333,14 +311,14 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 18,
-                      color: _textPrimary,
+                      color: AppColors.textDark,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     exp.companyName,
                     style: const TextStyle(
-                      color: _textMuted,
+                      color: AppColors.textMuted,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
@@ -359,7 +337,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                       exp.description!,
                       style: const TextStyle(
                         fontSize: 15,
-                        color: _textPrimary,
+                        color: AppColors.textDark,
                         height: 1.45,
                       ),
                     ),
@@ -376,7 +354,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   Widget _buildEducationCard(EducationModel edu) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      child: _buildSurfaceCard(
+      child: SurfaceCard(
         padding: const EdgeInsets.all(20),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -401,14 +379,14 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 18,
-                      color: _textPrimary,
+                      color: AppColors.textDark,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     edu.institutionName,
                     style: const TextStyle(
-                      color: _textMuted,
+                      color: AppColors.textMuted,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
@@ -427,7 +405,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                       edu.description!,
                       style: const TextStyle(
                         fontSize: 15,
-                        color: _textPrimary,
+                        color: AppColors.textDark,
                         height: 1.45,
                       ),
                     ),
@@ -447,8 +425,10 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
       backgroundColor: AppColors.background,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          : _loadError != null
+          ? LoadErrorView(message: _loadError!, onRetry: _loadPublicProfile)
           : _profile == null
-          ? const Center(child: Text('Profile not found.', style: TextStyle(color: _textPrimary)))
+          ? const Center(child: Text('Profile not found.', style: TextStyle(color: AppColors.textDark)))
           : SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
@@ -458,8 +438,8 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
               _buildHeroHeader(),
               const SizedBox(height: 24),
 
-              // 👉 Basic Information Card
-              _buildSurfaceCard(
+              // Basic Information Card
+              SurfaceCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -469,17 +449,17 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                         margin: const EdgeInsets.only(bottom: 20),
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: _surfaceAlt,
+                          color: AppColors.surfaceAlt,
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: const Row(
                           children: [
-                            Icon(Icons.lock_outline_rounded, color: _textMuted, size: 20),
+                            Icon(Icons.lock_outline_rounded, color: AppColors.textMuted, size: 20),
                             SizedBox(width: 10),
                             Expanded(
                               child: Text(
                                 'Contact details and resume are only visible to employers.',
-                                style: TextStyle(color: _textMuted, fontSize: 13, height: 1.35),
+                                style: TextStyle(color: AppColors.textMuted, fontSize: 13, height: 1.35),
                               ),
                             ),
                           ],
@@ -488,38 +468,38 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                     _buildField(
                       label: 'Email',
                       value: _profile!.email,
-                      icon: const Icon(Icons.email_outlined, color: _textMuted, size: 20),
+                      icon: const Icon(Icons.email_outlined, color: AppColors.textMuted, size: 20),
                     ),
                     _buildField(
                       label: 'Phone Number',
                       value: _profile!.phoneNumber,
-                      icon: const Icon(Icons.phone_outlined, color: _textMuted, size: 20),
+                      icon: const Icon(Icons.phone_outlined, color: AppColors.textMuted, size: 20),
                     ),
                     _buildField(
                       label: 'Bio / About Me',
                       value: _profile!.bio,
-                      icon: const Icon(Icons.menu_book_outlined, color: _textMuted, size: 20),
+                      icon: const Icon(Icons.menu_book_outlined, color: AppColors.textMuted, size: 20),
                     ),
                     _buildField(
                       label: 'LinkedIn URL',
                       value: _profile!.linkedInURL,
-                      icon: const FaIcon(FontAwesomeIcons.linkedin, color: _textMuted, size: 18),
+                      icon: const FaIcon(FontAwesomeIcons.linkedin, color: AppColors.textMuted, size: 18),
                       isLink: true,
                     ),
                     _buildField(
                       label: 'GitHub URL',
                       value: _profile!.gitHubURL,
-                      icon: const FaIcon(FontAwesomeIcons.github, color: _textMuted, size: 18),
+                      icon: const FaIcon(FontAwesomeIcons.github, color: AppColors.textMuted, size: 18),
                       isLink: true,
                     ),
                   ],
                 ),
               ),
 
-              // 👉 Resume Section
+              // Resume Section
               if (_profile!.resumeURL != null) ...[
                 _buildSectionHeader('Resume Document'),
-                _buildSurfaceCard(
+                SurfaceCard(
                   padding: const EdgeInsets.all(20),
                   child: Row(
                     children: [
@@ -545,14 +525,14 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
-                                color: _textPrimary,
+                                color: AppColors.textDark,
                               ),
                             ),
                             SizedBox(height: 4),
                             Text(
                               'Candidate attached a file.',
                               style: TextStyle(
-                                color: _textMuted,
+                                color: AppColors.textMuted,
                                 fontSize: 13,
                               ),
                             ),
@@ -568,7 +548,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                         icon: const Icon(Icons.visibility_outlined, size: 16),
                         label: const Text('View'),
                         style: TextButton.styleFrom(
-                          foregroundColor: _primary,
+                          foregroundColor: AppColors.primary,
                         ),
                       ),
                     ],
@@ -579,16 +559,16 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
               // Skills Section
               if (_skills.isNotEmpty) ...[
                 _buildSectionHeader('Skills'),
-                _buildSurfaceCard(child: SkillChips(skills: _skills)),
+                SurfaceCard(child: SkillChips(skills: _skills)),
               ],
 
-              // 👉 Work Experience Section
+              // Work Experience Section
               if (_profile!.workExperience.isNotEmpty) ...[
                 _buildSectionHeader('Experience'),
                 ..._profile!.workExperience.map(_buildExperienceCard),
               ],
 
-              // 👉 Education Section
+              // Education Section
               if (_profile!.education.isNotEmpty) ...[
                 _buildSectionHeader('Education'),
                 ..._profile!.education.map(_buildEducationCard),

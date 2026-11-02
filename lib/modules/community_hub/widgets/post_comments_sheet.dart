@@ -9,6 +9,7 @@ import '../controllers/post_comments_controller.dart';
 import '../screens/report_content_screen.dart';
 import 'comment_tile.dart';
 import 'community_state_card.dart';
+import '../../../shared_widgets/confirm_dialog.dart';
 
 /// Opens the comments of [post]. Returns the number of comments when closed,
 /// so the post card can show the new count.
@@ -59,13 +60,7 @@ class _PostCommentsSheetState extends State<PostCommentsSheet> {
   }
 
   void _showError(String message) {
-    SnackBarHelper.showStyled(
-      context,
-      message: message,
-      icon: Icons.error_outline_rounded,
-      accentColor: AppColors.errorRed,
-      duration: const Duration(seconds: 3),
-    );
+    SnackBarHelper.showError(context, message, duration: const Duration(seconds: 3));
   }
 
   Future<void> _send() async {
@@ -146,26 +141,12 @@ class _PostCommentsSheetState extends State<PostCommentsSheet> {
   }
 
   Future<void> _delete(PostCommentModel comment) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Delete comment?'),
-        content: const Text('This comment and any replies to it will be permanently deleted.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.danger),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Delete comment?',
+      message: 'This comment and any replies to it will be permanently deleted.',
     );
-    if (ok != true) return;
+    if (!ok) return;
     final error = await _c.delete(comment);
     if (error != null && mounted) _showError(error);
   }

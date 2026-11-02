@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/table_constants.dart';
+import '../../../core/utils/data_load_exception.dart';
 import '../../../models/pre_screening_question_model.dart';
 import 'applied_jobs_controller.dart';
 import '../../../core/utils/session_helper.dart';
@@ -21,13 +22,137 @@ class ApplicationException implements Exception {
   String toString() => message;
 }
 
-class ApplicationController {
+/// Which resume goes with the application.
+enum ResumeChoice { existing, newFile }
+
+/// Applying for a job: the form state (answers, resume choice) for the
+/// application screen, plus loading questions and submitting.
+class ApplicationController extends ChangeNotifier {
   final _supabase = Supabase.instance.client;
   String get _currentSeekerID => SessionHelper.requireUserId();
 
   static const String _resumeBucket = 'resumes';
   static const String _answerBucket = 'answer_files';
 
+  // ---------------------------------------------------------------------
+  // Form state
+  // ---------------------------------------------------------------------
+
+  List<PreScreeningQuestionModel> _questions = [];
+  String? _existingResumeUrl;
+  final Map<String, dynamic> _answers = {}; // questionID -> String or File
+  ResumeChoice _resumeChoice = ResumeChoice.existing;
+  File? _newResumeFile;
+  bool _isLoading = true;
+  bool _isSubmitting = false;
+  String? _loadError;
+  bool _disposed = false;
+
+  List<PreScreeningQuestionModel> get questions => List.unmodifiable(_questions);
+  String? get existingResumeUrl => _existingResumeUrl;
+  ResumeChoice get resumeChoice => _resumeChoice;
+  File? get newResumeFile => _newResumeFile;
+  bool get isLoading => _isLoading;
+  bool get isSubmitting => _isSubmitting;
+  String? get loadError => _loadError;
+
+  /// The answer to a question: a String, a File, or null.
+  dynamic answerFor(String questionID) => _answers[questionID];
+
+  /// Loads the job's questions and the seeker's saved resume.
+  Future<void> load(String jobId) async {
+    _isLoading = true;
+    _loadError = null;
+    _notify();
+    try {
+      final results = await Future.wait([getQuestions(jobId), getSeekerResume()]);
+      _questions = results[0] as List<PreScreeningQuestionModel>;
+      _existingResumeUrl = results[1] as String?;
+      if (_existingResumeUrl == null) _resumeChoice = ResumeChoice.newFile;
+    } on DataLoadException catch (e) {
+      _loadError = e.message;
+    } finally {
+      _isLoading = false;
+      _notify();
+    }
+  }
+
+  /// Typing doesn't rebuild the screen, so no notify here.
+  void setTextAnswer(String questionID, String text) => _answers[questionID] = text;
+
+  void setFileAnswer(String questionID, File file) {
+    _answers[questionID] = file;
+    _notify();
+  }
+
+  void chooseResume(ResumeChoice choice) {
+    if (_resumeChoice == choice) return;
+    _resumeChoice = choice;
+    _notify();
+  }
+
+  void setNewResumeFile(File file) {
+    _newResumeFile = file;
+    _resumeChoice = ResumeChoice.newFile;
+    _notify();
+  }
+
+  /// True when every question has an answer.
+  bool get questionsAnswered => _questions.every((q) {
+        final answer = _answers[q.questionID];
+        if (answer == null) return false;
+        if (answer is String && answer.trim().isEmpty) return false;
+        return true;
+      });
+
+  /// Checks the resume step. Returns a message to show, or null if OK.
+  String? validateResume() {
+    if (_resumeChoice == ResumeChoice.newFile && _newResumeFile == null) {
+      return 'Please select a resume file to upload.';
+    }
+    if (_resumeChoice == ResumeChoice.existing && _existingResumeUrl == null) {
+      return 'No existing resume found. Please upload a new one.';
+    }
+    return null;
+  }
+
+  /// Submits the form. Throws [ApplicationException] with a message to show.
+  Future<void> submit(String jobId) async {
+    final problem = validateResume();
+    if (problem != null) throw ApplicationException('resume_required', problem);
+    if (_isSubmitting) return;
+
+    _isSubmitting = true;
+    _notify();
+    try {
+      await submitApplication(
+        jobId: jobId,
+        answers: Map.of(_answers),
+        existingResumeUrl: _resumeChoice == ResumeChoice.existing ? _existingResumeUrl : null,
+        newResumeFile: _resumeChoice == ResumeChoice.newFile ? _newResumeFile : null,
+      );
+    } finally {
+      _isSubmitting = false;
+      _notify();
+    }
+  }
+
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  // ---------------------------------------------------------------------
+  // Data
+  // ---------------------------------------------------------------------
+
+  /// Throws [DataLoadException] if the questions can't be loaded (applying
+  /// without them would skip required answers).
   Future<List<PreScreeningQuestionModel>> getQuestions(String jobId) async {
     try {
       final response = await _supabase
@@ -39,7 +164,9 @@ class ApplicationController {
           .toList();
     } catch (e) {
       debugPrint('Error fetching questions: $e');
-      return [];
+      throw DataLoadException(
+        'Unable to load the application form. Please check your connection and try again.',
+      );
     }
   }
 
@@ -53,11 +180,15 @@ class ApplicationController {
       return response?['resumeURL'] as String?;
     } catch (e) {
       debugPrint('Error fetching resume: $e');
-      return null;
+      throw DataLoadException(
+        'Unable to load the application form. Please check your connection and try again.',
+      );
     }
   }
 
-  /// True if the current user already applied for this job (fix #1).
+  /// True if the current user already applied for this job.
+  /// Returns false if it can't be checked: the server still blocks a
+  /// duplicate application when it is submitted.
   Future<bool> hasApplied(String jobId) async {
     try {
       final row = await _supabase
@@ -99,7 +230,7 @@ class ApplicationController {
     }
   }
 
-  /// Submits the application in one database transaction (fix #2).
+  /// Submits the application in one database transaction.
   ///
   /// 1. Uploads the new resume and every answer file first. If any upload fails,
   ///    the files already uploaded are removed and nothing is saved.

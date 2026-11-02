@@ -1,11 +1,12 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/data_load_exception.dart';
 import '../../../core/utils/file_preview_helper.dart';
 import '../../../models/message_model.dart';
 import '../chat_formatters.dart';
-import 'full_screen_image_viewer.dart';
+import '../../../shared_widgets/full_screen_image_viewer.dart';
+import '../../../shared_widgets/storage_image.dart';
 
 /// Photos and files shared in a chat.
 Future<void> showSharedAttachmentsSheet(
@@ -33,7 +34,7 @@ class _SharedAttachmentsSheet extends StatefulWidget {
 }
 
 class _SharedAttachmentsSheetState extends State<_SharedAttachmentsSheet> {
-  late final Future<List<MessageModel>> _future = widget.load();
+  late Future<List<MessageModel>> _future = widget.load();
 
   @override
   Widget build(BuildContext context) {
@@ -66,6 +67,28 @@ class _SharedAttachmentsSheetState extends State<_SharedAttachmentsSheet> {
                 builder: (context, snapshot) {
                   if (snapshot.connectionState != ConnectionState.done) {
                     return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+                  }
+                  if (snapshot.hasError) {
+                    final error = snapshot.error;
+                    return Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            error is DataLoadException
+                                ? error.message
+                                : 'Unable to load shared photos and files.',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: AppColors.textMuted),
+                          ),
+                          TextButton.icon(
+                            onPressed: () => setState(() => _future = widget.load()),
+                            icon: const Icon(Icons.refresh_rounded),
+                            label: const Text('Try Again'),
+                          ),
+                        ],
+                      ),
+                    );
                   }
                   final items = snapshot.data ?? [];
                   if (items.isEmpty) {
@@ -103,11 +126,11 @@ class _SharedAttachmentsSheetState extends State<_SharedAttachmentsSheet> {
                                 tag: tag,
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(14),
-                                  child: CachedNetworkImage(
-                                    imageUrl: m.mediaURL!,
+                                  child: StorageImage(
+                                    url: m.mediaURL!,
                                     fit: BoxFit.cover,
                                     memCacheWidth: 300,
-                                    errorWidget: (_, __, ___) => Container(
+                                    error: (_) => Container(
                                       color: AppColors.surfaceAlt,
                                       child: const Icon(Icons.broken_image_outlined),
                                     ),

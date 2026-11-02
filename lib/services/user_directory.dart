@@ -1,14 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../core/constants/table_constants.dart';
-import '../../../models/chat_room_model.dart';
+import '../core/constants/table_constants.dart';
+import '../models/chat_room_model.dart';
 
-/// Looks up names, roles and photos of chat participants.
+/// Looks up names, roles and photos of users (chat, community, ...).
 /// Job seekers and employers keep their full name and photo in different
 /// tables, so both are checked; results are cached for the app session.
-class ChatUserDirectory {
-  ChatUserDirectory._();
+class UserDirectory {
+  UserDirectory._();
 
   static final Map<String, ChatParticipant> _cache = {};
 
@@ -28,7 +28,7 @@ class ChatUserDirectory {
           final rows = await supabase.from(table).select(columns).inFilter(idColumn, missing);
           return List<Map<String, dynamic>>.from(rows);
         } catch (e) {
-          debugPrint('ChatUserDirectory: $table lookup failed: $e');
+          debugPrint('UserDirectory: $table lookup failed: $e');
           return [];
         }
       }

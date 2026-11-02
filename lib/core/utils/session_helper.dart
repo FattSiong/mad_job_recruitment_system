@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'data_load_exception.dart';
@@ -14,6 +17,24 @@ class SessionHelper {
   SessionHelper._();
 
   static bool _manualSignOut = false;
+
+  /// ID of the logged-in user, or null when signed out.
+  static String? get currentUserId => Supabase.instance.client.auth.currentUser?.id;
+
+  /// Email of the logged-in user, or null.
+  static String? get currentEmail => Supabase.instance.client.auth.currentUser?.email;
+
+  /// Calls [onEnded] when the user is signed out: by Logout ([wasManual] =
+  /// true), on another device, or because the session expired. Cancel the
+  /// returned subscription in dispose().
+  static StreamSubscription<AuthState> onSessionEnded(void Function(bool wasManual) onEnded) {
+    return Supabase.instance.client.auth.onAuthStateChange.listen(
+      (data) {
+        if (data.event == AuthChangeEvent.signedOut) onEnded(consumeManualSignOut());
+      },
+      onError: (Object e) => debugPrint('Auth state error: $e'),
+    );
+  }
 
   /// ID of the logged-in user, or throws [SessionExpiredException].
   static String requireUserId() {

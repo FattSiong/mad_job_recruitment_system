@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/table_constants.dart';
 import '../../../models/chat_room_model.dart';
 import '../../../models/post_comment_model.dart';
-import '../../chat/controllers/chat_user_directory.dart';
+import '../../../services/user_directory.dart';
 
 /// Comments and replies of one post (the comments sheet).
 class PostCommentsController extends ChangeNotifier {
@@ -58,7 +58,7 @@ class PostCommentsController extends ChangeNotifier {
 
       // Comments removed by an admin are hidden.
       final visible = rows.where((r) => (r['status']?.toString() ?? 'active') != 'deleted').toList();
-      final authors = await ChatUserDirectory.fetch(visible.map((r) => r['userID']?.toString() ?? ''));
+      final authors = await UserDirectory.fetch(visible.map((r) => r['userID']?.toString() ?? ''));
 
       final all = visible.map((r) {
         final id = r['userID']?.toString() ?? '';

@@ -75,13 +75,11 @@ class BookmarkedController {
         bookmarkNotifier.value = !bookmarkNotifier.value;
         return false;
       } else {
-        // 👉 Package the data into the Model
         final newBookmark = BookmarkedJobModel(
           seekerID: _currentSeekerID,
           jobID: jobId,
         );
 
-        // 👉 Insert using toJson()
         await _supabase.from(TableConstants.bookmarkedJob).insert(newBookmark.toJson());
         _setBookmarked(jobId, true);
         bookmarkNotifier.value = !bookmarkNotifier.value;

@@ -6,6 +6,8 @@ import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/skill_model.dart';
 import '../controllers/skill_controller.dart';
 import '../widgets/load_error_view.dart';
+import '../../../shared_widgets/confirm_dialog.dart';
+import '../../../shared_widgets/surface_card.dart';
 
 /// Add, update and remove the skills on the job seeker's profile.
 /// Changes are saved straight away; callers should reload skills when this screen closes.
@@ -17,13 +19,6 @@ class AddSkillScreen extends StatefulWidget {
 }
 
 class _AddSkillScreenState extends State<AddSkillScreen> {
-  static const Color _primary = AppColors.primary;
-  static const Color _background = AppColors.background;
-  static const Color _textPrimary = AppColors.textDark;
-  static const Color _textMuted = AppColors.textMuted;
-  static const Color _surfaceAlt = AppColors.surfaceAlt;
-  static const Color _border = AppColors.border;
-
   static const List<String> _suggestedSkills = [
     'Communication',
     'Teamwork',
@@ -143,26 +138,13 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
   Future<void> _deleteSkill(SkillModel skill) async {
     if (skill.skillID == null) return;
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Remove skill?'),
-        content: Text('Remove "${skill.skillName}" from your profile?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.errorRed),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Remove skill?',
+      message: 'Remove "${skill.skillName}" from your profile?',
+      confirmLabel: 'Remove',
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
 
     setState(() => _busySkillIds.add(skill.skillID!));
     final ok = await _controller.deleteSkill(skill.skillID!);
@@ -184,12 +166,11 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
   }
 
   void _showSnack(String message, {required bool success}) {
-    SnackBarHelper.showStyled(
-      context,
-      message: message,
-      icon: success ? Icons.check_circle_outline_rounded : Icons.error_outline_rounded,
-      accentColor: success ? AppColors.successGreen : AppColors.errorRed,
-    );
+    if (success) {
+      SnackBarHelper.showSuccess(context, message);
+    } else {
+      SnackBarHelper.showError(context, message);
+    }
   }
 
   bool _alreadyAdded(String name) {
@@ -204,10 +185,10 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: RefreshIndicator(
-          color: _primary,
+          color: AppColors.primary,
           onRefresh: _loadSkills,
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -270,45 +251,13 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
     );
   }
 
-  Widget _surfaceCard({required List<Widget> children}) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: children,
-      ),
-    );
-  }
-
-  Widget _sectionTitle(String title, String subtitle) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _textPrimary),
-          ),
-          const SizedBox(height: 6),
-          Text(subtitle, style: const TextStyle(color: _textMuted, height: 1.4)),
-        ],
-      ),
-    );
-  }
-
   Widget _buildAddCard() {
     final canAdd = _nameController.text.trim().isNotEmpty && !_isAdding;
     final suggestions = _suggestedSkills.where((s) => !_alreadyAdded(s)).toList();
 
-    return _surfaceCard(
+    return SurfaceCard(
       children: [
-        _sectionTitle('Add a Skill', 'Type a skill and choose how well you know it.'),
+        SectionTitle('Add a Skill', subtitle: 'Type a skill and choose how well you know it.'),
         TextField(
           controller: _nameController,
           focusNode: _nameFocus,
@@ -320,29 +269,29 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
           },
           decoration: InputDecoration(
             hintText: 'e.g. Flutter, Public Speaking',
-            prefixIcon: const Icon(Icons.add_task_rounded, color: _primary),
+            prefixIcon: const Icon(Icons.add_task_rounded, color: AppColors.primary),
             filled: true,
-            fillColor: _surfaceAlt,
+            fillColor: AppColors.surfaceAlt,
             counterText: '',
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: _border),
+              borderSide: const BorderSide(color: AppColors.border),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: _border),
+              borderSide: const BorderSide(color: AppColors.border),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: _primary, width: 1.6),
+              borderSide: const BorderSide(color: AppColors.primary, width: 1.6),
             ),
           ),
         ),
         const SizedBox(height: 16),
         const Text(
           'Proficiency (optional)',
-          style: TextStyle(fontWeight: FontWeight.w700, color: _textPrimary),
+          style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textDark),
         ),
         const SizedBox(height: 10),
         Wrap(
@@ -355,10 +304,10 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
               selected: selected,
               onSelected: (_) => setState(() => _selectedProficiency = selected ? null : level),
               selectedColor: AppColors.primarySoft,
-              backgroundColor: _surfaceAlt,
-              side: BorderSide(color: selected ? _primary : _border),
+              backgroundColor: AppColors.surfaceAlt,
+              side: BorderSide(color: selected ? AppColors.primary : AppColors.border),
               labelStyle: TextStyle(
-                color: selected ? _primary : _textMuted,
+                color: selected ? AppColors.primary : AppColors.textMuted,
                 fontWeight: FontWeight.w600,
               ),
               showCheckmark: false,
@@ -384,10 +333,10 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: _primary,
+              backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
-              disabledBackgroundColor: _border,
-              disabledForegroundColor: _textMuted,
+              disabledBackgroundColor: AppColors.border,
+              disabledForegroundColor: AppColors.textMuted,
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             ),
@@ -397,7 +346,7 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
           const SizedBox(height: 20),
           const Text(
             'Suggestions',
-            style: TextStyle(fontWeight: FontWeight.w700, color: _textPrimary),
+            style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textDark),
           ),
           const SizedBox(height: 10),
           Wrap(
@@ -406,11 +355,11 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
             children: suggestions
                 .map((s) => ActionChip(
                       label: Text(s),
-                      avatar: const Icon(Icons.add_rounded, size: 16, color: _primary),
+                      avatar: const Icon(Icons.add_rounded, size: 16, color: AppColors.primary),
                       onPressed: () => _useSuggestion(s),
-                      backgroundColor: _surfaceAlt,
-                      side: const BorderSide(color: _border),
-                      labelStyle: const TextStyle(color: _textPrimary, fontWeight: FontWeight.w500),
+                      backgroundColor: AppColors.surfaceAlt,
+                      side: const BorderSide(color: AppColors.border),
+                      labelStyle: const TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w500),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ))
                 .toList(),
@@ -425,7 +374,7 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
     if (_isLoading) {
       body = const Padding(
         padding: EdgeInsets.symmetric(vertical: 24),
-        child: Center(child: CircularProgressIndicator(color: _primary)),
+        child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
       );
     } else if (_loadError != null) {
       body = LoadErrorView(message: _loadError!, onRetry: _loadSkills);
@@ -434,17 +383,17 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
         width: double.infinity,
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: _surfaceAlt,
+          color: AppColors.surfaceAlt,
           borderRadius: BorderRadius.circular(18),
         ),
         child: const Row(
           children: [
-            Icon(Icons.inbox_outlined, color: _textMuted),
+            Icon(Icons.inbox_outlined, color: AppColors.textMuted),
             SizedBox(width: 12),
             Expanded(
               child: Text(
                 'No skills added yet. Add your first skill above.',
-                style: TextStyle(color: _textMuted, fontStyle: FontStyle.italic),
+                style: TextStyle(color: AppColors.textMuted, fontStyle: FontStyle.italic),
               ),
             ),
           ],
@@ -454,12 +403,9 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
       body = Column(children: _skills.map(_buildSkillTile).toList());
     }
 
-    return _surfaceCard(
+    return SurfaceCard(
       children: [
-        _sectionTitle(
-          _isLoading || _loadError != null ? 'Your Skills' : 'Your Skills (${_skills.length})',
-          'Tap the level to change it.',
-        ),
+        SectionTitle(_isLoading || _loadError != null ? 'Your Skills' : 'Your Skills (${_skills.length})', subtitle: 'Tap the level to change it.'),
         body,
       ],
     );
@@ -472,9 +418,9 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.fromLTRB(16, 10, 6, 10),
       decoration: BoxDecoration(
-        color: _surfaceAlt,
+        color: AppColors.surfaceAlt,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppColors.border),
       ),
       child: Row(
         children: [
@@ -484,7 +430,7 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
-                color: _textPrimary,
+                color: AppColors.textDark,
               ),
             ),
           ),
@@ -494,7 +440,7 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
               child: SizedBox(
                 width: 20,
                 height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2, color: _primary),
+                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
               ),
             )
           else ...[
@@ -512,7 +458,7 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
                 decoration: BoxDecoration(
                   color: skill.proficiency != null ? AppColors.primarySoft : AppColors.surface,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: skill.proficiency != null ? AppColors.primarySoft : _border),
+                  border: Border.all(color: skill.proficiency != null ? AppColors.primarySoft : AppColors.border),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -520,7 +466,7 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
                     Text(
                       skill.proficiency ?? 'Set level',
                       style: TextStyle(
-                        color: skill.proficiency != null ? _primary : _textMuted,
+                        color: skill.proficiency != null ? AppColors.primary : AppColors.textMuted,
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
                       ),
@@ -529,7 +475,7 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
                     Icon(
                       Icons.arrow_drop_down_rounded,
                       size: 20,
-                      color: skill.proficiency != null ? _primary : _textMuted,
+                      color: skill.proficiency != null ? AppColors.primary : AppColors.textMuted,
                     ),
                   ],
                 ),

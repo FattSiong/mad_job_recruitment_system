@@ -5,8 +5,6 @@ import 'dart:async';
 import '../../../core/constants/agora_constants.dart';
 import '../../../services/call_service.dart';
 import '../../../models/call_model.dart';
-import '../../../services/community_service.dart';
-import '../../../models/message_model.dart';
 
 class StandardCallScreen extends StatefulWidget {
   final String callID;
@@ -81,16 +79,11 @@ class _StandardCallScreenState extends State<StandardCallScreen> {
     if (!widget.isCaller || _hasSentLog || widget.chatRoomID == null || widget.currentUserID == null) return;
 
     _hasSentLog = true;
-    final newMessage = MessageModel(
-      messageID: '',
+    _callService.sendCallLog(
       roomID: widget.chatRoomID!,
       senderID: widget.currentUserID!,
       content: content,
-      isRead: false,
-      sentAt: DateTime.now(),
-      mediaType: 'call_log',
     );
-    CommunityService().sendMessage(newMessage);
   }
 
   void _listenToDatabaseStatus() {

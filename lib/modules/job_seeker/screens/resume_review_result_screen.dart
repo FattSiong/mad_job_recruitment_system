@@ -17,10 +17,6 @@ class ResumeReviewResultScreen extends StatefulWidget {
 }
 
 class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
-  static const Color _primary = AppColors.primary;
-  static const Color _textPrimary = AppColors.textDark;
-  static const Color _textMuted = AppColors.textMuted;
-
   /// null = all priorities
   String? _priorityFilter;
 
@@ -69,7 +65,7 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
               const Text(
                 'AI feedback can be wrong. Only add skills, numbers and achievements that are true for you.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: _textMuted, fontSize: 12, height: 1.4),
+                style: TextStyle(color: AppColors.textMuted, fontSize: 12, height: 1.4),
               ),
             ],
           ),
@@ -145,10 +141,10 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(title,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _textPrimary)),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textDark)),
           if (subtitle != null) ...[
             const SizedBox(height: 6),
-            Text(subtitle, style: const TextStyle(color: _textMuted, height: 1.4)),
+            Text(subtitle, style: const TextStyle(color: AppColors.textMuted, height: 1.4)),
           ],
         ],
       ),
@@ -188,7 +184,7 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
                   Text(
                     _review.verdict.isNotEmpty ? _review.verdict : 'Resume score',
                     style: const TextStyle(
-                      color: _textPrimary,
+                      color: AppColors.textDark,
                       fontSize: 17,
                       fontWeight: FontWeight.bold,
                       height: 1.3,
@@ -196,7 +192,7 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
                   ),
                   if (role != null) ...[
                     const SizedBox(height: 6),
-                    Text(role, style: const TextStyle(color: _textMuted, fontSize: 13)),
+                    Text(role, style: const TextStyle(color: AppColors.textMuted, fontSize: 13)),
                   ],
                 ],
               ),
@@ -205,7 +201,7 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
         ),
         if (_review.summary.isNotEmpty) ...[
           const SizedBox(height: 18),
-          Text(_review.summary, style: const TextStyle(color: _textPrimary, height: 1.5)),
+          Text(_review.summary, style: const TextStyle(color: AppColors.textDark, height: 1.5)),
         ],
         if (_review.improvements.isNotEmpty) ...[
           const SizedBox(height: 16),
@@ -233,9 +229,9 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
           child: Column(
             children: [
               Text(value,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _primary)),
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.primary)),
               const SizedBox(height: 2),
-              Text(label, style: const TextStyle(fontSize: 12, color: _textMuted)),
+              Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
             ],
           ),
         ),
@@ -262,7 +258,7 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
               children: [
                 const Icon(Icons.check_circle_rounded, color: AppColors.successGreen, size: 20),
                 const SizedBox(width: 10),
-                Expanded(child: Text(s, style: const TextStyle(color: _textPrimary, height: 1.4))),
+                Expanded(child: Text(s, style: const TextStyle(color: AppColors.textDark, height: 1.4))),
               ],
             ),
           ),
@@ -284,9 +280,9 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
         onSelected: (_) => setState(() => _priorityFilter = value),
         selectedColor: AppColors.primarySoft,
         backgroundColor: AppColors.surfaceAlt,
-        side: BorderSide(color: selected ? _primary : AppColors.border),
+        side: BorderSide(color: selected ? AppColors.primary : AppColors.border),
         labelStyle: TextStyle(
-          color: selected ? _primary : _textPrimary,
+          color: selected ? AppColors.primary : AppColors.textDark,
           fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
         ),
         showCheckmark: false,
@@ -311,7 +307,7 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
         if (visible.isEmpty)
           const Padding(
             padding: EdgeInsets.only(bottom: 8),
-            child: Text('Nothing in this group.', style: TextStyle(color: _textMuted)),
+            child: Text('Nothing in this group.', style: TextStyle(color: AppColors.textMuted)),
           )
         else
           ...visible.map((i) => ResumeImprovementCard(item: i)),
@@ -325,11 +321,11 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
           runSpacing: 8,
           children: items
               .map((s) => Chip(
-                    avatar: Icon(icon, size: 16, color: _primary),
+                    avatar: Icon(icon, size: 16, color: AppColors.primary),
                     label: Text(s),
                     backgroundColor: AppColors.surfaceAlt,
                     side: const BorderSide(color: AppColors.border),
-                    labelStyle: const TextStyle(color: _textPrimary, fontWeight: FontWeight.w600),
+                    labelStyle: const TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w600),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ))
               .toList(),
@@ -340,20 +336,20 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
         _title('Consider Adding'),
         if (_review.missingSections.isNotEmpty) ...[
           const Text('Missing sections',
-              style: TextStyle(fontWeight: FontWeight.bold, color: _textPrimary)),
+              style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark)),
           const SizedBox(height: 10),
           chips(_review.missingSections, Icons.add_rounded),
           const SizedBox(height: 18),
         ],
         if (_review.keywordSuggestions.isNotEmpty) ...[
           const Text('Keywords employers look for',
-              style: TextStyle(fontWeight: FontWeight.bold, color: _textPrimary)),
+              style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark)),
           const SizedBox(height: 4),
           Text(
             _review.jobSampleSize > 0
                 ? 'Based on ${_review.jobSampleSize} matching job posting${_review.jobSampleSize == 1 ? '' : 's'} in the app. Add only the ones you really have.'
                 : 'Add only the ones you really have.',
-            style: const TextStyle(color: _textMuted, fontSize: 13, height: 1.4),
+            style: const TextStyle(color: AppColors.textMuted, fontSize: 13, height: 1.4),
           ),
           const SizedBox(height: 10),
           chips(_review.keywordSuggestions, Icons.key_rounded),
@@ -372,9 +368,9 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.format_align_left_rounded, color: _primary, size: 20),
+                const Icon(Icons.format_align_left_rounded, color: AppColors.primary, size: 20),
                 const SizedBox(width: 10),
-                Expanded(child: Text(n, style: const TextStyle(color: _textPrimary, height: 1.4))),
+                Expanded(child: Text(n, style: const TextStyle(color: AppColors.textDark, height: 1.4))),
               ],
             ),
           ),
@@ -396,7 +392,7 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
             icon: Icon(isBuilder ? Icons.edit_note_rounded : Icons.auto_fix_high_rounded),
             label: Text(isBuilder ? 'Edit Resume' : 'Improve in Resume Builder'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: _primary,
+              backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
               elevation: 0,
               padding: const EdgeInsets.symmetric(vertical: 16),

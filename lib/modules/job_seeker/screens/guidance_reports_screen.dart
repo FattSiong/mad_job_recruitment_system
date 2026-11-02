@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/data_load_exception.dart';
 import '../../../core/utils/guidance_pdf_builder.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/guidance_report_model.dart';
@@ -14,6 +15,7 @@ import 'mock_interview_result_screen.dart';
 import 'mock_interview_setup_screen.dart';
 import 'skill_gap_analysis_screen.dart';
 import 'skill_gap_result_screen.dart';
+import '../../../shared_widgets/surface_card.dart';
 
 enum _Filter { all, interviews, skillGaps }
 
@@ -26,16 +28,6 @@ class GuidanceReportsScreen extends StatefulWidget {
 }
 
 class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
-  static const Color _primary = AppColors.primary;
-  static const Color _background = AppColors.background;
-  static const Color _textPrimary = AppColors.textDark;
-  static const Color _textMuted = AppColors.textMuted;
-  static const Color _surfaceAlt = AppColors.surfaceAlt;
-  static const Color _border = AppColors.border;
-  static const Color _warning = AppColors.warning;
-  static const Color _interviewColor = AppColors.primary;
-  static const Color _skillGapColor = Color(0xFF2E7D8C);
-
   final GuidanceReportController _controller = GuidanceReportController();
   final SkillGapController _skillGapController = SkillGapController();
 
@@ -86,13 +78,6 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
     }
   }
 
-  Color _scoreColor(int? score) {
-    if (score == null) return _textMuted;
-    if (score >= 75) return AppColors.successGreen;
-    if (score >= 50) return _warning;
-    return AppColors.errorRed;
-  }
-
   Future<void> _openReport(GuidanceReportItem item) async {
     if (_openingID != null) return;
 
@@ -103,22 +88,24 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
       );
     } else {
       setState(() => _openingID = item.reportID);
-      final analysis = await _skillGapController.fetchAnalysis(item.reportID);
+      SkillGapAnalysisModel? analysis;
+      String? error;
+      try {
+        analysis = await _skillGapController.fetchAnalysis(item.reportID);
+      } on DataLoadException catch (e) {
+        error = e.message;
+      }
       if (!mounted) return;
       setState(() => _openingID = null);
       if (analysis == null) {
-        SnackBarHelper.showStyled(
-          context,
-          message: 'Unable to load this report. It may have been deleted.',
-          icon: Icons.error_outline_rounded,
-          accentColor: AppColors.errorRed,
-        );
+        SnackBarHelper.showError(context, error ?? 'This report no longer exists. It may have been deleted.');
         _load();
         return;
       }
+      final report = analysis; // non-null here; closures can't use the promoted variable
       await Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => SkillGapResultScreen(analysis: analysis)),
+        MaterialPageRoute(builder: (_) => SkillGapResultScreen(analysis: report)),
       );
     }
     if (mounted) _load(); // reports may have changed (e.g. "Practise Again")
@@ -173,10 +160,10 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: RefreshIndicator(
-          color: _primary,
+          color: AppColors.primary,
           onRefresh: _load,
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
@@ -196,7 +183,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
     if (_isLoading) {
       return const [
         SizedBox(height: 120),
-        Center(child: CircularProgressIndicator(color: _primary)),
+        Center(child: CircularProgressIndicator(color: AppColors.primary)),
       ];
     }
     if (_error != null) return [_buildErrorState()];
@@ -267,36 +254,10 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
     );
   }
 
-  Widget _surfaceCard({required List<Widget> children}) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
-    );
-  }
-
-  Widget _sectionTitle(String text, {String? subtitle}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(text,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _textPrimary)),
-          if (subtitle != null) ...[
-            const SizedBox(height: 6),
-            Text(subtitle, style: const TextStyle(color: _textMuted, height: 1.4)),
-          ],
-        ],
-      ),
-    );
-  }
-
   // ---- Use case A1: no reports yet --------------------------------------
 
   Widget _buildEmptyState() {
-    return _surfaceCard(
+    return SurfaceCard(
       children: [
         Center(
           child: Container(
@@ -306,21 +267,21 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
               color: AppColors.primarySoft,
               borderRadius: BorderRadius.circular(22),
             ),
-            child: const Icon(Icons.assignment_outlined, size: 34, color: _primary),
+            child: const Icon(Icons.assignment_outlined, size: 34, color: AppColors.primary),
           ),
         ),
         const SizedBox(height: 18),
         const Center(
           child: Text(
             'No guidance reports yet',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: _textPrimary),
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textDark),
           ),
         ),
         const SizedBox(height: 10),
         const Text(
           'Complete a mock interview or a skill gap analysis and your results will appear here.',
           textAlign: TextAlign.center,
-          style: TextStyle(color: _textMuted, height: 1.45),
+          style: TextStyle(color: AppColors.textMuted, height: 1.45),
         ),
         const SizedBox(height: 20),
         _startButton(
@@ -350,7 +311,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
               icon: Icon(icon),
               label: Text(label),
               style: ElevatedButton.styleFrom(
-                backgroundColor: _primary,
+                backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 elevation: 0,
                 padding: padding,
@@ -362,7 +323,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
               icon: Icon(icon),
               label: Text(label),
               style: OutlinedButton.styleFrom(
-                foregroundColor: _primary,
+                foregroundColor: AppColors.primary,
                 side: const BorderSide(color: AppColors.borderActive),
                 padding: padding,
                 shape: shape,
@@ -374,7 +335,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
   // ---- Use case A2: database error ----------------------------------------
 
   Widget _buildErrorState() {
-    return _surfaceCard(
+    return SurfaceCard(
       children: [
         const Center(
           child: Icon(Icons.cloud_off_rounded, size: 44, color: AppColors.errorRed),
@@ -384,7 +345,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
           child: Text(
             _error ?? 'Unable to load reports.',
             textAlign: TextAlign.center,
-            style: const TextStyle(fontWeight: FontWeight.w600, color: _textPrimary),
+            style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textDark),
           ),
         ),
         const SizedBox(height: 16),
@@ -404,9 +365,9 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
         interviewScores.isEmpty ? null : interviewScores.reduce((a, b) => a > b ? a : b);
     final latestSkillGap = _skillGaps.isEmpty ? null : _skillGaps.first;
 
-    return _surfaceCard(
+    return SurfaceCard(
       children: [
-        _sectionTitle('Overview'),
+        SectionTitle('Overview'),
         GridView.count(
           crossAxisCount: 2,
           shrinkWrap: true,
@@ -416,17 +377,17 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
           childAspectRatio: 1.45,
           children: [
             _statTile(Icons.record_voice_over_outlined, '${_interviews.length}',
-                'Mock interviews', _interviewColor),
+                'Mock interviews', AppColors.primary),
             _statTile(Icons.insights_outlined, '${_skillGaps.length}', 'Skill analyses',
-                _skillGapColor),
+                AppColors.teal),
             _statTile(Icons.speed_rounded, avgInterview == null ? '–' : '$avgInterview',
                 bestInterview == null ? 'Avg interview score' : 'Avg score · best $bestInterview',
-                _scoreColor(avgInterview)),
+                AppColors.forScore(avgInterview)),
             _statTile(
               Icons.track_changes_rounded,
               latestSkillGap?.score == null ? '–' : '${latestSkillGap!.score}%',
               latestSkillGap == null ? 'Latest skill match' : 'Latest match · ${latestSkillGap.targetJobRole}',
-              _scoreColor(latestSkillGap?.score),
+              AppColors.forScore(latestSkillGap?.score),
             ),
           ],
         ),
@@ -438,9 +399,9 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _surfaceAlt,
+        color: AppColors.surfaceAlt,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -453,7 +414,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
           Text(label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: _textMuted, fontSize: 12)),
+              style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
         ],
       ),
     );
@@ -462,12 +423,12 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
   // ---- Progress chart ---------------------------------------------------------
 
   Widget _buildProgressCard() {
-    return _surfaceCard(
+    return SurfaceCard(
       children: [
-        _sectionTitle('Progress', subtitle: 'Your most recent results, oldest to newest.'),
-        _progressRow('Mock interview scores', _interviews, _interviewColor),
+        SectionTitle('Progress', subtitle: 'Your most recent results, oldest to newest.'),
+        _progressRow('Mock interview scores', _interviews, AppColors.primary),
         const SizedBox(height: 18),
-        _progressRow('Skill match %', _skillGaps, _skillGapColor),
+        _progressRow('Skill match %', _skillGaps, AppColors.teal),
       ],
     );
   }
@@ -487,7 +448,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
           children: [
             Expanded(
               child: Text(title,
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: _textPrimary)),
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark)),
             ),
             if (trend != null)
               Text(trend,
@@ -496,7 +457,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
                         ? AppColors.successGreen
                         : trend.startsWith('-')
                             ? AppColors.errorRed
-                            : _textMuted,
+                            : AppColors.textMuted,
                     fontWeight: FontWeight.w600,
                     fontSize: 12,
                   )),
@@ -504,7 +465,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
         ),
         const SizedBox(height: 10),
         if (recent.isEmpty)
-          const Text('No results yet.', style: TextStyle(color: _textMuted))
+          const Text('No results yet.', style: TextStyle(color: AppColors.textMuted))
         else
           SizedBox(
             height: 110,
@@ -520,7 +481,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
                       children: [
                         Text('$score',
                             style: const TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.w700, color: _textPrimary)),
+                                fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textDark)),
                         const SizedBox(height: 4),
                         Container(
                           height: 70 * score / 100 + 4,
@@ -531,7 +492,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(DateFormat('d/M').format(r.createdAt),
-                            style: const TextStyle(fontSize: 10, color: _textMuted)),
+                            style: const TextStyle(fontSize: 10, color: AppColors.textMuted)),
                       ],
                     ),
                   ),
@@ -559,16 +520,16 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
               padding: const EdgeInsets.symmetric(vertical: 11),
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: selected ? _primary : Colors.white,
+                color: selected ? AppColors.primary : Colors.white,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: selected ? _primary : _border),
+                border: Border.all(color: selected ? AppColors.primary : AppColors.border),
               ),
               child: Text(
                 '$label ($count)',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: selected ? Colors.white : _textPrimary,
+                  color: selected ? Colors.white : AppColors.textDark,
                   fontWeight: FontWeight.w600,
                   fontSize: 13,
                 ),
@@ -593,8 +554,8 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
     final items = _filtered;
     if (items.isEmpty) {
       return [
-        _surfaceCard(children: [
-          const Text('No reports of this type yet.', style: TextStyle(color: _textMuted)),
+        SurfaceCard(children: [
+          const Text('No reports of this type yet.', style: TextStyle(color: AppColors.textMuted)),
           const SizedBox(height: 14),
           _startButton(
             _filter == _Filter.interviews ? Icons.record_voice_over_outlined : Icons.insights_outlined,
@@ -617,7 +578,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
           padding: const EdgeInsets.fromLTRB(4, 12, 4, 10),
           child: Text(month,
               style: const TextStyle(
-                  fontWeight: FontWeight.bold, color: _textMuted, letterSpacing: 0.3)),
+                  fontWeight: FontWeight.bold, color: AppColors.textMuted, letterSpacing: 0.3)),
         ));
       }
       widgets.add(_reportTile(item));
@@ -626,8 +587,8 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
   }
 
   Widget _reportTile(GuidanceReportItem item) {
-    final typeColor = item.isMockInterview ? _interviewColor : _skillGapColor;
-    final scoreColor = _scoreColor(item.score);
+    final typeColor = item.isMockInterview ? AppColors.primary : AppColors.teal;
+    final scoreColor = AppColors.forScore(item.score);
     final opening = _openingID == item.reportID;
 
     return Padding(
@@ -667,10 +628,10 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                              fontWeight: FontWeight.bold, color: _textPrimary, fontSize: 15)),
+                              fontWeight: FontWeight.bold, color: AppColors.textDark, fontSize: 15)),
                       const SizedBox(height: 3),
                       Text(DateFormat('d MMM yyyy, h:mm a').format(item.createdAt),
-                          style: const TextStyle(color: _textMuted, fontSize: 12)),
+                          style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
                     ],
                   ),
                 ),
@@ -679,7 +640,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
                   const SizedBox(
                     width: 24,
                     height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: _primary),
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
                   )
                 else
                   Column(
@@ -694,11 +655,11 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
                             color: scoreColor, fontWeight: FontWeight.w800, fontSize: 20),
                       ),
                       Text(item.isSkillGap ? 'match' : 'score',
-                          style: const TextStyle(color: _textMuted, fontSize: 11)),
+                          style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
                     ],
                   ),
                 const SizedBox(width: 4),
-                const Icon(Icons.chevron_right_rounded, color: _textMuted),
+                const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
               ],
             ),
           ),

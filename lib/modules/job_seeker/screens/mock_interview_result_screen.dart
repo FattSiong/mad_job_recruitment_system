@@ -5,9 +5,12 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/guidance_pdf_builder.dart';
 import '../../../models/mock_interview_model.dart';
 import '../controllers/guidance_report_controller.dart';
+import '../../../core/utils/data_load_exception.dart';
+import '../widgets/load_error_view.dart';
 import '../controllers/mock_interview_controller.dart';
 import 'guidance_pdf_viewer_screen.dart';
 import 'mock_interview_setup_screen.dart';
+import '../../../shared_widgets/surface_card.dart';
 
 /// Interview scorecard (end of Use Case 4.59). Also reusable from Guidance Reports.
 class MockInterviewResultScreen extends StatefulWidget {
@@ -25,14 +28,6 @@ class MockInterviewResultScreen extends StatefulWidget {
 }
 
 class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
-  static const Color _primary = AppColors.primary;
-  static const Color _background = AppColors.background;
-  static const Color _textPrimary = AppColors.textDark;
-  static const Color _textMuted = AppColors.textMuted;
-  static const Color _surfaceAlt = AppColors.surfaceAlt;
-  static const Color _border = AppColors.border;
-  static const Color _warning = AppColors.warning;
-
   final MockInterviewController _controller = MockInterviewController();
   late Future<MockInterviewRecordModel?> _future;
 
@@ -44,11 +39,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
         : _controller.fetchInterview(widget.sessionID);
   }
 
-  Color _scoreColor(int score) {
-    if (score >= 75) return AppColors.successGreen;
-    if (score >= 50) return _warning;
-    return AppColors.errorRed;
-  }
+  void _retry() => setState(() => _future = _controller.fetchInterview(widget.sessionID));
 
   // ---------------------------------------------------------------------
   // UI
@@ -57,13 +48,31 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: FutureBuilder<MockInterviewRecordModel?>(
           future: _future,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator(color: _primary));
+              return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+            }
+            if (snapshot.hasError) {
+              return Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    _buildHeader(null),
+                    Expanded(
+                      child: LoadErrorView(
+                        message: snapshot.error is DataLoadException
+                            ? (snapshot.error as DataLoadException).message
+                            : 'Unable to load this interview report.',
+                        onRetry: _retry,
+                      ),
+                    ),
+                  ],
+                ),
+              );
             }
             final record = snapshot.data;
             if (record == null) {
@@ -75,8 +84,8 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
                     const Expanded(
                       child: Center(
                         child: Text(
-                          'Unable to load this interview report.',
-                          style: TextStyle(color: _textMuted),
+                          'This interview report no longer exists.',
+                          style: TextStyle(color: AppColors.textMuted),
                         ),
                       ),
                     ),
@@ -159,40 +168,11 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
     );
   }
 
-  Widget _surfaceCard({required List<Widget> children}) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: children,
-      ),
-    );
-  }
-
-  Widget _sectionTitle(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-          color: _textPrimary,
-        ),
-      ),
-    );
-  }
-
   Widget _buildScoreCard(MockInterviewRecordModel record) {
     final overall = record.overallScore ?? 0;
-    final color = _scoreColor(overall);
+    final color = AppColors.forScore(overall);
 
-    return _surfaceCard(
+    return SurfaceCard(
       children: [
         Row(
           children: [
@@ -205,7 +185,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
                   CircularProgressIndicator(
                     value: overall / 100,
                     strokeWidth: 10,
-                    backgroundColor: const Color(0xFFE8EEF6),
+                    backgroundColor: AppColors.progressTrack,
                     valueColor: AlwaysStoppedAnimation(color),
                     strokeCap: StrokeCap.round,
                   ),
@@ -221,7 +201,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
                             color: color,
                           ),
                         ),
-                        const Text('/ 100', style: TextStyle(color: _textMuted, fontSize: 12)),
+                        const Text('/ 100', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
                       ],
                     ),
                   ),
@@ -235,7 +215,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
                 children: [
                   const Text(
                     'Overall Score',
-                    style: TextStyle(fontWeight: FontWeight.bold, color: _textPrimary, fontSize: 16),
+                    style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark, fontSize: 16),
                   ),
                   const SizedBox(height: 8),
                   if (record.readiness.isNotEmpty)
@@ -253,7 +233,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
                   const SizedBox(height: 8),
                   const Text(
                     '60% answer content + 40% delivery',
-                    style: TextStyle(color: _textMuted, fontSize: 12),
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 12),
                   ),
                 ],
               ),
@@ -270,7 +250,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
   }
 
   Widget _scoreBar(String label, int score, String hint) {
-    final color = _scoreColor(score);
+    final color = AppColors.forScore(score);
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Column(
@@ -280,7 +260,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
             children: [
               Expanded(
                 child: Text(label,
-                    style: const TextStyle(fontWeight: FontWeight.bold, color: _textPrimary)),
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark)),
               ),
               Text('$score', style: TextStyle(fontWeight: FontWeight.bold, color: color)),
             ],
@@ -291,12 +271,12 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
             child: LinearProgressIndicator(
               value: score / 100,
               minHeight: 8,
-              backgroundColor: const Color(0xFFE8EEF6),
+              backgroundColor: AppColors.progressTrack,
               valueColor: AlwaysStoppedAnimation(color),
             ),
           ),
           const SizedBox(height: 6),
-          Text(hint, style: const TextStyle(color: _textMuted, fontSize: 12)),
+          Text(hint, style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
         ],
       ),
     );
@@ -306,9 +286,9 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
     final speech = record.speech;
     num n(String key) => (speech[key] as num?) ?? 0;
 
-    return _surfaceCard(
+    return SurfaceCard(
       children: [
-        _sectionTitle('Speaking Delivery'),
+        SectionTitle('Speaking Delivery'),
         GridView.count(
           crossAxisCount: 2,
           shrinkWrap: true,
@@ -335,9 +315,9 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _surfaceAlt,
+        color: AppColors.surfaceAlt,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -345,11 +325,11 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
         children: [
           Row(
             children: [
-              Icon(icon, size: 18, color: _primary),
+              Icon(icon, size: 18, color: AppColors.primary),
               const SizedBox(width: 6),
               Text(
                 value,
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _textPrimary),
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textDark),
               ),
             ],
           ),
@@ -357,28 +337,28 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
           Text(label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w600, color: _textPrimary, fontSize: 13)),
+              style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textDark, fontSize: 13)),
           Text(hint,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: _textMuted, fontSize: 11)),
+              style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
         ],
       ),
     );
   }
 
   Widget _buildSummaryCard(MockInterviewRecordModel record) {
-    return _surfaceCard(
+    return SurfaceCard(
       children: [
-        _sectionTitle('AI Feedback'),
+        SectionTitle('AI Feedback'),
         if (record.summary.isNotEmpty) ...[
-          Text(record.summary, style: const TextStyle(color: _textPrimary, height: 1.5)),
+          Text(record.summary, style: const TextStyle(color: AppColors.textDark, height: 1.5)),
           const SizedBox(height: 18),
         ],
         _bulletSection('Strengths', record.strengths, Icons.check_circle_outline_rounded,
             AppColors.successGreen),
-        _bulletSection('Areas to Improve', record.improvements, Icons.trending_up_rounded, _warning),
-        _bulletSection('Tips for Next Time', record.tips, Icons.tips_and_updates_outlined, _primary),
+        _bulletSection('Areas to Improve', record.improvements, Icons.trending_up_rounded, AppColors.warning),
+        _bulletSection('Tips for Next Time', record.tips, Icons.tips_and_updates_outlined, AppColors.primary),
       ],
     );
   }
@@ -390,7 +370,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: _textPrimary)),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark)),
           const SizedBox(height: 8),
           ...items.map(
             (item) => Padding(
@@ -401,7 +381,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
                   Icon(icon, size: 18, color: color),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(item, style: const TextStyle(color: _textMuted, height: 1.4)),
+                    child: Text(item, style: const TextStyle(color: AppColors.textMuted, height: 1.4)),
                   ),
                 ],
               ),
@@ -413,9 +393,9 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
   }
 
   Widget _buildQuestionsCard(MockInterviewRecordModel record) {
-    return _surfaceCard(
+    return SurfaceCard(
       children: [
-        _sectionTitle('Question-by-Question'),
+        SectionTitle('Question-by-Question'),
         ...record.answers.map(_buildAnswerTile),
       ],
     );
@@ -423,14 +403,14 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
 
   Widget _buildAnswerTile(MockInterviewAnswerModel a) {
     final avgScore = (((a.contentScore ?? 0) + (a.deliveryScore ?? 0)) / 2).round();
-    final color = _scoreColor(avgScore);
+    final color = AppColors.forScore(avgScore);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: _surfaceAlt,
+        color: AppColors.surfaceAlt,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppColors.border),
       ),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
@@ -452,19 +432,19 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
           ),
           title: Text(
             a.questionIndex == 0 ? 'Introduction' : 'Question ${a.questionIndex}',
-            style: const TextStyle(fontWeight: FontWeight.bold, color: _textPrimary),
+            style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark),
           ),
           subtitle: Text(
             a.questionText,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: _textMuted, fontSize: 13),
+            style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
           ),
           children: [
             Align(
               alignment: Alignment.centerLeft,
               child: Text(a.questionText,
-                  style: const TextStyle(fontWeight: FontWeight.w600, color: _textPrimary, height: 1.4)),
+                  style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textDark, height: 1.4)),
             ),
             const SizedBox(height: 12),
             Wrap(
@@ -483,7 +463,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
             if (a.relevance.isNotEmpty) _detailBlock('Relevance', a.relevance),
             _bulletSection('What went well', a.strengths, Icons.check_circle_outline_rounded,
                 AppColors.successGreen),
-            _bulletSection('What to improve', a.improvements, Icons.trending_up_rounded, _warning),
+            _bulletSection('What to improve', a.improvements, Icons.trending_up_rounded, AppColors.warning),
             if (a.deliveryFeedback.isNotEmpty) _detailBlock('Delivery', a.deliveryFeedback),
             if (a.improvedAnswer.isNotEmpty)
               Container(
@@ -498,15 +478,15 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
                   children: [
                     const Row(
                       children: [
-                        Icon(Icons.auto_awesome_outlined, size: 18, color: _primary),
+                        Icon(Icons.auto_awesome_outlined, size: 18, color: AppColors.primary),
                         SizedBox(width: 8),
                         Text('Stronger sample answer',
-                            style: TextStyle(fontWeight: FontWeight.bold, color: _primary)),
+                            style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
                       ],
                     ),
                     const SizedBox(height: 8),
                     Text(a.improvedAnswer,
-                        style: const TextStyle(color: _textPrimary, height: 1.45)),
+                        style: const TextStyle(color: AppColors.textDark, height: 1.45)),
                   ],
                 ),
               ),
@@ -522,10 +502,10 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppColors.border),
       ),
       child: Text(label,
-          style: const TextStyle(color: _primary, fontWeight: FontWeight.w600, fontSize: 12)),
+          style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 12)),
     );
   }
 
@@ -535,9 +515,9 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: _textPrimary)),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark)),
           const SizedBox(height: 6),
-          Text(text, style: const TextStyle(color: _textMuted, height: 1.45)),
+          Text(text, style: const TextStyle(color: AppColors.textMuted, height: 1.45)),
         ],
       ),
     );
@@ -564,7 +544,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
         icon: const Icon(Icons.picture_as_pdf_outlined),
         label: const Text('View as PDF'),
         style: OutlinedButton.styleFrom(
-          foregroundColor: _primary,
+          foregroundColor: AppColors.primary,
           backgroundColor: Colors.white,
           side: const BorderSide(color: AppColors.borderActive),
           padding: const EdgeInsets.symmetric(vertical: 15),
@@ -585,7 +565,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
               child: OutlinedButton(
                 onPressed: () => Navigator.pop(context),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: _primary,
+                  foregroundColor: AppColors.primary,
                   side: const BorderSide(color: AppColors.borderActive),
                   padding: const EdgeInsets.symmetric(vertical: 15),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
@@ -603,7 +583,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
                 icon: const Icon(Icons.replay_rounded),
                 label: const Text('Practise Again'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _primary,
+                  backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(vertical: 15),

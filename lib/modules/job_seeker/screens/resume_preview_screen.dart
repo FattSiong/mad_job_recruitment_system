@@ -62,12 +62,11 @@ class _ResumePreviewScreenState extends State<ResumePreviewScreen> {
 
   void _toast(String message, {bool success = true}) {
     if (!mounted) return;
-    SnackBarHelper.showStyled(
-      context,
-      message: message,
-      icon: success ? Icons.check_circle_outline_rounded : Icons.error_outline_rounded,
-      accentColor: success ? AppColors.successGreen : AppColors.errorRed,
-    );
+    if (success) {
+      SnackBarHelper.showSuccess(context, message);
+    } else {
+      SnackBarHelper.showError(context, message);
+    }
   }
 
   /// Asked once when the PDF is ready.

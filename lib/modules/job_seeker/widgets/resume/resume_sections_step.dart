@@ -5,6 +5,7 @@ import '../../../../models/resume_model.dart';
 import '../../controllers/resume_builder_controller.dart';
 import 'resume_record_steps.dart';
 import 'resume_section_item_sheet.dart';
+import '../../../../shared_widgets/confirm_dialog.dart';
 
 /// Last step: optional sections (summary, projects, awards, languages...).
 class ResumeSectionsStep extends StatelessWidget {
@@ -126,23 +127,13 @@ class _SectionCardState extends State<_SectionCard> {
   void _onTextChanged(String value) => widget.controller.setSectionText(_type, value);
 
   Future<void> _confirmRemove() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: Text('Remove ${_type.label}?'),
-        content: const Text('This section and everything in it will be removed from your resume.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.errorRed),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Remove ${_type.label}?',
+      message: 'This section and everything in it will be removed from your resume.',
+      confirmLabel: 'Remove',
     );
-    if (ok == true) widget.controller.removeSection(_type);
+    if (ok) widget.controller.removeSection(_type);
   }
 
   @override

@@ -3,10 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/data_load_exception.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/advisor_conversation_model.dart';
 import '../../../models/advisor_message_model.dart';
 import '../controllers/career_advisor_controller.dart';
+import '../../../shared_widgets/confirm_dialog.dart';
 
 /// AI Career Advisor chat (Use Case 4.58: Chat with AI Career Advisor).
 class AiCareerAdvisorScreen extends StatefulWidget {
@@ -21,12 +23,6 @@ class AiCareerAdvisorScreen extends StatefulWidget {
 
 class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
   // Same palette as the other job seeker screens
-  static const Color _primary = AppColors.primary;
-  static const Color _background = AppColors.background;
-  static const Color _textPrimary = AppColors.textDark;
-  static const Color _textMuted = AppColors.textMuted;
-  static const Color _softBlue = AppColors.primarySoft;
-  static const Color _border = AppColors.borderSoft;
 
   static const List<String> _suggestedQuestions = [
     'What career paths suit my skills?',
@@ -39,16 +35,18 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
-  final List<AdvisorMessageModel> _messages = [];
-  String? _conversationID;
-  String? _conversationTitle;
-  bool _isLoadingHistory = false;
-  bool _isSending = false;
+  // Conversation state lives in the controller (MVC); these read it.
+  List<AdvisorMessageModel> get _messages => _controller.messages;
+  String? get _conversationTitle => _controller.conversationTitle;
+  bool get _isLoadingHistory => _controller.isLoadingHistory;
+  bool get _isSending => _controller.isSending;
+
   bool _hasMessageText = false;
 
   @override
   void initState() {
     super.initState();
+    _controller.addListener(_onControllerChanged);
     _messageController.addListener(() {
       final hasText = _messageController.text.trim().isNotEmpty;
       if (hasText != _hasMessageText) {
@@ -62,9 +60,15 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
 
   @override
   void dispose() {
+    _controller.removeListener(_onControllerChanged);
+    _controller.dispose();
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onControllerChanged() {
+    if (mounted) setState(() {});
   }
 
   // ---------------------------------------------------------------------
@@ -72,36 +76,23 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
   // ---------------------------------------------------------------------
 
   Future<void> _openConversation(String conversationID, {String? title}) async {
-    setState(() {
-      _isLoadingHistory = true;
-      _conversationID = conversationID;
-      _conversationTitle = title;
-      _messages.clear();
-    });
-
-    final messages = await _controller.fetchMessages(conversationID);
+    final error = await _controller.openConversation(conversationID, title: title);
     if (!mounted) return;
-
-    setState(() {
-      _messages.addAll(messages);
-      _isLoadingHistory = false;
-    });
+    if (error != null) {
+      SnackBarHelper.showError(context, error, duration: const Duration(seconds: 3));
+      return;
+    }
     _scrollToBottom();
   }
 
   void _startNewConversation() {
     if (_isSending) return;
-    setState(() {
-      _conversationID = null;
-      _conversationTitle = null;
-      _messages.clear();
-      _messageController.clear();
-    });
+    _controller.startNewConversation();
+    _messageController.clear();
   }
 
   Future<void> _sendMessage([String? presetText]) async {
     if (_isSending) return;
-
     final text = (presetText ?? _messageController.text).trim();
 
     // Use case A2: ignore empty input and prompt the user
@@ -110,59 +101,27 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
         context,
         message: 'Please enter a question for the advisor.',
         icon: Icons.info_outline_rounded,
-        accentColor: _primary,
+        accentColor: AppColors.primary,
       );
       return;
     }
 
-    // Show the user's message straight away
-    final pending = AdvisorMessageModel.pending(text);
-    setState(() {
-      _messages.add(pending);
-      _isSending = true;
-      _messageController.clear();
-    });
+    _messageController.clear();
+    final sending = _controller.send(text); // the question shows straight away
     _scrollToBottom();
 
     try {
-      final result = await _controller.sendMessage(
-        message: text,
-        conversationID: _conversationID,
-      );
+      await sending;
       if (!mounted) return;
-
-      setState(() {
-        final index = _messages.indexOf(pending);
-        if (index != -1) _messages[index] = result.userMessage;
-        _messages.add(result.reply);
-        _conversationTitle ??= text.length > 50 ? '${text.substring(0, 50)}…' : text;
-        _conversationID = result.conversationID;
-        _isSending = false;
-      });
       _scrollToBottom();
     } on AdvisorException catch (e) {
       if (!mounted) return;
-
-      // Use case A1: remove the unsent message, give the text back, show error
-      setState(() {
-        _messages.remove(pending);
-        _isSending = false;
-        if (_messageController.text.trim().isEmpty) {
-          _messageController.text = text;
-          _messageController.selection =
-              TextSelection.collapsed(offset: text.length);
-        }
-      });
-
-      if (e.code == 'conversation_not_found') _startNewConversation();
-
-      SnackBarHelper.showStyled(
-        context,
-        message: e.message,
-        icon: Icons.error_outline_rounded,
-        accentColor: AppColors.errorRed,
-        duration: const Duration(seconds: 3),
-      );
+      // Use case A1: give the text back and show the error
+      if (_messageController.text.trim().isEmpty) {
+        _messageController.text = text;
+        _messageController.selection = TextSelection.collapsed(offset: text.length);
+      }
+      SnackBarHelper.showError(context, e.message, duration: const Duration(seconds: 3));
     }
   }
 
@@ -181,12 +140,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
   Future<void> _copyMessage(String text) async {
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
-    SnackBarHelper.showStyled(
-      context,
-      message: 'Copied to clipboard',
-      icon: Icons.check_circle_outline_rounded,
-      accentColor: AppColors.successGreen,
-    );
+    SnackBarHelper.showSuccess(context, 'Copied to clipboard');
   }
 
   // ---------------------------------------------------------------------
@@ -203,7 +157,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
       ),
       builder: (sheetContext) => _ConversationHistorySheet(
         controller: _controller,
-        currentConversationID: _conversationID,
+        currentConversationID: _controller.conversationID,
         onSelected: (conversation) {
           Navigator.pop(sheetContext);
           _openConversation(
@@ -212,7 +166,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
           );
         },
         onDeleted: (conversationID) {
-          if (conversationID == _conversationID) _startNewConversation();
+          if (conversationID == _controller.conversationID) _startNewConversation();
         },
       ),
     );
@@ -225,7 +179,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppColors.background,
       appBar: _buildAppBar(),
       body: Column(
         children: [
@@ -233,11 +187,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xFFEAF2FC), Color(0xFFF8FAFD)],
-                ),
+                gradient: AppColors.chatGradient,
                 borderRadius: BorderRadius.circular(30),
               ),
               child: _buildBody(),
@@ -251,13 +201,13 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      backgroundColor: _background,
+      backgroundColor: AppColors.background,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
       titleSpacing: 0,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back_rounded, color: _primary),
+        icon: const Icon(Icons.arrow_back_rounded, color: AppColors.primary),
         onPressed: () => Navigator.pop(context),
       ),
       title: Row(
@@ -287,7 +237,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
-                    color: _textPrimary,
+                    color: AppColors.textDark,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -297,7 +247,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
                       : (_conversationTitle ?? 'Ask anything about your career'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: _textMuted),
+                  style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
                 ),
               ],
             ),
@@ -330,10 +280,10 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppColors.borderSoft),
       ),
       child: IconButton(
-        icon: Icon(icon, color: _primary),
+        icon: Icon(icon, color: AppColors.primary),
         tooltip: tooltip,
         onPressed: onPressed,
       ),
@@ -342,7 +292,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
 
   Widget _buildBody() {
     if (_isLoadingHistory) {
-      return const Center(child: CircularProgressIndicator(color: _primary));
+      return const Center(child: CircularProgressIndicator(color: AppColors.primary));
     }
     if (_messages.isEmpty) {
       return _buildEmptyState();
@@ -379,7 +329,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
           borderRadius: BorderRadius.circular(28),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x120F172A),
+              color: AppColors.shadow,
               blurRadius: 24,
               offset: Offset(0, 10),
             ),
@@ -391,10 +341,10 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
               width: 72,
               height: 72,
               decoration: BoxDecoration(
-                color: _softBlue,
+                color: AppColors.primarySoft,
                 borderRadius: BorderRadius.circular(22),
               ),
-              child: const Icon(Icons.smart_toy_outlined, size: 34, color: _primary),
+              child: const Icon(Icons.smart_toy_outlined, size: 34, color: AppColors.primary),
             ),
             const SizedBox(height: 18),
             const Text(
@@ -403,7 +353,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
-                color: _textPrimary,
+                color: AppColors.textDark,
               ),
             ),
             const SizedBox(height: 10),
@@ -411,7 +361,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
               'I use your profile, skills and experience to give personalised '
               'career guidance. Try one of these questions:',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, height: 1.45, color: _textMuted),
+              style: TextStyle(fontSize: 14, height: 1.45, color: AppColors.textMuted),
             ),
             const SizedBox(height: 20),
             ..._suggestedQuestions.map(_buildSuggestionTile),
@@ -439,19 +389,19 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.lightbulb_outline_rounded, color: _primary, size: 20),
+                const Icon(Icons.lightbulb_outline_rounded, color: AppColors.primary, size: 20),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     question,
                     style: const TextStyle(
-                      color: _textPrimary,
+                      color: AppColors.textDark,
                       fontWeight: FontWeight.w600,
                       height: 1.3,
                     ),
                   ),
                 ),
-                const Icon(Icons.arrow_forward_rounded, color: _textMuted, size: 18),
+                const Icon(Icons.arrow_forward_rounded, color: AppColors.textMuted, size: 18),
               ],
             ),
           ),
@@ -473,7 +423,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
             borderRadius: BorderRadius.circular(28),
             boxShadow: const [
               BoxShadow(
-                color: Color(0x140F172A),
+                color: AppColors.shadow,
                 blurRadius: 28,
                 offset: Offset(0, 12),
               ),
@@ -499,13 +449,13 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
                       hintText: _isSending
                           ? 'Advisor is replying…'
                           : 'Ask your career question…',
-                      hintStyle: const TextStyle(color: Color(0xFF9AA5B5)),
+                      hintStyle: const TextStyle(color: AppColors.textHint),
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 18,
                         vertical: 14,
                       ),
                       filled: true,
-                      fillColor: _background,
+                      fillColor: AppColors.background,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(22),
                         borderSide: BorderSide.none,
@@ -520,7 +470,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(22),
-                        borderSide: const BorderSide(color: _primary, width: 1.2),
+                        borderSide: const BorderSide(color: AppColors.primary, width: 1.2),
                       ),
                     ),
                     onSubmitted: (_) => _sendMessage(),
@@ -530,7 +480,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
                   decoration: BoxDecoration(
-                    color: canSend ? AppColors.primary : const Color(0xFFD7E3F3),
+                    color: canSend ? AppColors.primary : AppColors.disabled,
                     borderRadius: BorderRadius.circular(18),
                   ),
                   child: IconButton(
@@ -565,8 +515,6 @@ class _AdvisorMessageBubble extends StatelessWidget {
 
   const _AdvisorMessageBubble({required this.message, required this.onLongPress});
 
-  static const Color _primary = AppColors.primary;
-
   @override
   Widget build(BuildContext context) {
     final isUser = message.isUser;
@@ -584,14 +532,14 @@ class _AdvisorMessageBubble extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.smart_toy_outlined, size: 14, color: _primary),
+                  Icon(Icons.smart_toy_outlined, size: 14, color: AppColors.primary),
                   SizedBox(width: 6),
                   Text(
                     'AI Advisor',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: _primary,
+                      color: AppColors.primary,
                     ),
                   ),
                 ],
@@ -603,7 +551,7 @@ class _AdvisorMessageBubble extends StatelessWidget {
               constraints: BoxConstraints(maxWidth: maxWidth),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: isUser ? _primary : Colors.white,
+                color: isUser ? AppColors.primary : Colors.white,
                 border: isUser ? null : Border.all(color: AppColors.borderSoft),
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(22),
@@ -615,7 +563,7 @@ class _AdvisorMessageBubble extends StatelessWidget {
                     ? null
                     : const [
                         BoxShadow(
-                          color: Color(0x0D0F172A),
+                          color: AppColors.shadowFaint,
                           blurRadius: 18,
                           offset: Offset(0, 8),
                         ),
@@ -635,7 +583,7 @@ class _AdvisorMessageBubble extends StatelessWidget {
             padding: const EdgeInsets.only(top: 4, left: 6, right: 6),
             child: Text(
               DateFormat('h:mm a').format(message.createdAt),
-              style: const TextStyle(fontSize: 11, color: Color(0xFF7C8798)),
+              style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
             ),
           ),
         ],
@@ -712,10 +660,6 @@ class _ConversationHistorySheet extends StatefulWidget {
 }
 
 class _ConversationHistorySheetState extends State<_ConversationHistorySheet> {
-  static const Color _primary = AppColors.primary;
-  static const Color _textPrimary = AppColors.textDark;
-  static const Color _textMuted = AppColors.textMuted;
-
   late Future<List<AdvisorConversationModel>> _future;
 
   @override
@@ -725,26 +669,12 @@ class _ConversationHistorySheetState extends State<_ConversationHistorySheet> {
   }
 
   Future<void> _confirmDelete(AdvisorConversationModel conversation) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Delete conversation?'),
-        content: Text('"${conversation.title}" will be permanently deleted.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.errorRed),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Delete conversation?',
+      message: '"${conversation.title}" will be permanently deleted.',
     );
-    if (confirmed != true) return;
+    if (!confirmed) return;
 
     final ok = await widget.controller.deleteConversation(conversation.conversationID);
     if (!mounted) return;
@@ -753,12 +683,7 @@ class _ConversationHistorySheetState extends State<_ConversationHistorySheet> {
       widget.onDeleted(conversation.conversationID);
       setState(() => _future = widget.controller.fetchConversations());
     } else {
-      SnackBarHelper.showStyled(
-        context,
-        message: 'Unable to delete the conversation.',
-        icon: Icons.error_outline_rounded,
-        accentColor: AppColors.errorRed,
-      );
+      SnackBarHelper.showError(context, 'Unable to delete the conversation.');
     }
   }
 
@@ -792,7 +717,7 @@ class _ConversationHistorySheetState extends State<_ConversationHistorySheet> {
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
                   letterSpacing: -0.5,
-                  color: _textPrimary,
+                  color: AppColors.textDark,
                 ),
               ),
               const SizedBox(height: 16),
@@ -804,7 +729,32 @@ class _ConversationHistorySheetState extends State<_ConversationHistorySheet> {
                       return const Padding(
                         padding: EdgeInsets.all(24),
                         child: Center(
-                          child: CircularProgressIndicator(color: _primary),
+                          child: CircularProgressIndicator(color: AppColors.primary),
+                        ),
+                      );
+                    }
+                    if (snapshot.hasError) {
+                      final error = snapshot.error;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              error is DataLoadException
+                                  ? error.message
+                                  : 'Unable to load your conversations.',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: AppColors.textMuted, height: 1.45),
+                            ),
+                            TextButton.icon(
+                              onPressed: () => setState(
+                                () => _future = widget.controller.fetchConversations(),
+                              ),
+                              icon: const Icon(Icons.refresh_rounded),
+                              label: const Text('Try Again'),
+                            ),
+                          ],
                         ),
                       );
                     }
@@ -816,7 +766,7 @@ class _ConversationHistorySheetState extends State<_ConversationHistorySheet> {
                           child: Text(
                             'No conversations yet.\nAsk your first question to get started.',
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: _textMuted, height: 1.45),
+                            style: TextStyle(color: AppColors.textMuted, height: 1.45),
                           ),
                         ),
                       );
@@ -844,7 +794,7 @@ class _ConversationHistorySheetState extends State<_ConversationHistorySheet> {
                               child: Row(
                                 children: [
                                   const Icon(Icons.chat_bubble_outline_rounded,
-                                      color: _primary, size: 20),
+                                      color: AppColors.primary, size: 20),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
@@ -856,7 +806,7 @@ class _ConversationHistorySheetState extends State<_ConversationHistorySheet> {
                                           overflow: TextOverflow.ellipsis,
                                           style: const TextStyle(
                                             fontWeight: FontWeight.w700,
-                                            color: _textPrimary,
+                                            color: AppColors.textDark,
                                           ),
                                         ),
                                         const SizedBox(height: 4),
@@ -865,7 +815,7 @@ class _ConversationHistorySheetState extends State<_ConversationHistorySheet> {
                                               .format(c.updatedAt),
                                           style: const TextStyle(
                                             fontSize: 12,
-                                            color: _textMuted,
+                                            color: AppColors.textMuted,
                                           ),
                                         ),
                                       ],

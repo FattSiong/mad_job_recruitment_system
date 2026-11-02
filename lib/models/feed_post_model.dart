@@ -1,15 +1,17 @@
 import 'chat_room_model.dart';
+import 'post_topic.dart';
 
 /// A post in the Community Hub, as seen by the current user.
 ///
 /// Comes from "CommunityPost" plus its PostLike / PostSaved / PostComment rows.
-/// The author's name and photo come from ChatUserDirectory (Employer / JobSeeker).
+/// The author's name and photo come from UserDirectory (Employer / JobSeeker).
 class FeedPostModel {
   final String postID;
   final String authorID;
   final String content;
   final String? mediaURL;
   final String status; // 'active' or 'deleted' (removed by admin)
+  final PostTopic topic;
   final DateTime createdAt;
   final ChatParticipant author;
 
@@ -25,6 +27,7 @@ class FeedPostModel {
     required this.content,
     this.mediaURL,
     required this.status,
+    this.topic = PostTopic.general,
     required this.createdAt,
     required this.author,
     required this.likeCount,
@@ -78,6 +81,7 @@ class FeedPostModel {
       content: content ?? this.content,
       mediaURL: clearMedia ? null : (mediaURL ?? this.mediaURL),
       status: status,
+      topic: topic,
       createdAt: createdAt,
       author: author,
       likeCount: likeCount ?? this.likeCount,
@@ -113,6 +117,7 @@ class FeedPostModel {
       content: json['content']?.toString() ?? '',
       mediaURL: json['mediaURL'] as String?,
       status: json['status']?.toString() ?? 'active',
+      topic: PostTopic.fromValue(json['category']?.toString()),
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '')?.toLocal() ?? DateTime.now(),
       author: author,
       likeCount: likes.length,

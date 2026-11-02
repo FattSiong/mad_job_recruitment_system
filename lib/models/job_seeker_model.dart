@@ -57,8 +57,7 @@ class JobSeekerModel {
     );
   }
 
-  // 👉 Updated toJson()
-  // Removed the "if != null" checks so empty fields can successfully be cleared in Supabase
+  /// Null fields are sent too, so clearing a field in the app clears it in the database.
   Map<String, dynamic> toJson() {
     return {
       'seekerID': seekerID,

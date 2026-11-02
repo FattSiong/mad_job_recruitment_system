@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/file_preview_helper.dart';
 import '../../../models/feed_post_model.dart';
-import '../../chat/widgets/full_screen_image_viewer.dart';
+import '../../../shared_widgets/full_screen_image_viewer.dart';
 
 /// The post's attachment: a photo (tap to zoom) or a file card (tap to open).
 class PostMediaView extends StatelessWidget {

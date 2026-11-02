@@ -4,11 +4,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/table_constants.dart';
 import '../../../models/chat_room_model.dart';
 import '../../../models/feed_post_model.dart';
-import '../../chat/controllers/chat_user_directory.dart';
+import '../../../models/post_filter.dart';
+import '../../../services/user_directory.dart';
 
 /// Which posts a [PostListController] shows.
 enum PostListMode {
-  /// Everyone's active posts, newest first, loaded a page at a time.
+  /// Everyone's active posts, a page at a time, narrowed by a [PostFilter].
   feed,
 
   /// The current user's posts, including ones removed by an admin.
@@ -30,7 +31,7 @@ class PostListController extends ChangeNotifier {
 
   static const int pageSize = 15;
   static const String _columns =
-      'postID, authorID, content, mediaURL, status, createdAt, '
+      'postID, authorID, content, mediaURL, status, category, createdAt, '
       'PostLike(userID), PostSaved(userID), PostComment(commentID, status)';
 
   List<FeedPostModel> _posts = [];
@@ -39,69 +40,145 @@ class PostListController extends ChangeNotifier {
   bool _hasMore = false;
   String? _error;
   bool _disposed = false;
+  PostFilter _filter = PostFilter.none; // feed only
+  MyPostsStatus _status = MyPostsStatus.all; // My Posts only
+  int _loadToken = 0; // a newer load makes older results obsolete
+  int _nextOffset = 0; // feed: how many results the database has given so far
 
-  List<FeedPostModel> get posts => List.unmodifiable(_posts);
+  /// The posts to show (for My Posts: only those matching [statusFilter]).
+  List<FeedPostModel> get posts {
+    switch (_status) {
+      case MyPostsStatus.all:
+        return List.unmodifiable(_posts);
+      case MyPostsStatus.visible:
+        return _posts.where((p) => !p.isRemoved).toList();
+      case MyPostsStatus.removed:
+        return _posts.where((p) => p.isRemoved).toList();
+    }
+  }
+
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
   bool get hasMore => _hasMore;
   String? get error => _error;
-  bool get isEmpty => _posts.isEmpty;
+  bool get isEmpty => posts.isEmpty;
 
-  // My Posts summary
+  PostFilter get filter => _filter;
+  MyPostsStatus get statusFilter => _status;
+
+  /// True when posts may be hidden by a filter, so an empty list means
+  /// "nothing matches" rather than "nothing posted yet".
+  bool get isFiltered =>
+      _filter.isActive || (_status != MyPostsStatus.all && _posts.isNotEmpty);
+
+  // My Posts summary (all own posts, whatever the status filter)
   int get totalCount => _posts.length;
   int get removedCount => _posts.where((p) => p.isRemoved).length;
   int get visibleCount => totalCount - removedCount;
+
+  // ---------------------------------------------------------------------
+  // Filters
+  // ---------------------------------------------------------------------
+
+  /// Feed: applies [filter] on the server and reloads from the first page.
+  void setFilter(PostFilter filter) {
+    if (filter == _filter) return;
+    _filter = filter;
+    _posts = []; // show the spinner, not posts from the old filter
+    _hasMore = false;
+    load();
+  }
+
+  void clearFilter() => setFilter(PostFilter.none);
+
+  /// My Posts: show all, visible or removed posts.
+  void setStatusFilter(MyPostsStatus status) {
+    if (status == _status) return;
+    _status = status;
+    _notify();
+  }
 
   // ---------------------------------------------------------------------
   // Loading
   // ---------------------------------------------------------------------
 
   Future<void> load() async {
+    final token = ++_loadToken;
     _isLoading = _posts.isEmpty;
+    _isLoadingMore = false;
     _error = null;
     _notify();
     try {
-      final rows = await _fetch(offset: 0);
-      _posts = await _toModels(rows);
-      _hasMore = mode == PostListMode.feed && rows.length == pageSize;
+      final page = await _fetch(offset: 0);
+      final models = await _toModels(page.rows);
+      if (token != _loadToken) return; // a newer filter / reload took over
+      _posts = models;
+      _nextOffset = page.count;
+      _hasMore = mode == PostListMode.feed && page.full;
     } catch (e) {
+      if (token != _loadToken) return;
       debugPrint('PostListController($mode) load failed: $e');
       _error = 'Unable to load posts. Pull down to try again.';
     } finally {
-      _isLoading = false;
-      _notify();
+      if (token == _loadToken) {
+        _isLoading = false;
+        _notify();
+      }
     }
   }
 
   /// Next page of the feed (called near the end of the list).
   Future<void> loadMore() async {
     if (!_hasMore || _isLoadingMore || _isLoading) return;
+    final token = _loadToken;
     _isLoadingMore = true;
     _notify();
     try {
-      final rows = await _fetch(offset: _posts.length);
+      final page = await _fetch(offset: _nextOffset);
+      final models = await _toModels(page.rows);
+      if (token != _loadToken) return;
       final known = _posts.map((p) => p.postID).toSet();
-      final more = (await _toModels(rows)).where((p) => !known.contains(p.postID));
-      _posts = [..._posts, ...more];
-      _hasMore = rows.length == pageSize;
+      _posts = [..._posts, ...models.where((p) => !known.contains(p.postID))];
+      _nextOffset += page.count;
+      _hasMore = page.full;
     } catch (e) {
       debugPrint('PostListController loadMore failed: $e');
     } finally {
-      _isLoadingMore = false;
-      _notify();
+      if (token == _loadToken) {
+        _isLoadingMore = false;
+        _notify();
+      }
     }
   }
 
-  Future<List<Map<String, dynamic>>> _fetch({required int offset}) async {
+  /// One page of rows. [count] is how many results the page used up (for the
+  /// next offset); [full] means there may be more after it.
+  Future<({List<Map<String, dynamic>> rows, int count, bool full})> _fetch({
+    required int offset,
+  }) async {
     switch (mode) {
       case PostListMode.feed:
+        // The database function filters, sorts and pages; it returns post IDs.
+        final result = await _supabase.rpc(
+          'search_community_posts',
+          params: _filter.toParams(limit: pageSize, offset: offset),
+        );
+        final ids = List<Map<String, dynamic>>.from(result as List)
+            .map((r) => r['post_id'].toString())
+            .toList();
+        if (ids.isEmpty) return (rows: <Map<String, dynamic>>[], count: 0, full: false);
+
         final rows = await _supabase
             .from(TableConstants.communityPost)
             .select(_columns)
-            .eq('status', 'active')
-            .order('createdAt', ascending: false)
-            .range(offset, offset + pageSize - 1);
-        return List<Map<String, dynamic>>.from(rows);
+            .inFilter('postID', ids);
+        // Keep the order the function chose.
+        final byId = {for (final r in rows) r['postID'].toString(): r};
+        return (
+          rows: [for (final id in ids) if (byId[id] != null) byId[id]!],
+          count: ids.length,
+          full: ids.length == pageSize,
+        );
 
       case PostListMode.mine:
         final rows = await _supabase
@@ -109,7 +186,7 @@ class PostListController extends ChangeNotifier {
             .select(_columns)
             .eq('authorID', currentUserID)
             .order('createdAt', ascending: false);
-        return List<Map<String, dynamic>>.from(rows);
+        return (rows: List<Map<String, dynamic>>.from(rows), count: rows.length, full: false);
 
       case PostListMode.saved:
         final saved = await _supabase
@@ -120,19 +197,19 @@ class PostListController extends ChangeNotifier {
             .map((r) => r['postID'].toString())
             .toSet()
             .toList();
-        if (ids.isEmpty) return [];
+        if (ids.isEmpty) return (rows: <Map<String, dynamic>>[], count: 0, full: false);
         final rows = await _supabase
             .from(TableConstants.communityPost)
             .select(_columns)
             .inFilter('postID', ids)
             .eq('status', 'active')
             .order('createdAt', ascending: false);
-        return List<Map<String, dynamic>>.from(rows);
+        return (rows: List<Map<String, dynamic>>.from(rows), count: rows.length, full: false);
     }
   }
 
   Future<List<FeedPostModel>> _toModels(List<Map<String, dynamic>> rows) async {
-    final authors = await ChatUserDirectory.fetch(rows.map((r) => r['authorID']?.toString() ?? ''));
+    final authors = await UserDirectory.fetch(rows.map((r) => r['authorID']?.toString() ?? ''));
     return rows.map((row) {
       final authorID = row['authorID']?.toString() ?? '';
       return FeedPostModel.fromJson(

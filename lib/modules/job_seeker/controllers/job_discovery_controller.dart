@@ -54,7 +54,7 @@ class JobDiscoveryController {
   /// Loads one page of active, non-expired jobs, newest first.
   ///
   /// Everything except the salary filter is done by the database, and only
-  /// [pageSize] rows are downloaded at a time (the old version downloaded every job).
+  /// [pageSize] rows are downloaded at a time.
   /// When a salary filter is set, rows are fetched in batches and checked with
   /// [SalaryUtils] until the page is full or there are no more rows.
   Future<JobsPage> fetchJobsPage({

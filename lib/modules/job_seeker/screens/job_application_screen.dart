@@ -9,6 +9,9 @@ import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/job_model.dart';
 import '../../../models/pre_screening_question_model.dart';
 import '../controllers/application_controller.dart';
+import '../widgets/load_error_view.dart';
+import '../../../shared_widgets/hero_icon_button.dart';
+import '../../../shared_widgets/surface_card.dart';
 
 class JobApplicationScreen extends StatefulWidget {
   final JobModel job;
@@ -20,64 +23,36 @@ class JobApplicationScreen extends StatefulWidget {
 }
 
 class _JobApplicationScreenState extends State<JobApplicationScreen> {
-  static const Color _primary = AppColors.primary;
-  static const Color _primarySoft = AppColors.primarySoft;
-  static const Color _textPrimary = AppColors.textDark;
-  static const Color _textMuted = AppColors.textMuted;
-  static const Color _surfaceAlt = AppColors.surfaceAlt;
-  static const Color _border = AppColors.border;
-
   final ApplicationController _appController = ApplicationController();
   final PageController _pageController = PageController();
 
-  bool _isLoading = true;
-  bool _isSubmitting = false;
-  int _currentPage = 0;
+  int _currentPage = 0; // which step of the form is showing (UI only)
 
-  List<PreScreeningQuestionModel> _questions = [];
-  String? _existingResumeUrl;
-
-  final Map<String, dynamic> _answers = {};
-  String _resumeSelection = 'existing';
-  File? _newResumeFile;
+  // Form state lives in the controller (MVC); these read it.
+  bool get _isLoading => _appController.isLoading;
+  bool get _isSubmitting => _appController.isSubmitting;
+  List<PreScreeningQuestionModel> get _questions => _appController.questions;
+  String? get _existingResumeUrl => _appController.existingResumeUrl;
+  File? get _newResumeFile => _appController.newResumeFile;
+  bool _isResume(ResumeChoice choice) => _appController.resumeChoice == choice;
 
   @override
   void initState() {
     super.initState();
-    _loadApplicationData();
+    _appController.addListener(_onControllerChanged);
+    _appController.load(widget.job.jobID!);
   }
 
   @override
   void dispose() {
+    _appController.removeListener(_onControllerChanged);
+    _appController.dispose();
     _pageController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadApplicationData() async {
-    final questions = await _appController.getQuestions(widget.job.jobID!);
-    final resumeUrl = await _appController.getSeekerResume();
-
-    if (mounted) {
-      setState(() {
-        _questions = questions;
-        _existingResumeUrl = resumeUrl;
-
-        if (resumeUrl == null) {
-          _resumeSelection = 'new';
-        }
-
-        _isLoading = false;
-      });
-    }
-  }
-
-  bool _validateQuestions() {
-    for (final q in _questions) {
-      final answer = _answers[q.questionID!];
-      if (answer == null) return false;
-      if (answer is String && answer.trim().isEmpty) return false;
-    }
-    return true;
+  void _onControllerChanged() {
+    if (mounted) setState(() {});
   }
 
   void _showFileTooLarge(String message) {
@@ -91,40 +66,22 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
   }
 
   Future<void> _submitApplication() async {
-    if (_resumeSelection == 'new' && _newResumeFile == null) {
+    final problem = _appController.validateResume();
+    if (problem != null) {
       SnackBarHelper.showStyled(
         context,
-        message: 'Please select a resume file to upload.',
+        message: problem,
         icon: Icons.info_outline_rounded,
         accentColor: AppColors.coral,
       );
       return;
     }
-
-    if (_resumeSelection == 'existing' && _existingResumeUrl == null) {
-      SnackBarHelper.showStyled(
-        context,
-        message: 'No existing resume found. Please upload a new one.',
-        icon: Icons.info_outline_rounded,
-        accentColor: AppColors.coral,
-      );
-      return;
-    }
-
-    setState(() => _isSubmitting = true);
 
     try {
       // Uploads files first, then saves the application + answers in one transaction
-      await _appController.submitApplication(
-        jobId: widget.job.jobID!,
-        answers: _answers,
-        existingResumeUrl:
-        _resumeSelection == 'existing' ? _existingResumeUrl : null,
-        newResumeFile: _resumeSelection == 'new' ? _newResumeFile : null,
-      );
+      await _appController.submit(widget.job.jobID!);
 
       if (!mounted) return;
-      setState(() => _isSubmitting = false);
       SnackBarHelper.showStyled(
         context,
         message: 'Application submitted successfully!',
@@ -134,7 +91,6 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
       Navigator.pop(context, true); // tells JobDetailsScreen the user has applied
     } on ApplicationException catch (e) {
       if (!mounted) return;
-      setState(() => _isSubmitting = false);
       SnackBarHelper.showStyled(
         context,
         message: e.message,
@@ -152,7 +108,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
 
   ButtonStyle _primaryButtonStyle() {
     return ElevatedButton.styleFrom(
-      backgroundColor: _primary,
+      backgroundColor: AppColors.primary,
       foregroundColor: Colors.white,
       elevation: 0,
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 18),
@@ -164,52 +120,14 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
 
   ButtonStyle _secondaryButtonStyle() {
     return OutlinedButton.styleFrom(
-      foregroundColor: _textPrimary,
+      foregroundColor: AppColors.textDark,
       backgroundColor: Colors.white,
       elevation: 0,
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
-      side: const BorderSide(color: _border),
+      side: const BorderSide(color: AppColors.border),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
-    );
-  }
-
-  Widget _buildHeroActionButton({
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback onTap,
-  }) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.white.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: SizedBox(
-            width: 42,
-            height: 42,
-            child: Icon(icon, color: Colors.white, size: 20),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSurfaceCard({
-    required Widget child,
-    EdgeInsetsGeometry padding = const EdgeInsets.all(22),
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: padding,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: child,
     );
   }
 
@@ -219,7 +137,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     required bool isActive,
     required bool isDone,
   }) {
-    final Color color = isDone || isActive ? _primary : const Color(0xFFB0B9C5);
+    final Color color = isDone || isActive ? AppColors.primary : AppColors.iconDisabled;
 
     return Expanded(
       child: Row(
@@ -228,10 +146,10 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: isDone || isActive ? _primarySoft : Colors.white,
+              color: isDone || isActive ? AppColors.primarySoft : Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: isDone || isActive ? AppColors.borderActive : _border,
+                color: isDone || isActive ? AppColors.borderActive : AppColors.border,
               ),
             ),
             child: Center(
@@ -239,7 +157,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                   ? const Icon(
                 Icons.check_rounded,
                 size: 18,
-                color: _primary,
+                color: AppColors.primary,
               )
                   : Text(
                 '$stepNumber',
@@ -255,7 +173,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
             child: Text(
               title,
               style: TextStyle(
-                color: isActive ? _textPrimary : _textMuted,
+                color: isActive ? AppColors.textDark : AppColors.textMuted,
                 fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
                 fontSize: 12,
               ),
@@ -271,12 +189,12 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
   }) {
     final questionId = question.questionID!;
     final isText = question.questionType == 'Text';
-    final currentAnswer = _answers[questionId];
+    final currentAnswer = _appController.answerFor(questionId);
     final isFileSelected = currentAnswer != null && currentAnswer is File;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      child: _buildSurfaceCard(
+      child: SurfaceCard(
         padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -286,18 +204,18 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: _textPrimary,
+                color: AppColors.textDark,
               ),
             ),
             const SizedBox(height: 10),
             if (isText)
               TextField(
-                onChanged: (val) => _answers[questionId] = val,
+                onChanged: (val) => _appController.setTextAnswer(questionId, val),
                 maxLines: 4,
                 decoration: InputDecoration(
                   hintText: 'Enter your answer',
                   filled: true,
-                  fillColor: _surfaceAlt,
+                  fillColor: AppColors.surfaceAlt,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
                     borderSide: BorderSide(color: Colors.grey.shade300),
@@ -308,7 +226,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: _primary, width: 1.5),
+                    borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
                   ),
                 ),
               )
@@ -340,13 +258,13 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                         );
 
                         if (pickedFile != null) {
-                          setState(() => _answers[questionId] = pickedFile);
+                          _appController.setFileAnswer(questionId, pickedFile);
                         }
                       },
                       icon: const Icon(Icons.upload_file_rounded),
                       label: Text(isFileSelected ? 'Change File' : 'Upload File'),
                       style: _secondaryButtonStyle().copyWith(
-                        foregroundColor: WidgetStateProperty.all(_primary),
+                        foregroundColor: WidgetStateProperty.all(AppColors.primary),
                         side: WidgetStateProperty.all(
                           const BorderSide(color: AppColors.borderActive),
                         ),
@@ -368,7 +286,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                     IconButton(
                       icon: const Icon(
                         Icons.visibility_outlined,
-                        color: _primary,
+                        color: AppColors.primary,
                       ),
                       tooltip: 'Preview File',
                       onPressed: () =>
@@ -378,7 +296,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                     const Expanded(
                       child: Text(
                         'No file selected',
-                        style: TextStyle(color: _textMuted),
+                        style: TextStyle(color: AppColors.textMuted),
                       ),
                     ),
                   ],
@@ -396,7 +314,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSurfaceCard(
+          SurfaceCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -405,14 +323,14 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
-                    color: _textPrimary,
+                    color: AppColors.textDark,
                   ),
                 ),
                 const SizedBox(height: 8),
                 const Text(
                   'The employer requires answers to these questions before you continue.',
                   style: TextStyle(
-                    color: _textMuted,
+                    color: AppColors.textMuted,
                     height: 1.4,
                   ),
                 ),
@@ -445,7 +363,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: selected ? AppColors.borderActive : _border,
+            color: selected ? AppColors.borderActive : AppColors.border,
             width: selected ? 2 : 1,
           ),
         ),
@@ -456,10 +374,10 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
               width: 46,
               height: 46,
               decoration: BoxDecoration(
-                color: selected ? _primarySoft : _surfaceAlt,
+                color: selected ? AppColors.primarySoft : AppColors.surfaceAlt,
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(icon, color: selected ? _primary : _textMuted),
+              child: Icon(icon, color: selected ? AppColors.primary : AppColors.textMuted),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -471,14 +389,14 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
-                      color: _textPrimary,
+                      color: AppColors.textDark,
                     ),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     subtitle,
                     style: const TextStyle(
-                      color: _textMuted,
+                      color: AppColors.textMuted,
                       fontSize: 13.5,
                       height: 1.4,
                     ),
@@ -489,7 +407,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
             if (trailing != null) trailing,
             Icon(
               selected ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
-              color: selected ? _primary : Colors.grey,
+              color: selected ? AppColors.primary : Colors.grey,
             ),
           ],
         ),
@@ -503,7 +421,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSurfaceCard(
+          SurfaceCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -512,29 +430,29 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
-                    color: _textPrimary,
+                    color: AppColors.textDark,
                   ),
                 ),
                 const SizedBox(height: 8),
                 const Text(
                   'Choose your existing resume or upload a fresh version for this application.',
                   style: TextStyle(
-                    color: _textMuted,
+                    color: AppColors.textMuted,
                     height: 1.4,
                   ),
                 ),
                 const SizedBox(height: 18),
                 if (_existingResumeUrl != null)
                   _buildResumeOptionCard(
-                    selected: _resumeSelection == 'existing',
+                    selected: _isResume(ResumeChoice.existing),
                     icon: Icons.description_outlined,
                     title: 'Use your existing resume',
                     subtitle: 'Recommended for faster applications.',
-                    onTap: () => setState(() => _resumeSelection = 'existing'),
+                    onTap: () => _appController.chooseResume(ResumeChoice.existing),
                     trailing: IconButton(
                       icon: const Icon(
                         Icons.visibility_outlined,
-                        color: _primary,
+                        color: AppColors.primary,
                       ),
                       tooltip: 'Preview',
                       onPressed: () => FilePreviewHelper.previewNetworkFile(
@@ -545,14 +463,14 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                     ),
                   ),
                 _buildResumeOptionCard(
-                  selected: _resumeSelection == 'new',
+                  selected: _isResume(ResumeChoice.newFile),
                   icon: Icons.upload_file_rounded,
                   title: 'Upload a new resume',
                   subtitle: _newResumeFile != null
                       ? 'Selected: ${_newResumeFile!.path.split('/').last}'
                       : 'Accepted: ${FileLimits.resumeTypesLabel}, up to ${FileLimits.resumeMB} MB.',
                   onTap: () async {
-                    setState(() => _resumeSelection = 'new');
+                    _appController.chooseResume(ResumeChoice.newFile);
 
                     final pickedFile = await FilePickerHelper.pickFile(
                       allowedExtensions: FileLimits.resumeExtensions,
@@ -560,15 +478,13 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                       onTooLarge: _showFileTooLarge,
                     );
 
-                    if (pickedFile != null) {
-                      setState(() => _newResumeFile = pickedFile);
-                    }
+                    if (pickedFile != null) _appController.setNewResumeFile(pickedFile);
                   },
                   trailing: _newResumeFile != null
                       ? IconButton(
                     icon: const Icon(
                       Icons.visibility_outlined,
-                      color: _primary,
+                      color: AppColors.primary,
                     ),
                     tooltip: 'Preview',
                     onPressed: () => FilePreviewHelper.previewLocalFile(
@@ -593,6 +509,23 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
         backgroundColor: AppColors.background,
         body: Center(
           child: CircularProgressIndicator(color: AppColors.primary),
+        ),
+      );
+    }
+
+    final loadError = _appController.loadError;
+    if (loadError != null) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.background,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          iconTheme: const IconThemeData(color: AppColors.primary),
+        ),
+        body: LoadErrorView(
+          message: loadError,
+          onRetry: () => _appController.load(widget.job.jobID!),
         ),
       );
     }
@@ -643,7 +576,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                               children: [
                                 Row(
                                   children: [
-                                    _buildHeroActionButton(
+                                    HeroIconButton(
                                       icon: Icons.arrow_back_rounded,
                                       tooltip: 'Back',
                                       onTap: () {
@@ -658,7 +591,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                                       },
                                     ),
                                     const Spacer(),
-                                    _buildHeroActionButton(
+                                    HeroIconButton(
                                       icon: Icons.close_rounded,
                                       tooltip: 'Cancel',
                                       onTap: () => Navigator.pop(context),
@@ -725,7 +658,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                             ),
                           ),
                           SizedBox(height: sectionGap),
-                          _buildSurfaceCard(
+                          SurfaceCard(
                             padding: EdgeInsets.all(isCompact ? 14 : 18),
                             child: Column(
                               children: [
@@ -752,7 +685,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                                               widthFactor: progress,
                                               child: Container(
                                                 decoration: BoxDecoration(
-                                                  color: _primary,
+                                                  color: AppColors.primary,
                                                   borderRadius: BorderRadius.circular(999),
                                                 ),
                                               ),
@@ -837,7 +770,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                       ? null
                       : () {
                           if (hasQuestions && _currentPage == 0) {
-                            if (!_validateQuestions()) {
+                            if (!_appController.questionsAnswered) {
                               SnackBarHelper.showStyled(
                                 context,
                                 message:

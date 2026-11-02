@@ -9,7 +9,8 @@ import '../../../models/call_model.dart';
 import '../../../models/chat_room_model.dart';
 import '../../../models/message_model.dart';
 import '../../../services/call_service.dart';
-import 'chat_user_directory.dart';
+import '../../../services/incoming_call_service.dart';
+import '../../../services/user_directory.dart';
 
 /// Data for the chat list (inbox): rooms, latest message, unread counts,
 /// search, and live updates while the list is open.
@@ -25,6 +26,7 @@ class ChatListController extends ChangeNotifier {
   RealtimeChannel? _channel;
   List<String> _subscribedRoomIds = [];
   Timer? _refreshDebounce;
+  StreamSubscription<List<CallModel>>? _callSubscription;
   bool _disposed = false;
 
   late final String currentUserID = SessionHelper.requireUserId();
@@ -33,7 +35,6 @@ class ChatListController extends ChangeNotifier {
   String? get error => _error;
   String get searchQuery => _searchQuery;
   bool get hasRooms => _rooms.isNotEmpty;
-  int get totalUnread => _rooms.fold(0, (sum, room) => sum + room.unreadCount);
 
   /// Rooms matching the search box (name or last message).
   List<ChatRoomModel> get visibleRooms {
@@ -102,7 +103,7 @@ class ChatListController extends ChangeNotifier {
     }).toList();
 
     final results = await Future.wait([
-      ChatUserDirectory.fetch(otherIds),
+      UserDirectory.fetch(otherIds),
       _fetchUnreadCounts(roomIds),
     ]);
     final participants = results[0] as Map<String, ChatParticipant>;
@@ -225,9 +226,26 @@ class ChatListController extends ChangeNotifier {
   // Calls (incoming calls ring while the chat list is open)
   // ---------------------------------------------------------------------
 
-  Stream<List<CallModel>> incomingCalls() => _callService.listenForIncomingCalls(currentUserID);
-
-  Future<ChatParticipant> caller(String callerID) => ChatUserDirectory.fetchOne(callerID);
+  /// Shows the incoming-call screen while the chat list is open.
+  /// Shared with push notifications, so the same call never opens twice.
+  void watchIncomingCalls() {
+    _callSubscription?.cancel();
+    _callSubscription = _callService.listenForIncomingCalls(currentUserID).listen(
+      (calls) async {
+        if (calls.isEmpty || _disposed) return;
+        final call = calls.first;
+        final caller = await UserDirectory.fetchOne(call.callerID);
+        if (_disposed) return;
+        await IncomingCallService.show(
+          callID: call.callID,
+          roomCode: call.roomCode,
+          callerName: caller.displayName,
+          callerPhoto: caller.photoUrl,
+        );
+      },
+      onError: (Object e) => debugPrint('Incoming call stream error: $e'),
+    );
+  }
 
   // ---------------------------------------------------------------------
 
@@ -239,6 +257,7 @@ class ChatListController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _refreshDebounce?.cancel();
+    _callSubscription?.cancel();
     _unsubscribe();
     super.dispose();
   }

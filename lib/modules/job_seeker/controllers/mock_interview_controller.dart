@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/table_constants.dart';
+import '../../../core/utils/data_load_exception.dart';
 import '../../../models/mock_interview_model.dart';
 import '../../../core/utils/session_helper.dart';
 
@@ -137,9 +138,13 @@ class MockInterviewController {
       timeout: const Duration(seconds: 60),
     );
     final record = data['record'] as Map<String, dynamic>;
-    // Load again with the answers attached
-    return await fetchInterview(record['sessionID'] as String) ??
-        MockInterviewRecordModel.fromJson(record);
+    // Load again with the answers attached (fall back to the basic record)
+    try {
+      return await fetchInterview(record['sessionID'] as String) ??
+          MockInterviewRecordModel.fromJson(record);
+    } on DataLoadException {
+      return MockInterviewRecordModel.fromJson(record);
+    }
   }
 
   /// Use case A2 (early exit): removes the unfinished session and its answers.
@@ -157,6 +162,7 @@ class MockInterviewController {
   }
 
   /// One interview with all its answers (used by the result screen / guidance reports).
+  /// Returns null if it doesn't exist; throws [DataLoadException] if it can't be loaded.
   Future<MockInterviewRecordModel?> fetchInterview(String sessionID) async {
     try {
       final response = await _supabase
@@ -166,27 +172,13 @@ class MockInterviewController {
           .eq('seekerID', _currentSeekerID)
           .maybeSingle();
       return response == null ? null : MockInterviewRecordModel.fromJson(response);
+    } on DataLoadException {
+      rethrow;
     } catch (e) {
       debugPrint('Error fetching mock interview: $e');
-      return null;
-    }
-  }
-
-  /// Completed interviews, newest first.
-  Future<List<MockInterviewRecordModel>> fetchCompletedInterviews() async {
-    try {
-      final response = await _supabase
-          .from(TableConstants.mockInterviewRecord)
-          .select()
-          .eq('seekerID', _currentSeekerID)
-          .eq('status', 'completed')
-          .order('completedAt', ascending: false);
-      return (response as List<dynamic>)
-          .map((e) => MockInterviewRecordModel.fromJson(e as Map<String, dynamic>))
-          .toList();
-    } catch (e) {
-      debugPrint('Error fetching mock interviews: $e');
-      return [];
+      throw DataLoadException(
+        'Unable to load this interview report. Please check your connection and try again.',
+      );
     }
   }
 }

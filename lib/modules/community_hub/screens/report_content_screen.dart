@@ -63,12 +63,7 @@ class _ReportContentScreenState extends State<ReportContentScreen> {
       );
       return;
     }
-    SnackBarHelper.showStyled(
-      context,
-      message: 'Thanks. Our team will review this $_what.',
-      icon: Icons.check_circle_outline_rounded,
-      accentColor: AppColors.successGreen,
-    );
+    SnackBarHelper.showSuccess(context, 'Thanks. Our team will review this $_what.');
     Navigator.pop(context, true);
   }
 

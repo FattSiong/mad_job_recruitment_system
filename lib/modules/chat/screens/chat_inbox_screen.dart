@@ -1,11 +1,8 @@
-import 'dart:async';
 
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../../models/call_model.dart';
 import '../../../models/chat_room_model.dart';
-import '../../../services/incoming_call_service.dart';
 import '../controllers/chat_list_controller.dart';
 import '../widgets/chat_list_tile.dart';
 import 'chat_room_screen.dart';
@@ -22,37 +19,19 @@ class ChatInboxScreen extends StatefulWidget {
 class _ChatInboxScreenState extends State<ChatInboxScreen> {
   final ChatListController _controller = ChatListController();
   final TextEditingController _searchController = TextEditingController();
-  StreamSubscription<List<CallModel>>? _callSubscription;
 
   @override
   void initState() {
     super.initState();
     _controller.load();
-    _listenForCalls();
+    _controller.watchIncomingCalls();
   }
 
   @override
   void dispose() {
-    _callSubscription?.cancel();
     _searchController.dispose();
     _controller.dispose();
     super.dispose();
-  }
-
-  /// Shows the incoming-call screen while the chat list is open.
-  void _listenForCalls() {
-    _callSubscription = _controller.incomingCalls().listen((calls) async {
-      if (calls.isEmpty) return;
-      final call = calls.first;
-      final caller = await _controller.caller(call.callerID);
-      // Shared with push notifications, so the same call never opens twice.
-      await IncomingCallService.show(
-        callID: call.callID,
-        roomCode: call.roomCode,
-        callerName: caller.displayName,
-        callerPhoto: caller.photoUrl,
-      );
-    });
   }
 
   Future<void> _openRoom(ChatRoomModel room) async {

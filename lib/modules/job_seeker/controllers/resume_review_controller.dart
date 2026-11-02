@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/table_constants.dart';
+import '../../../core/utils/data_load_exception.dart';
 import '../../../core/utils/session_helper.dart';
 import '../../../models/resume_review_model.dart';
 
@@ -65,6 +66,7 @@ class ResumeReviewController {
   }
 
   /// Which resumes the user has: the uploaded file and/or the in-app resume.
+  /// Throws [DataLoadException] if they can't be loaded.
   Future<ResumeReviewSources?> fetchSources() async {
     try {
       final userId = _currentSeekerID;
@@ -89,9 +91,13 @@ class ResumeReviewController {
         hasBuiltResume: _hasContent(built?['content']),
         builtResumeUpdatedAt: DateTime.tryParse(built?['updatedAt']?.toString() ?? '')?.toLocal(),
       );
+    } on DataLoadException {
+      rethrow; // session expired
     } catch (e) {
       debugPrint('Error fetching resume sources: $e');
-      return null;
+      throw DataLoadException(
+        'Unable to load your resumes. Please check your connection and try again.',
+      );
     }
   }
 
@@ -102,7 +108,7 @@ class ResumeReviewController {
     return filled('education') || filled('experience') || filled('skills');
   }
 
-  /// Past reviews, newest first.
+  /// Past reviews, newest first. Throws [DataLoadException].
   Future<List<ResumeReviewModel>> fetchHistory() async {
     try {
       final response = await _supabase
@@ -113,9 +119,13 @@ class ResumeReviewController {
       return (response as List<dynamic>)
           .map((e) => ResumeReviewModel.fromJson(e as Map<String, dynamic>))
           .toList();
+    } on DataLoadException {
+      rethrow; // session expired
     } catch (e) {
       debugPrint('Error fetching resume reviews: $e');
-      return [];
+      throw DataLoadException(
+        'Unable to load your past reviews. Please check your connection and try again.',
+      );
     }
   }
 

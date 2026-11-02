@@ -6,8 +6,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/table_constants.dart';
 import '../../../core/utils/file_picker_helper.dart';
 import '../../../models/feed_post_model.dart';
+import '../../../models/post_topic.dart';
 
-/// Create a new post, or edit an existing one (text and one PDF/image).
+/// Create a new post, or edit an existing one (topic, text and one PDF/image).
 class PostEditorController extends ChangeNotifier {
   final String currentUserID;
 
@@ -17,6 +18,7 @@ class PostEditorController extends ChangeNotifier {
   PostEditorController({required this.currentUserID, this.original}) {
     _content = original?.content ?? '';
     _existingMediaURL = original?.mediaURL;
+    _topic = original?.topic ?? PostTopic.general;
   }
 
   final _supabase = Supabase.instance.client;
@@ -27,6 +29,7 @@ class PostEditorController extends ChangeNotifier {
   static const String _bucket = 'post_media';
 
   String _content = '';
+  PostTopic _topic = PostTopic.general;
   String? _existingMediaURL;
   File? _newFile;
   bool _isSaving = false;
@@ -34,6 +37,7 @@ class PostEditorController extends ChangeNotifier {
   bool get isEditing => original != null;
   bool get isSaving => _isSaving;
   String get content => _content;
+  PostTopic get topic => _topic;
   File? get newFile => _newFile;
   String? get existingMediaURL => _existingMediaURL;
 
@@ -55,6 +59,7 @@ class PostEditorController extends ChangeNotifier {
   bool get _changed =>
       !isEditing ||
       _content.trim() != original!.content.trim() ||
+      _topic != original!.topic ||
       _newFile != null ||
       _existingMediaURL != original!.mediaURL;
 
@@ -66,6 +71,12 @@ class PostEditorController extends ChangeNotifier {
 
   void setContent(String value) {
     _content = value;
+    notifyListeners();
+  }
+
+  void setTopic(PostTopic topic) {
+    if (topic == _topic) return;
+    _topic = topic;
     notifyListeners();
   }
 
@@ -104,7 +115,11 @@ class PostEditorController extends ChangeNotifier {
       if (isEditing) {
         await _supabase
             .from(TableConstants.communityPost)
-            .update({'content': _content.trim(), 'mediaURL': mediaURL})
+            .update({
+              'content': _content.trim(),
+              'mediaURL': mediaURL,
+              'category': _topic.value,
+            })
             .eq('postID', original!.postID)
             .eq('authorID', currentUserID);
       } else {
@@ -112,6 +127,7 @@ class PostEditorController extends ChangeNotifier {
           'authorID': currentUserID,
           'content': _content.trim(),
           'mediaURL': mediaURL,
+          'category': _topic.value,
           'status': 'active',
         });
       }
