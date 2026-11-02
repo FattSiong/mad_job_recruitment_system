@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/table_constants.dart';
 import '../../../core/utils/file_picker_helper.dart';
 import '../../../core/utils/session_helper.dart';
+import '../../../core/utils/storage_url_helper.dart';
 import '../../../models/call_model.dart';
 import '../../../models/chat_room_model.dart';
 import '../../../models/message_model.dart';
@@ -192,6 +193,8 @@ class ChatRoomController extends ChangeNotifier {
     final safeName = fileName.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
     final path = 'chats/$roomID/${DateTime.now().millisecondsSinceEpoch}_$safeName';
     await _supabase.storage.from(attachmentsBucket).upload(path, file);
+    // The bucket is private: this link only identifies the file. The app opens
+    // it through a signed link (StorageUrlHelper), and only chat members may.
     return _supabase.storage.from(attachmentsBucket).getPublicUrl(path);
   }
 
@@ -232,6 +235,8 @@ class ChatRoomController extends ChangeNotifier {
   // ---------------------------------------------------------------------
 
   /// Deletes one of your own messages for everyone (kept as "deleted").
+  /// A photo, file or voice note is also removed from storage, so its old
+  /// link stops working.
   Future<bool> deleteMessage(MessageModel message) async {
     if (!isMine(message)) return false;
     try {
@@ -244,10 +249,24 @@ class ChatRoomController extends ChangeNotifier {
           })
           .eq('messageID', message.messageID)
           .eq('senderID', currentUserID);
-      return true;
     } catch (e) {
       debugPrint('Error deleting message: $e');
       return false;
+    }
+    await _deleteAttachmentFile(message.mediaURL);
+    return true;
+  }
+
+  /// Removes a chat file from storage. Failure is only logged: the message is
+  /// already deleted and the private bucket keeps the file hidden anyway.
+  Future<void> _deleteAttachmentFile(String? mediaURL) async {
+    if (mediaURL == null || mediaURL.isEmpty) return;
+    final file = StorageUrlHelper.parse(mediaURL);
+    if (file == null || file.bucket != attachmentsBucket) return;
+    try {
+      await _supabase.storage.from(attachmentsBucket).remove([file.path]);
+    } catch (e) {
+      debugPrint('Could not delete chat file ${file.path}: $e');
     }
   }
 

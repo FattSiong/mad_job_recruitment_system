@@ -1,7 +1,9 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import 'storage_image.dart';
+
 /// Black full-screen photo with pinch-to-zoom.
+/// Works for public links and private storage files (e.g. chat photos).
 class FullScreenImageViewer extends StatelessWidget {
   final String imageUrl;
   final String heroTag;
@@ -23,12 +25,11 @@ class FullScreenImageViewer extends StatelessWidget {
           maxScale: 4,
           child: Hero(
             tag: heroTag,
-            child: CachedNetworkImage(
-              imageUrl: imageUrl,
+            child: StorageImage(
+              url: imageUrl,
               fit: BoxFit.contain,
-              placeholder: (_, __) => const CircularProgressIndicator(color: Colors.white),
-              errorWidget: (_, __, ___) =>
-                  const Icon(Icons.broken_image_outlined, color: Colors.white54, size: 48),
+              placeholder: (_) => const CircularProgressIndicator(color: Colors.white),
+              error: (_) => const Icon(Icons.broken_image_outlined, color: Colors.white54, size: 48),
             ),
           ),
         ),

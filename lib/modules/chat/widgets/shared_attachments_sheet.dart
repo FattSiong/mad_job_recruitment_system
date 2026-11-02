@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -6,6 +5,7 @@ import '../../../core/utils/file_preview_helper.dart';
 import '../../../models/message_model.dart';
 import '../chat_formatters.dart';
 import '../../../shared_widgets/full_screen_image_viewer.dart';
+import '../../../shared_widgets/storage_image.dart';
 
 /// Photos and files shared in a chat.
 Future<void> showSharedAttachmentsSheet(
@@ -103,11 +103,11 @@ class _SharedAttachmentsSheetState extends State<_SharedAttachmentsSheet> {
                                 tag: tag,
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(14),
-                                  child: CachedNetworkImage(
-                                    imageUrl: m.mediaURL!,
+                                  child: StorageImage(
+                                    url: m.mediaURL!,
                                     fit: BoxFit.cover,
                                     memCacheWidth: 300,
-                                    errorWidget: (_, __, ___) => Container(
+                                    error: (_) => Container(
                                       color: AppColors.surfaceAlt,
                                       child: const Icon(Icons.broken_image_outlined),
                                     ),

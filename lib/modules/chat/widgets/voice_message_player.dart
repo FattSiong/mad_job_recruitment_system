@@ -4,6 +4,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/storage_url_helper.dart';
 import '../chat_formatters.dart';
 
 /// Only one voice note plays at a time across the chat.
@@ -90,7 +91,10 @@ class _VoiceMessagePlayerState extends State<VoiceMessagePlayer> {
         await _player.resume();
       } else {
         setState(() => _isLoading = true);
-        await _player.play(UrlSource(widget.url));
+        // Private chat file: play it through a signed link.
+        final url = await StorageUrlHelper.resolveCached(widget.url);
+        if (!mounted) return;
+        await _player.play(UrlSource(url));
       }
     } catch (e) {
       debugPrint('Voice message playback failed: $e');

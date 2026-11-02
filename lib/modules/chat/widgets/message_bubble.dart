@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -6,6 +5,7 @@ import '../../../core/utils/file_preview_helper.dart';
 import '../../../models/message_model.dart';
 import '../chat_formatters.dart';
 import '../../../shared_widgets/full_screen_image_viewer.dart';
+import '../../../shared_widgets/storage_image.dart';
 import 'voice_message_player.dart';
 
 /// One chat message: text, photo, file, voice note or "deleted".
@@ -122,20 +122,20 @@ class MessageBubble extends StatelessWidget {
           tag: tag,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(16),
-            child: CachedNetworkImage(
-              imageUrl: url,
+            child: StorageImage(
+              url: url, // private chat file: shown through a signed link
               width: 220,
               height: 220,
               fit: BoxFit.cover,
               memCacheWidth: 660,
-              placeholder: (_, __) => Container(
+              placeholder: (_) => Container(
                 width: 220,
                 height: 220,
                 color: AppColors.surfaceAlt,
                 alignment: Alignment.center,
                 child: const CircularProgressIndicator(strokeWidth: 2),
               ),
-              errorWidget: (_, __, ___) => Container(
+              error: (_) => Container(
                 width: 220,
                 height: 220,
                 color: AppColors.surfaceAlt,
