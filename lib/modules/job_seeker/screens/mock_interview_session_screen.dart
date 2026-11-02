@@ -9,6 +9,7 @@ import '../../../models/mock_interview_model.dart';
 import '../controllers/mock_interview_controller.dart';
 import '../controllers/mock_interview_session_controller.dart';
 import 'mock_interview_result_screen.dart';
+import '../../../shared_widgets/confirm_dialog.dart';
 
 /// Steps 2-6 of Use Case 4.59: introduction, questions, answers, end.
 class MockInterviewSessionScreen extends StatefulWidget {
@@ -31,13 +32,6 @@ class MockInterviewSessionScreen extends StatefulWidget {
 
 class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
     with WidgetsBindingObserver {
-  static const Color _primary = AppColors.primary;
-  static const Color _background = AppColors.background;
-  static const Color _textPrimary = AppColors.textDark;
-  static const Color _textMuted = AppColors.textMuted;
-  static const Color _surfaceAlt = AppColors.surfaceAlt;
-  static const Color _border = AppColors.border;
-  static const Color _recordRed = AppColors.danger;
 
   static const Duration _maxAnswerLength = MockInterviewSessionController.maxAnswerLength;
 
@@ -194,28 +188,14 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
   Future<void> _confirmExit() async {
     if (_stage == InterviewStage.finishing) return;
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Exit interview?'),
-        content: const Text(
-          'Exiting now will discard your progress. No scorecard will be generated or saved.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Continue Interview'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.errorRed),
-            child: const Text('Exit'),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Exit interview?',
+      message: 'Exiting now will discard your progress. No scorecard will be generated or saved.',
+      confirmLabel: 'Exit',
+      cancelLabel: 'Continue Interview',
     );
-    if (confirmed != true) return;
+    if (!confirmed) return;
 
     await _session.discard();
     if (mounted) Navigator.pop(context);
@@ -223,13 +203,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
 
   void _showError(String message) {
     if (!mounted) return;
-    SnackBarHelper.showStyled(
-      context,
-      message: message,
-      icon: Icons.error_outline_rounded,
-      accentColor: AppColors.errorRed,
-      duration: const Duration(seconds: 3),
-    );
+    SnackBarHelper.showError(context, message, duration: const Duration(seconds: 3));
   }
 
   // ---------------------------------------------------------------------
@@ -244,7 +218,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
         if (!didPop) _confirmExit();
       },
       child: Scaffold(
-        backgroundColor: _background,
+        backgroundColor: AppColors.background,
         body: SafeArea(
           child: Column(
             children: [
@@ -359,7 +333,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
       width: double.infinity,
       height: 240,
       decoration: BoxDecoration(
-        color: const Color(0xFF0F2440),
+        color: AppColors.cameraBackground,
         borderRadius: BorderRadius.circular(24),
       ),
       clipBehavior: Clip.antiAlias,
@@ -410,7 +384,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: _recordRed,
+                  color: AppColors.danger,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -454,7 +428,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
                 tooltip: _cameraOn ? 'Turn camera off' : 'Turn camera on',
                 icon: Icon(
                   _cameraOn ? Icons.videocam_off_outlined : Icons.videocam_outlined,
-                  color: _primary,
+                  color: AppColors.primary,
                 ),
                 onPressed: _cameraLoading ? null : _toggleCamera,
               ),
@@ -486,7 +460,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
             child: Text(
               q.isIntroduction ? 'Introduction' : 'Question ${q.index} · ${q.typeLabel}',
               style: const TextStyle(
-                color: _primary,
+                color: AppColors.primary,
                 fontWeight: FontWeight.w700,
                 fontSize: 12,
               ),
@@ -498,7 +472,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
             style: const TextStyle(
               fontSize: 19,
               fontWeight: FontWeight.w700,
-              color: _textPrimary,
+              color: AppColors.textDark,
               height: 1.4,
             ),
           ),
@@ -548,11 +522,11 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
               width: 84,
               height: 84,
               decoration: BoxDecoration(
-                color: _primary,
+                color: AppColors.primary,
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: _primary.withValues(alpha: 0.25),
+                    color: AppColors.primary.withValues(alpha: 0.25),
                     blurRadius: 20,
                     offset: const Offset(0, 8),
                   ),
@@ -564,13 +538,13 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
           const SizedBox(height: 14),
           const Text(
             'Tap to start your answer',
-            style: TextStyle(fontWeight: FontWeight.bold, color: _textPrimary, fontSize: 16),
+            style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark, fontSize: 16),
           ),
           const SizedBox(height: 6),
           const Text(
             'Speak clearly. You can answer for up to 3 minutes.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: _textMuted),
+            style: TextStyle(color: AppColors.textMuted),
           ),
         ],
       ),
@@ -596,7 +570,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
                   height: h,
                   margin: const EdgeInsets.symmetric(horizontal: 3),
                   decoration: BoxDecoration(
-                    color: _recordRed,
+                    color: AppColors.danger,
                     borderRadius: BorderRadius.circular(3),
                   ),
                 );
@@ -609,7 +583,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
             style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
-              color: _textPrimary,
+              color: AppColors.textDark,
               fontFeatures: [FontFeature.tabularFigures()],
             ),
           ),
@@ -623,13 +597,13 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
                 color: AppColors.dangerSoft,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.stop_rounded, color: _recordRed, size: 44),
+              child: const Icon(Icons.stop_rounded, color: AppColors.danger, size: 44),
             ),
           ),
           const SizedBox(height: 12),
           const Text(
             'Recording… tap to finish your answer',
-            style: TextStyle(color: _textMuted),
+            style: TextStyle(color: AppColors.textMuted),
           ),
         ],
       ),
@@ -641,17 +615,17 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
       child: Column(
         children: [
           const SizedBox(height: 8),
-          const CircularProgressIndicator(color: _primary),
+          const CircularProgressIndicator(color: AppColors.primary),
           const SizedBox(height: 18),
           Text(
             message,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontWeight: FontWeight.w600, color: _textPrimary),
+            style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textDark),
           ),
           const SizedBox(height: 6),
           const Text(
             'This usually takes a few seconds.',
-            style: TextStyle(color: _textMuted),
+            style: TextStyle(color: AppColors.textMuted),
           ),
         ],
       ),
@@ -669,7 +643,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
               SizedBox(width: 8),
               Text(
                 'Answer saved',
-                style: TextStyle(fontWeight: FontWeight.bold, color: _textPrimary, fontSize: 16),
+                style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark, fontSize: 16),
               ),
             ],
           ),
@@ -689,7 +663,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
           const SizedBox(height: 16),
           const Text(
             'What we heard',
-            style: TextStyle(fontWeight: FontWeight.bold, color: _textPrimary),
+            style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark),
           ),
           const SizedBox(height: 8),
           Container(
@@ -697,21 +671,21 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
             constraints: const BoxConstraints(maxHeight: 160),
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: _surfaceAlt,
+              color: AppColors.surfaceAlt,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _border),
+              border: Border.all(color: AppColors.border),
             ),
             child: SingleChildScrollView(
               child: Text(
                 answer.transcriptText,
-                style: const TextStyle(color: _textMuted, height: 1.45),
+                style: const TextStyle(color: AppColors.textMuted, height: 1.45),
               ),
             ),
           ),
           const SizedBox(height: 10),
           const Text(
             'Detailed feedback will be shown in your scorecard at the end.',
-            style: TextStyle(fontSize: 12, color: _textMuted),
+            style: TextStyle(fontSize: 12, color: AppColors.textMuted),
           ),
         ],
       ),
@@ -728,9 +702,9 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: _primary),
+          Icon(icon, size: 16, color: AppColors.primary),
           const SizedBox(width: 6),
-          Text(label, style: const TextStyle(color: _primary, fontWeight: FontWeight.w600)),
+          Text(label, style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -751,7 +725,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
                 icon: const Icon(Icons.refresh_rounded),
                 label: const Text('Re-record'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: _primary,
+                  foregroundColor: AppColors.primary,
                   side: const BorderSide(color: AppColors.borderActive),
                   padding: const EdgeInsets.symmetric(vertical: 15),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
@@ -768,7 +742,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
                 icon: Icon(_isLastQuestion ? Icons.flag_rounded : Icons.arrow_forward_rounded),
                 label: Text(_isLastQuestion ? 'End Interview' : 'Next Question'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _primary,
+                  backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(vertical: 15),

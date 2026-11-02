@@ -31,11 +31,6 @@ class GuidancePdfViewerScreen extends StatefulWidget {
 }
 
 class _GuidancePdfViewerScreenState extends State<GuidancePdfViewerScreen> {
-  static const Color _primary = AppColors.primary;
-  static const Color _background = AppColors.background;
-  static const Color _textPrimary = AppColors.textDark;
-  static const Color _textMuted = AppColors.textMuted;
-
   Uint8List? _bytes;
   File? _file;
   String? _error;
@@ -86,13 +81,11 @@ class _GuidancePdfViewerScreenState extends State<GuidancePdfViewerScreen> {
     if (file == null) return;
     final result = await OpenFilex.open(file.path, type: 'application/pdf');
     if (result.type != ResultType.done && mounted) {
-      SnackBarHelper.showStyled(
+      SnackBarHelper.showError(
         context,
-        message: result.type == ResultType.noAppToOpen
+        result.type == ResultType.noAppToOpen
             ? 'No PDF app found on this device.'
             : 'Unable to open the PDF.',
-        icon: Icons.error_outline_rounded,
-        accentColor: AppColors.errorRed,
       );
     }
   }
@@ -106,7 +99,7 @@ class _GuidancePdfViewerScreenState extends State<GuidancePdfViewerScreen> {
         border: Border.all(color: AppColors.borderSoft),
       ),
       child: IconButton(
-        icon: Icon(icon, color: onPressed == null ? const Color(0xFFB0BCCB) : _primary),
+        icon: Icon(icon, color: onPressed == null ? AppColors.iconDisabled : AppColors.primary),
         tooltip: tooltip,
         onPressed: onPressed,
       ),
@@ -118,15 +111,15 @@ class _GuidancePdfViewerScreenState extends State<GuidancePdfViewerScreen> {
     final ready = _bytes != null;
 
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: _background,
+        backgroundColor: AppColors.background,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         titleSpacing: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: _primary),
+          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.primary),
           onPressed: () => Navigator.pop(context),
         ),
         title: Column(
@@ -136,9 +129,9 @@ class _GuidancePdfViewerScreenState extends State<GuidancePdfViewerScreen> {
               widget.title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _textPrimary),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textDark),
             ),
-            const Text('PDF preview', style: TextStyle(fontSize: 12, color: _textMuted)),
+            const Text('PDF preview', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
           ],
         ),
         actions: [
@@ -161,9 +154,9 @@ class _GuidancePdfViewerScreenState extends State<GuidancePdfViewerScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        CircularProgressIndicator(color: _primary),
+                        CircularProgressIndicator(color: AppColors.primary),
                         SizedBox(height: 16),
-                        Text('Preparing your PDF…', style: TextStyle(color: _textMuted)),
+                        Text('Preparing your PDF…', style: TextStyle(color: AppColors.textMuted)),
                       ],
                     ),
                   )
@@ -186,14 +179,14 @@ class _GuidancePdfViewerScreenState extends State<GuidancePdfViewerScreen> {
             const Icon(Icons.picture_as_pdf_outlined, size: 44, color: AppColors.errorRed),
             const SizedBox(height: 12),
             Text(_error!, textAlign: TextAlign.center,
-                style: const TextStyle(fontWeight: FontWeight.w600, color: _textPrimary)),
+                style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textDark)),
             const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: _generate,
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Try Again'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: _primary,
+                backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),

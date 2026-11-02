@@ -9,6 +9,7 @@ import '../widgets/load_error_view.dart';
 import '../widgets/profile/add_education_sheet.dart';
 import '../widgets/profile/profile_record_card.dart';
 import '../widgets/profile/profile_sheet_helpers.dart';
+import '../../../shared_widgets/confirm_dialog.dart';
 
 /// Add, edit and remove the job seeker's education.
 /// Changes are saved straight away; callers should reload when this screen closes.
@@ -20,10 +21,6 @@ class EducationScreen extends StatefulWidget {
 }
 
 class _EducationScreenState extends State<EducationScreen> {
-  static const Color _primary = AppColors.primary;
-  static const Color _textPrimary = AppColors.textDark;
-  static const Color _textMuted = AppColors.textMuted;
-
   final ProfileController _controller = ProfileController();
 
   List<EducationModel> _items = [];
@@ -105,35 +102,21 @@ class _EducationScreenState extends State<EducationScreen> {
     _showSnack(ok ? 'Education removed.' : 'Failed to remove education.', success: ok);
   }
 
-  Future<bool?> _confirmDelete(String label) {
-    return showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Remove education?'),
-        content: Text('Remove "$label" from your profile?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.errorRed),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
+  Future<bool> _confirmDelete(String label) {
+    return showConfirmDialog(
+      context,
+      title: 'Remove education?',
+      message: 'Remove "$label" from your profile?',
+      confirmLabel: 'Remove',
     );
   }
 
   void _showSnack(String message, {required bool success}) {
-    SnackBarHelper.showStyled(
-      context,
-      message: message,
-      icon: success ? Icons.check_circle_outline_rounded : Icons.error_outline_rounded,
-      accentColor: success ? AppColors.successGreen : AppColors.errorRed,
-    );
+    if (success) {
+      SnackBarHelper.showSuccess(context, message);
+    } else {
+      SnackBarHelper.showError(context, message);
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -148,7 +131,7 @@ class _EducationScreenState extends State<EducationScreen> {
         child: Stack(
           children: [
             RefreshIndicator(
-              color: _primary,
+              color: AppColors.primary,
               onRefresh: _load,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -176,7 +159,7 @@ class _EducationScreenState extends State<EducationScreen> {
           ? null
           : FloatingActionButton.extended(
               onPressed: _isSaving ? null : _add,
-              backgroundColor: _primary,
+              backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
               icon: const Icon(Icons.add_rounded),
               label: const Text('Add Education', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -230,7 +213,7 @@ class _EducationScreenState extends State<EducationScreen> {
     final count = (_isLoading || _loadError != null) ? '' : ' (${_items.length})';
     return Text(
       'Your Education$count',
-      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _textPrimary),
+      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textDark),
     );
   }
 
@@ -239,7 +222,7 @@ class _EducationScreenState extends State<EducationScreen> {
       return const [
         Padding(
           padding: EdgeInsets.symmetric(vertical: 40),
-          child: Center(child: CircularProgressIndicator(color: _primary)),
+          child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
         ),
       ];
     }
@@ -257,12 +240,12 @@ class _EducationScreenState extends State<EducationScreen> {
           ),
           child: const Row(
             children: [
-              Icon(Icons.inbox_outlined, color: _textMuted),
+              Icon(Icons.inbox_outlined, color: AppColors.textMuted),
               SizedBox(width: 12),
               Expanded(
                 child: Text(
                   'No education added yet. Tap "Add Education" to add one.',
-                  style: TextStyle(color: _textMuted, fontStyle: FontStyle.italic),
+                  style: TextStyle(color: AppColors.textMuted, fontStyle: FontStyle.italic),
                 ),
               ),
             ],

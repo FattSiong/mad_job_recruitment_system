@@ -382,7 +382,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
                         (context, index) {
-                      // 👉 Check if we are at the very bottom slot
+                      // Last slot: "load more" error, spinner or end-of-list text
                       if (index == _visibleJobs.length) {
                         if (_loadMoreFailed) {
                           return Padding(
@@ -409,7 +409,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                             ),
                           );
                         } else {
-                          // 👉 Show "End of list" text if there are no more jobs
+                          // No more jobs
                           return Padding(
                             padding: const EdgeInsets.only(top: 20, bottom: 40),
                             child: Center(
@@ -441,7 +441,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                         },
                       );
                     },
-                    // 👉 Changed to ALWAYS add 1 extra slot for either the loader or the text
+                    // + 1 for the slot at the bottom
                     childCount: _visibleJobs.length + 1,
                   ),
                 ),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../core/theme/app_colors.dart';
 import '../../core/utils/snackbar_helper.dart';
 import '../../models/chat_room_model.dart';
 import 'controllers/chat_room_controller.dart';
@@ -28,11 +27,6 @@ Future<void> openChatWith(BuildContext context, String otherUserID) async {
   } catch (e) {
     debugPrint('Open chat failed: $e');
     if (!context.mounted) return;
-    SnackBarHelper.showStyled(
-      context,
-      message: 'Unable to open the chat. Please try again.',
-      icon: Icons.error_outline_rounded,
-      accentColor: AppColors.errorRed,
-    );
+    SnackBarHelper.showError(context, 'Unable to open the chat. Please try again.');
   }
 }

@@ -6,6 +6,7 @@ import '../../../core/utils/data_load_exception.dart';
 import '../../../core/utils/file_picker_helper.dart';
 import '../../../models/job_seeker_model.dart';
 import '../../../models/skill_model.dart';
+import '../../../services/user_directory.dart';
 import 'profile_controller.dart';
 import 'skill_controller.dart';
 
@@ -174,6 +175,7 @@ class MyProfileController extends ChangeNotifier {
 
       _profile = updated;
       _isEditing = false;
+      UserDirectory.forget(updated.seekerID); // chat / community show the new name and photo
       _newPhoto = null;
       _removePhoto = false;
 

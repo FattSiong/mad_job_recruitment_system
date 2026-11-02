@@ -35,7 +35,6 @@ class ChatListController extends ChangeNotifier {
   String? get error => _error;
   String get searchQuery => _searchQuery;
   bool get hasRooms => _rooms.isNotEmpty;
-  int get totalUnread => _rooms.fold(0, (sum, room) => sum + room.unreadCount);
 
   /// Rooms matching the search box (name or last message).
   List<ChatRoomModel> get visibleRooms {

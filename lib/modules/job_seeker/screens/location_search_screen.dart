@@ -3,6 +3,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared_widgets/hero_icon_button.dart';
 
 class LocationSearchScreen extends StatefulWidget {
   final String initialKeyword;
@@ -20,11 +21,6 @@ class LocationSearchScreen extends StatefulWidget {
 
 class _LocationSearchScreenState extends State<LocationSearchScreen> {
   // Theme Colors matching Seeker Dashboard
-  static const Color _primary = AppColors.primary;
-  static const Color _textPrimary = AppColors.textDark;
-  static const Color _textMuted = AppColors.textMuted;
-  static const Color _surfaceAlt = AppColors.surfaceAlt;
-  static const Color _border = AppColors.border;
 
   late TextEditingController _keywordController;
   late TextEditingController _locationController;
@@ -106,29 +102,6 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
     }
   }
 
-  Widget _buildHeroActionButton({
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback onTap,
-  }) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.white.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: SizedBox(
-            width: 42,
-            height: 42,
-            child: Icon(icon, color: Colors.white, size: 20),
-          ),
-        ),
-      ),
-    );
-  }
-
   InputDecoration _searchInputDecoration({
     required String hint,
     required IconData icon,
@@ -136,10 +109,10 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
   }) {
     return InputDecoration(
       hintText: hint,
-      prefixIcon: Icon(icon, color: _textMuted),
+      prefixIcon: Icon(icon, color: AppColors.textMuted),
       suffixIcon: suffix,
       filled: true,
-      fillColor: _surfaceAlt,
+      fillColor: AppColors.surfaceAlt,
       contentPadding: const EdgeInsets.symmetric(vertical: 16),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(18),
@@ -151,7 +124,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(18),
-        borderSide: const BorderSide(color: _primary, width: 1.5),
+        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
       ),
     );
   }
@@ -169,7 +142,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                 child: Column(
                   children: [
-                    // 👉 Hero Header
+                    // Hero Header
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(24),
@@ -186,7 +159,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
                         children: [
                           Row(
                             children: [
-                              _buildHeroActionButton(
+                              HeroIconButton(
                                 icon: Icons.arrow_back_rounded,
                                 tooltip: 'Back',
                                 onTap: () => Navigator.pop(context),
@@ -232,7 +205,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // 👉 Search Inputs Card
+                    // Search Inputs Card
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
@@ -272,7 +245,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
                               icon: Icons.location_on_outlined,
                               suffix: _locationController.text.isNotEmpty
                                   ? IconButton(
-                                icon: const Icon(Icons.close, color: _textMuted, size: 18),
+                                icon: const Icon(Icons.close, color: AppColors.textMuted, size: 18),
                                 onPressed: () {
                                   _locationController.clear();
                                   setState(() {});
@@ -291,7 +264,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
                                   : const Icon(Icons.my_location_rounded),
                               label: Text(_isLocating ? 'Locating...' : 'Use Current Location'),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: _primary,
+                                backgroundColor: AppColors.primary,
                                 foregroundColor: Colors.white,
                                 padding: const EdgeInsets.symmetric(vertical: 16),
                                 elevation: 0,
@@ -306,7 +279,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
                 ),
               ),
 
-              // 👉 Suggestions Area (Removed Expanded and SingleChildScrollView from here)
+              // Suggestions
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
                 child: Column(
@@ -314,7 +287,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
                   children: [
                     const Text(
                       'Popular Locations',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: _textPrimary),
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.textDark),
                     ),
                     const SizedBox(height: 14),
                     Wrap(
@@ -328,12 +301,12 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                             decoration: BoxDecoration(
                               color: Colors.white,
-                              border: Border.all(color: _border),
+                              border: Border.all(color: AppColors.border),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
                                 location,
-                                style: const TextStyle(color: _textMuted, fontWeight: FontWeight.w500)
+                                style: const TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w500)
                             ),
                           ),
                         );
@@ -343,7 +316,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
 
                     const Text(
                       'Location By State',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: _textPrimary),
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.textDark),
                     ),
                     const SizedBox(height: 14),
                     GridView.builder(
@@ -366,18 +339,18 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
                             alignment: Alignment.centerLeft,
                             decoration: BoxDecoration(
                               color: Colors.white,
-                              border: Border.all(color: _border),
+                              border: Border.all(color: AppColors.border),
                               borderRadius: BorderRadius.circular(16),
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.map_outlined, size: 16, color: _textMuted),
+                                const Icon(Icons.map_outlined, size: 16, color: AppColors.textMuted),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
                                     state,
                                     style: const TextStyle(
-                                      color: _textPrimary,
+                                      color: AppColors.textDark,
                                       fontWeight: FontWeight.w600,
                                     ),
                                     maxLines: 1,

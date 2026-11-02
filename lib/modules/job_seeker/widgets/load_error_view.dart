@@ -8,10 +8,6 @@ class LoadErrorView extends StatelessWidget {
 
   const LoadErrorView({super.key, required this.message, required this.onRetry});
 
-  static const Color _primary = AppColors.primary;
-  static const Color _textPrimary = AppColors.textDark;
-  static const Color _textMuted = AppColors.textMuted;
-
   @override
   Widget build(BuildContext context) {
     return Center(
@@ -32,13 +28,13 @@ class LoadErrorView extends StatelessWidget {
             const SizedBox(height: 16),
             const Text(
               'Something went wrong',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _textPrimary),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textDark),
             ),
             const SizedBox(height: 8),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 14, height: 1.45, color: _textMuted),
+              style: const TextStyle(fontSize: 14, height: 1.45, color: AppColors.textMuted),
             ),
             const SizedBox(height: 18),
             ElevatedButton.icon(
@@ -46,7 +42,7 @@ class LoadErrorView extends StatelessWidget {
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Try Again'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: _primary,
+                backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),

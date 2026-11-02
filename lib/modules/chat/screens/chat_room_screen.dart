@@ -69,12 +69,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
   void _showError(String message) {
     if (!mounted) return;
-    SnackBarHelper.showStyled(
-      context,
-      message: message,
-      icon: Icons.error_outline_rounded,
-      accentColor: AppColors.errorRed,
-    );
+    SnackBarHelper.showError(context, message);
   }
 
   Future<void> _sendText() async {

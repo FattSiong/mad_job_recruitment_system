@@ -6,6 +6,7 @@ import '../controllers/bookmarked_controller.dart';
 import 'job_application_screen.dart';
 import 'report_job_screen.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared_widgets/hero_icon_button.dart';
 
 class JobDetailsScreen extends StatefulWidget {
   final JobModel job;
@@ -26,7 +27,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
   final ApplicationController _applicationController = ApplicationController();
   final ScrollController _scrollController = ScrollController();
 
-  // Fix #1: block applying twice, whichever screen the job was opened from
+  // Blocks applying twice, whichever screen the job was opened from
   bool _hasApplied = false;
   bool _isCheckingApplied = true;
 
@@ -187,34 +188,6 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => ReportJobScreen(job: widget.job),
-      ),
-    );
-  }
-
-  Widget _buildHeroActionButton({
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback onTap,
-    bool isActive = false,
-  }) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.white.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: SizedBox(
-            width: 42,
-            height: 42,
-            child: Icon(
-              icon,
-              color: isActive ? const Color(0xFFFFE08A) : Colors.white,
-              size: 20,
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -495,13 +468,13 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                             children: [
                               Row(
                                 children: [
-                                  _buildHeroActionButton(
+                                  HeroIconButton(
                                     icon: Icons.arrow_back_rounded,
                                     tooltip: 'Back',
                                     onTap: () => Navigator.pop(context),
                                   ),
                                   const Spacer(),
-                                  _buildHeroActionButton(
+                                  HeroIconButton(
                                     icon: _isBookmarked
                                         ? Icons.bookmark
                                         : Icons.bookmark_border,
@@ -510,7 +483,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                                     isActive: _isBookmarked,
                                   ),
                                   const SizedBox(width: 12),
-                                  _buildHeroActionButton(
+                                  HeroIconButton(
                                     icon: Icons.flag_outlined,
                                     tooltip: 'Report Job',
                                     onTap: _handleReportJob,

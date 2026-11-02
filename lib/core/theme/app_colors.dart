@@ -19,12 +19,21 @@ class AppColors {
   static const Color borderActive = Color(0xFFB8D1EE); // selected chips, outlined buttons
   static const Color overlay = Color(0x33000000);      // dim layer while saving
   static const Color shadow = Color(0x140F172A);       // soft shadow under floating bars
+  static const Color shadowFaint = Color(0x0D0F172A);  // very light shadow (chat bubbles)
+  static const Color progressTrack = Color(0xFFE8EEF6); // empty part of score bars
+  static const Color cameraBackground = Color(0xFF0F2440); // behind the mock interview camera
 
   // Text
   static const Color textDark = Color(0xFF1B2433); // job seeker screens
-  /// Shared with app_text_styles (other modules) – value unchanged.
+  /// Only used by core/theme/app_text_styles.dart.
   static const Color textPrimary = Color(0xFF191C1F);
   static const Color textMuted = Color(0xFF687588);
+  static const Color textHint = Color(0xFF9AA5B5);     // placeholder text in inputs
+
+  // Disabled / inactive
+  static const Color disabled = Color(0xFFD7E3F3);     // disabled button background
+  static const Color iconDisabled = Color(0xFFB0B9C5); // disabled icons, steps not reached yet
+  static const Color highlight = Color(0xFFFFE08A);    // "on" icon on a dark header (saved job)
 
   // Status
   static const Color errorRed = Color(0xFFD32F2F);
@@ -43,15 +52,26 @@ class AppColors {
   static const Color statusRejected = coral;
   static const Color statusInactive = Color(0xFF9AA5B1);
 
-  /// Older bright blue, still used by the employer, community and admin screens.
-  /// The job seeker module now uses [primary].
-  static const Color primaryBlue = Color(0xFF0A66C2);
-  static const Color backgroundLight = Color(0xFFF3F2EF);
-
   /// Header gradient used by most screens.
   static const LinearGradient headerGradient = LinearGradient(
     colors: [primary, primaryLight],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
+
+  /// Light blue background behind the AI Career Advisor chat.
+  static const LinearGradient chatGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFFEAF2FC), Color(0xFFF8FAFD)],
+  );
+
+  /// Green / amber / red for a 0-100 score (mock interview, skill gap);
+  /// grey when there is no score yet.
+  static Color forScore(int? score) {
+    if (score == null) return textMuted;
+    if (score >= 75) return successGreen;
+    if (score >= 50) return warning;
+    return errorRed;
+  }
 }

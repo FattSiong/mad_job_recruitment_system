@@ -3,6 +3,7 @@ import '../../../models/job_model.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../controllers/report_controller.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared_widgets/hero_icon_button.dart';
 
 class ReportJobScreen extends StatefulWidget {
   final JobModel job;
@@ -15,12 +16,6 @@ class ReportJobScreen extends StatefulWidget {
 
 class _ReportJobScreenState extends State<ReportJobScreen> {
   // Theme Colors
-  static const Color _primary = AppColors.primary;
-  static const Color _primarySoft = AppColors.primarySoft;
-  static const Color _textPrimary = AppColors.textDark;
-  static const Color _textMuted = AppColors.textMuted;
-  static const Color _surfaceAlt = AppColors.surfaceAlt;
-  static const Color _border = AppColors.border;
 
   final ReportController _reportController = ReportController();
   final TextEditingController _detailsController = TextEditingController();
@@ -102,29 +97,6 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
     }
   }
 
-  Widget _buildHeroActionButton({
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback onTap,
-  }) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.white.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: SizedBox(
-            width: 42,
-            height: 42,
-            child: Icon(icon, color: Colors.white, size: 20),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildRadioOption(String option) {
     final isSelected = _selectedCategory == option;
 
@@ -137,10 +109,10 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
-          color: isSelected ? _primarySoft : Colors.white,
+          color: isSelected ? AppColors.primarySoft : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? AppColors.borderActive : _border,
+            color: isSelected ? AppColors.borderActive : AppColors.border,
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -148,7 +120,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
           children: [
             Icon(
               isSelected ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded,
-              color: isSelected ? _primary : Colors.grey.shade400,
+              color: isSelected ? AppColors.primary : Colors.grey.shade400,
               size: 22,
             ),
             const SizedBox(width: 14),
@@ -158,7 +130,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                  color: isSelected ? _textPrimary : _textMuted,
+                  color: isSelected ? AppColors.textDark : AppColors.textMuted,
                 ),
               ),
             ),
@@ -183,7 +155,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
                       padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
                       child: Column(
                         children: [
-                          // 👉 Hero Header
+                          // Hero Header
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(24),
@@ -200,7 +172,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
                               children: [
                                 Row(
                                   children: [
-                                    _buildHeroActionButton(
+                                    HeroIconButton(
                                       icon: Icons.arrow_back_rounded,
                                       tooltip: 'Back',
                                       onTap: () => Navigator.pop(context),
@@ -264,7 +236,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
                           ),
                           const SizedBox(height: 16),
 
-                          // 👉 Report Options Card
+                          // Report Options Card
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(22),
@@ -280,7 +252,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
                                   style: TextStyle(
                                     fontSize: 20,
                                     fontWeight: FontWeight.bold,
-                                    color: _textPrimary,
+                                    color: AppColors.textDark,
                                   ),
                                 ),
                                 const SizedBox(height: 6),
@@ -288,7 +260,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
                                   'Select the option that best describes the issue with this job posting.',
                                   style: TextStyle(
                                     fontSize: 14,
-                                    color: _textMuted,
+                                    color: AppColors.textMuted,
                                     height: 1.4,
                                   ),
                                 ),
@@ -296,16 +268,16 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
                                 ..._reportOptions.map((option) => _buildRadioOption(option)),
 
                                 const SizedBox(height: 12),
-                                const Divider(color: _border),
+                                const Divider(color: AppColors.border),
                                 const SizedBox(height: 16),
 
-                                // 👉 Details Text Field
+                                // Details Text Field
                                 const Text(
                                   'Additional details',
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.bold,
-                                    color: _textPrimary,
+                                    color: AppColors.textDark,
                                   ),
                                 ),
                                 const SizedBox(height: 10),
@@ -315,7 +287,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
                                   decoration: InputDecoration(
                                     hintText: 'Describe your problem below...',
                                     filled: true,
-                                    fillColor: _surfaceAlt,
+                                    fillColor: AppColors.surfaceAlt,
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(16),
                                       borderSide: BorderSide(color: Colors.grey.shade300),
@@ -326,7 +298,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
                                     ),
                                     focusedBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(16),
-                                      borderSide: const BorderSide(color: _primary, width: 1.5),
+                                      borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
                                     ),
                                   ),
                                 ),
@@ -341,7 +313,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
               ),
             ),
 
-            // 👉 Sticky Bottom Bar
+            // Sticky Bottom Bar
             Container(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               decoration: BoxDecoration(
@@ -367,7 +339,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
                         ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                         : const Text('Submit Report', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _primary,
+                      backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 16),

@@ -181,26 +181,4 @@ class MockInterviewController {
       );
     }
   }
-
-  /// Completed interviews, newest first.
-  Future<List<MockInterviewRecordModel>> fetchCompletedInterviews() async {
-    try {
-      final response = await _supabase
-          .from(TableConstants.mockInterviewRecord)
-          .select()
-          .eq('seekerID', _currentSeekerID)
-          .eq('status', 'completed')
-          .order('completedAt', ascending: false);
-      return (response as List<dynamic>)
-          .map((e) => MockInterviewRecordModel.fromJson(e as Map<String, dynamic>))
-          .toList();
-    } on DataLoadException {
-      rethrow;
-    } catch (e) {
-      debugPrint('Error fetching mock interviews: $e');
-      throw DataLoadException(
-        'Unable to load your interviews. Please check your connection and try again.',
-      );
-    }
-  }
 }

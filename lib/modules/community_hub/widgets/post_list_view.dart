@@ -11,6 +11,7 @@ import '../screens/report_content_screen.dart';
 import 'community_state_card.dart';
 import 'post_card.dart';
 import 'post_comments_sheet.dart';
+import '../../../shared_widgets/confirm_dialog.dart';
 
 /// Scrollable list of posts for a [PostListController], with pull to refresh,
 /// "load more" for the feed, and all post actions (like, save, comments,
@@ -41,13 +42,7 @@ class PostListView extends StatelessWidget {
 
   void _showError(BuildContext context, String? message) {
     if (message == null) return;
-    SnackBarHelper.showStyled(
-      context,
-      message: message,
-      icon: Icons.error_outline_rounded,
-      accentColor: AppColors.errorRed,
-      duration: const Duration(seconds: 3),
-    );
+    SnackBarHelper.showError(context, message, duration: const Duration(seconds: 3));
   }
 
   Future<void> _like(BuildContext context, FeedPostModel post) async {
@@ -87,37 +82,18 @@ class PostListView extends StatelessWidget {
           onPostsChanged?.call();
         }
       case PostAction.delete:
-        final ok = await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-            title: const Text('Delete post?'),
-            content: const Text('The post, its comments and likes will be permanently deleted.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                style: TextButton.styleFrom(foregroundColor: AppColors.danger),
-                child: const Text('Delete'),
-              ),
-            ],
-          ),
+        final ok = await showConfirmDialog(
+          context,
+          title: 'Delete post?',
+          message: 'The post, its comments and likes will be permanently deleted.',
         );
-        if (ok != true) return;
+        if (!ok) return;
         final error = await controller.deletePost(post);
         if (!context.mounted) return;
         if (error != null) {
           _showError(context, error);
         } else {
-          SnackBarHelper.showStyled(
-            context,
-            message: 'Post deleted.',
-            icon: Icons.check_circle_outline_rounded,
-            accentColor: AppColors.successGreen,
-          );
+          SnackBarHelper.showSuccess(context, 'Post deleted.');
           onPostsChanged?.call();
         }
       case PostAction.message:

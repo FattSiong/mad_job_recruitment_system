@@ -158,8 +158,6 @@ class MockInterviewRecordModel {
     this.answers = const [],
   });
 
-  bool get isCompleted => status == 'completed';
-
   String get summary => aiEvaluationReport['summary'] as String? ?? '';
   String get readiness => aiEvaluationReport['readiness'] as String? ?? '';
   List<String> get strengths => _stringList(aiEvaluationReport['strengths']);

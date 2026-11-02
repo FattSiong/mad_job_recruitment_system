@@ -115,13 +115,7 @@ class _JobMapScreenState extends State<JobMapScreen> {
       if (mounted && _controller.searchCenter == center) _fitToArea(center);
     });
     if (_controller.error != null) {
-      SnackBarHelper.showStyled(
-        context,
-        message: _controller.error!,
-        icon: Icons.error_outline_rounded,
-        accentColor: AppColors.errorRed,
-        duration: const Duration(seconds: 3),
-      );
+      SnackBarHelper.showError(context, _controller.error!, duration: const Duration(seconds: 3));
     }
     if (_pageController.hasClients && _controller.hasResults) {
       _pageController.jumpToPage(0);

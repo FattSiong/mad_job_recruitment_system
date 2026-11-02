@@ -6,6 +6,7 @@ import '../../../core/utils/guidance_pdf_builder.dart';
 import '../../../models/skill_gap_model.dart';
 import '../controllers/guidance_report_controller.dart';
 import 'guidance_pdf_viewer_screen.dart';
+import '../../../shared_widgets/surface_card.dart';
 
 /// Skill Gap Report (end of Use Case 4.60). Also reusable from Guidance Reports.
 class SkillGapResultScreen extends StatelessWidget {
@@ -13,28 +14,14 @@ class SkillGapResultScreen extends StatelessWidget {
 
   const SkillGapResultScreen({super.key, required this.analysis});
 
-  static const Color _primary = AppColors.primary;
-  static const Color _background = AppColors.background;
-  static const Color _textPrimary = AppColors.textDark;
-  static const Color _textMuted = AppColors.textMuted;
-  static const Color _surfaceAlt = AppColors.surfaceAlt;
-  static const Color _border = AppColors.border;
-  static const Color _warning = AppColors.warning;
-
-  Color _scoreColor(int score) {
-    if (score >= 75) return AppColors.successGreen;
-    if (score >= 50) return _warning;
-    return AppColors.errorRed;
-  }
-
   Color _priorityColor(String p) {
     switch (p) {
       case 'high':
         return AppColors.errorRed;
       case 'low':
-        return _textMuted;
+        return AppColors.textMuted;
       default:
-        return _warning;
+        return AppColors.warning;
     }
   }
 
@@ -67,7 +54,7 @@ class SkillGapResultScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final a = analysis;
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
@@ -122,7 +109,7 @@ class SkillGapResultScreen extends StatelessWidget {
                   icon: const Icon(Icons.picture_as_pdf_outlined),
                   label: const Text('View as PDF'),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: _primary,
+                    foregroundColor: AppColors.primary,
                     side: const BorderSide(color: AppColors.borderActive),
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
@@ -134,7 +121,7 @@ class SkillGapResultScreen extends StatelessWidget {
             child: ElevatedButton(
               onPressed: () => Navigator.pop(context),
               style: ElevatedButton.styleFrom(
-                backgroundColor: _primary,
+                backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(vertical: 16),
@@ -191,35 +178,9 @@ class SkillGapResultScreen extends StatelessWidget {
     );
   }
 
-  Widget _surfaceCard({required List<Widget> children}) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
-    );
-  }
-
-  Widget _sectionTitle(String text, {String? subtitle}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(text,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _textPrimary)),
-          if (subtitle != null) ...[
-            const SizedBox(height: 6),
-            Text(subtitle, style: const TextStyle(color: _textMuted, height: 1.4)),
-          ],
-        ],
-      ),
-    );
-  }
-
   Widget _buildScoreCard() {
     final a = analysis;
-    final color = _scoreColor(a.matchScore);
+    final color = AppColors.forScore(a.matchScore);
     final basedOn = [
       if (a.resumeAnalysed) 'your resume',
       'profile',
@@ -228,7 +189,7 @@ class SkillGapResultScreen extends StatelessWidget {
           : 'AI market knowledge',
     ].join(', ');
 
-    return _surfaceCard(
+    return SurfaceCard(
       children: [
         Row(
           children: [
@@ -241,7 +202,7 @@ class SkillGapResultScreen extends StatelessWidget {
                   CircularProgressIndicator(
                     value: a.matchScore / 100,
                     strokeWidth: 10,
-                    backgroundColor: const Color(0xFFE8EEF6),
+                    backgroundColor: AppColors.progressTrack,
                     valueColor: AlwaysStoppedAnimation(color),
                     strokeCap: StrokeCap.round,
                   ),
@@ -251,7 +212,7 @@ class SkillGapResultScreen extends StatelessWidget {
                       children: [
                         Text('${a.matchScore}%',
                             style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: color)),
-                        const Text('match', style: TextStyle(color: _textMuted, fontSize: 12)),
+                        const Text('match', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
                       ],
                     ),
                   ),
@@ -265,7 +226,7 @@ class SkillGapResultScreen extends StatelessWidget {
                 children: [
                   _countRow(Icons.check_circle_rounded, AppColors.successGreen,
                       '${a.matching.length} matching'),
-                  _countRow(Icons.adjust_rounded, _warning, '${a.partial.length} partial'),
+                  _countRow(Icons.adjust_rounded, AppColors.warning, '${a.partial.length} partial'),
                   _countRow(Icons.cancel_rounded, AppColors.errorRed, '${a.missing.length} missing'),
                 ],
               ),
@@ -273,10 +234,10 @@ class SkillGapResultScreen extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 16),
-        Text('Based on $basedOn.', style: const TextStyle(color: _textMuted, fontSize: 12)),
+        Text('Based on $basedOn.', style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
         if (a.summary.isNotEmpty) ...[
           const SizedBox(height: 14),
-          Text(a.summary, style: const TextStyle(color: _textPrimary, height: 1.5)),
+          Text(a.summary, style: const TextStyle(color: AppColors.textDark, height: 1.5)),
         ],
       ],
     );
@@ -289,7 +250,7 @@ class SkillGapResultScreen extends StatelessWidget {
         children: [
           Icon(icon, color: color, size: 20),
           const SizedBox(width: 8),
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w600, color: _textPrimary)),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textDark)),
         ],
       ),
     );
@@ -301,11 +262,11 @@ class SkillGapResultScreen extends StatelessWidget {
         ? AppColors.successGreen
         : m.demandLevel == 'Low'
             ? AppColors.errorRed
-            : _warning;
+            : AppColors.warning;
 
-    return _surfaceCard(
+    return SurfaceCard(
       children: [
-        _sectionTitle('Market Demand'),
+        SectionTitle('Market Demand'),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -313,19 +274,19 @@ class SkillGapResultScreen extends StatelessWidget {
             if (m.demandLevel.isNotEmpty)
               _pill(Icons.trending_up_rounded, '${m.demandLevel} demand', demandColor),
             if (m.typicalSalary.isNotEmpty)
-              _pill(Icons.payments_outlined, m.typicalSalary, _primary),
+              _pill(Icons.payments_outlined, m.typicalSalary, AppColors.primary),
           ],
         ),
         if (m.summary.isNotEmpty) ...[
           const SizedBox(height: 14),
-          Text(m.summary, style: const TextStyle(color: _textMuted, height: 1.45)),
+          Text(m.summary, style: const TextStyle(color: AppColors.textMuted, height: 1.45)),
         ],
         if (m.commonRequirements.isNotEmpty) ...[
           const SizedBox(height: 14),
           const Text('Employers commonly ask for',
-              style: TextStyle(fontWeight: FontWeight.bold, color: _textPrimary)),
+              style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark)),
           const SizedBox(height: 8),
-          ...m.commonRequirements.map((r) => _bullet(r, Icons.chevron_right_rounded, _primary)),
+          ...m.commonRequirements.map((r) => _bullet(r, Icons.chevron_right_rounded, AppColors.primary)),
         ],
       ],
     );
@@ -359,7 +320,7 @@ class SkillGapResultScreen extends StatelessWidget {
         children: [
           Icon(icon, size: 18, color: color),
           const SizedBox(width: 8),
-          Expanded(child: Text(text, style: const TextStyle(color: _textMuted, height: 1.4))),
+          Expanded(child: Text(text, style: const TextStyle(color: AppColors.textMuted, height: 1.4))),
         ],
       ),
     );
@@ -367,16 +328,18 @@ class SkillGapResultScreen extends StatelessWidget {
 
   Widget _buildSkillsCard() {
     final a = analysis;
-    return _surfaceCard(
+    return SurfaceCard(
       children: [
-        _sectionTitle('Skills Breakdown', subtitle: 'Required skills for this role compared with yours.'),
+        SectionTitle('Skills Breakdown',
+          subtitle: 'Required skills for this role compared with yours.',
+        ),
         if (a.missing.isNotEmpty) ...[
           _groupTitle('Missing skills', AppColors.errorRed),
           ...a.missing.map((s) => _skillTile(s, AppColors.errorRed, Icons.cancel_rounded, s.gap)),
         ],
         if (a.partial.isNotEmpty) ...[
-          _groupTitle('Partially matching', _warning),
-          ...a.partial.map((s) => _skillTile(s, _warning, Icons.adjust_rounded, s.gap)),
+          _groupTitle('Partially matching', AppColors.warning),
+          ...a.partial.map((s) => _skillTile(s, AppColors.warning, Icons.adjust_rounded, s.gap)),
         ],
         if (a.matching.isNotEmpty) ...[
           _groupTitle('Matching skills', AppColors.successGreen),
@@ -400,9 +363,9 @@ class SkillGapResultScreen extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _surfaceAlt,
+        color: AppColors.surfaceAlt,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppColors.border),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -417,7 +380,7 @@ class SkillGapResultScreen extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(s.skill,
-                          style: const TextStyle(fontWeight: FontWeight.bold, color: _textPrimary)),
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark)),
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -432,11 +395,11 @@ class SkillGapResultScreen extends StatelessWidget {
                 ),
                 if (s.category.isNotEmpty) ...[
                   const SizedBox(height: 2),
-                  Text(_cap(s.category), style: const TextStyle(color: _textMuted, fontSize: 12)),
+                  Text(_cap(s.category), style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
                 ],
                 if (detail.isNotEmpty) ...[
                   const SizedBox(height: 6),
-                  Text(detail, style: const TextStyle(color: _textMuted, height: 1.35, fontSize: 13)),
+                  Text(detail, style: const TextStyle(color: AppColors.textMuted, height: 1.35, fontSize: 13)),
                 ],
               ],
             ),
@@ -448,9 +411,9 @@ class SkillGapResultScreen extends StatelessWidget {
 
   Widget _buildActionPathsCard() {
     final paths = analysis.actionPaths;
-    return _surfaceCard(
+    return SurfaceCard(
       children: [
-        _sectionTitle('Recommended Action Paths', subtitle: 'Start with the highest priority.'),
+        SectionTitle('Recommended Action Paths', subtitle: 'Start with the highest priority.'),
         for (var i = 0; i < paths.length; i++) _actionPathTile(i + 1, paths[i]),
       ],
     );
@@ -462,9 +425,9 @@ class SkillGapResultScreen extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _surfaceAlt,
+        color: AppColors.surfaceAlt,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -476,10 +439,10 @@ class SkillGapResultScreen extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: _primary.withValues(alpha: 0.10),
+                  color: AppColors.primary.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(_pathIcon(p.type), color: _primary, size: 22),
+                child: Icon(_pathIcon(p.type), color: AppColors.primary, size: 22),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -488,15 +451,15 @@ class SkillGapResultScreen extends StatelessWidget {
                   children: [
                     Text('$number. ${p.title}',
                         style: const TextStyle(
-                            fontWeight: FontWeight.bold, color: _textPrimary, height: 1.3)),
+                            fontWeight: FontWeight.bold, color: AppColors.textDark, height: 1.3)),
                     const SizedBox(height: 6),
                     Wrap(
                       spacing: 6,
                       runSpacing: 6,
                       children: [
                         _smallTag('${_cap(p.priority)} priority', pColor),
-                        if (p.type.isNotEmpty) _smallTag(_cap(p.type), _primary),
-                        if (p.timeframe.isNotEmpty) _smallTag(p.timeframe, _textMuted),
+                        if (p.type.isNotEmpty) _smallTag(_cap(p.type), AppColors.primary),
+                        if (p.timeframe.isNotEmpty) _smallTag(p.timeframe, AppColors.textMuted),
                       ],
                     ),
                   ],
@@ -507,7 +470,7 @@ class SkillGapResultScreen extends StatelessWidget {
           if (p.skillsAddressed.isNotEmpty) ...[
             const SizedBox(height: 12),
             Text('Builds: ${p.skillsAddressed.join(', ')}',
-                style: const TextStyle(color: _primary, fontWeight: FontWeight.w600, fontSize: 13)),
+                style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 13)),
           ],
           if (p.steps.isNotEmpty) ...[
             const SizedBox(height: 10),
@@ -525,12 +488,12 @@ class SkillGapResultScreen extends StatelessWidget {
                       decoration: const BoxDecoration(color: AppColors.primarySoft, shape: BoxShape.circle),
                       child: Text('${i + 1}',
                           style: const TextStyle(
-                              color: _primary, fontSize: 11, fontWeight: FontWeight.bold)),
+                              color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(p.steps[i],
-                          style: const TextStyle(color: _textMuted, height: 1.4)),
+                          style: const TextStyle(color: AppColors.textMuted, height: 1.4)),
                     ),
                   ],
                 ),
@@ -547,17 +510,17 @@ class SkillGapResultScreen extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: _border),
+                          border: Border.all(color: AppColors.border),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.bookmark_border_rounded, size: 14, color: _primary),
+                            const Icon(Icons.bookmark_border_rounded, size: 14, color: AppColors.primary),
                             const SizedBox(width: 4),
                             Flexible(
                               child: Text(r,
                                   style: const TextStyle(
-                                      color: _primary, fontSize: 12, fontWeight: FontWeight.w600)),
+                                      color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
                             ),
                           ],
                         ),
@@ -582,22 +545,24 @@ class SkillGapResultScreen extends StatelessWidget {
   }
 
   Widget _buildResumeTipsCard() {
-    return _surfaceCard(
+    return SurfaceCard(
       children: [
-        _sectionTitle('Resume Tips', subtitle: 'Show the skills you already have more clearly.'),
-        ...analysis.resumeTips.map((t) => _bullet(t, Icons.tips_and_updates_outlined, _primary)),
+        SectionTitle('Resume Tips', subtitle: 'Show the skills you already have more clearly.'),
+        ...analysis.resumeTips.map((t) => _bullet(t, Icons.tips_and_updates_outlined, AppColors.primary)),
         if (analysis.resumeNote.isNotEmpty) ...[
           const SizedBox(height: 4),
-          Text(analysis.resumeNote, style: const TextStyle(color: _textMuted, fontSize: 12)),
+          Text(analysis.resumeNote, style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
         ],
       ],
     );
   }
 
   Widget _buildDetectedSkillsCard() {
-    return _surfaceCard(
+    return SurfaceCard(
       children: [
-        _sectionTitle('Your Detected Skills', subtitle: 'Found in your profile, resume, education and experience.'),
+        SectionTitle('Your Detected Skills',
+          subtitle: 'Found in your profile, resume, education and experience.',
+        ),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -611,7 +576,7 @@ class SkillGapResultScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(s.skill,
-                          style: const TextStyle(color: _primary, fontWeight: FontWeight.w600)),
+                          style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600)),
                     ),
                   ))
               .toList(),

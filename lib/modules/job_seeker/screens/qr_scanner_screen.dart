@@ -34,11 +34,11 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
 
         String? scannedSeekerId;
 
-        // 👉 Handle the URL format (if using Deep Links from the previous step)
+        // Link format: .../profile/<seekerID>
         if (rawValue.contains('/profile/')) {
           scannedSeekerId = rawValue.split('/').last;
         }
-        // 👉 Handle the raw scheme format (if you just used 'profile:UUID')
+        // Short format: profile:<seekerID>
         else if (rawValue.startsWith('profile:')) {
           scannedSeekerId = rawValue.replaceFirst('profile:', '');
         }
@@ -48,7 +48,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
           setState(() => _isNavigating = true);
           _scannerController.stop(); // Stop camera to save battery
 
-          // 👉 Completed TODO: Navigate to the read-only Public Profile Screen
+          // Open the read-only public profile
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -80,10 +80,8 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
           IconButton(
             color: Colors.white,
             icon: ValueListenableBuilder(
-              // 👉 Fix: Listen to the controller directly instead of torchState
               valueListenable: _scannerController,
               builder: (context, state, child) {
-                // 👉 Fix: Check the torchState from the emitted state object
                 switch (state.torchState) {
                   case TorchState.on:
                     return const Icon(Icons.flash_on, color: Colors.yellow);

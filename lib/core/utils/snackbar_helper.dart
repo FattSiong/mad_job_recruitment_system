@@ -1,6 +1,38 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_colors.dart';
+
 class SnackBarHelper {
+  /// Red error message, e.g. "Failed to save. Please try again."
+  static void showError(
+    BuildContext context,
+    String message, {
+    Duration duration = const Duration(seconds: 2),
+  }) {
+    showStyled(
+      context,
+      message: message,
+      icon: Icons.error_outline_rounded,
+      accentColor: AppColors.errorRed,
+      duration: duration,
+    );
+  }
+
+  /// Green confirmation, e.g. "Saved".
+  static void showSuccess(
+    BuildContext context,
+    String message, {
+    Duration duration = const Duration(seconds: 2),
+  }) {
+    showStyled(
+      context,
+      message: message,
+      icon: Icons.check_circle_outline_rounded,
+      accentColor: AppColors.successGreen,
+      duration: duration,
+    );
+  }
+
   static void showStyled(
       BuildContext context, {
         required String message,
@@ -50,7 +82,7 @@ class SnackBarHelper {
                 child: Text(
                   message,
                   style: const TextStyle(
-                    color: Color(0xFF1B2433),
+                    color: AppColors.textDark,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     height: 1.3,

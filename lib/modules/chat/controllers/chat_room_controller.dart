@@ -20,8 +20,8 @@ import '../../../services/user_directory.dart';
 /// Data for one conversation: live messages, sending text / files / voice,
 /// read receipts, deleting, shared attachments and starting a call.
 ///
-/// Push notifications are NOT sent from here: the server sends them when a
-/// Message row is inserted (FCM, set up later).
+/// Push notifications are NOT sent from here: a database trigger calls the
+/// send-push Edge Function (FCM) when a Message row is inserted.
 class ChatRoomController extends ChangeNotifier {
   static const String attachmentsBucket = 'chat_attachments';
   static const int maxAttachmentMB = 10;

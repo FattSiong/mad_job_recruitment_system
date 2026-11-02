@@ -186,7 +186,7 @@ class ApplicationController extends ChangeNotifier {
     }
   }
 
-  /// True if the current user already applied for this job (fix #1).
+  /// True if the current user already applied for this job.
   /// Returns false if it can't be checked: the server still blocks a
   /// duplicate application when it is submitted.
   Future<bool> hasApplied(String jobId) async {
@@ -230,7 +230,7 @@ class ApplicationController extends ChangeNotifier {
     }
   }
 
-  /// Submits the application in one database transaction (fix #2).
+  /// Submits the application in one database transaction.
   ///
   /// 1. Uploads the new resume and every answer file first. If any upload fails,
   ///    the files already uploaded are removed and nothing is saved.

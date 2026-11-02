@@ -61,7 +61,7 @@ class ProfileController {
     }
   }
 
-  /// Profile shown after scanning a QR code (fix #8).
+  /// Profile shown after scanning a QR code.
   /// Email, phone and resume are only included for employers, admins and the owner;
   /// [contactVisible] tells the screen whether they were hidden.
   /// Returns null if there is no such profile; throws [DataLoadException]
@@ -116,7 +116,8 @@ class ProfileController {
     }
   }
 
-  // 👉 ADDED BACK: The missing uploadResume method
+  /// Uploads a resume file and saves its link on the profile.
+  /// Returns the link, or null if it failed.
   Future<String?> uploadResume(File file) async {
     try {
       final userId = SessionHelper.requireUserId();

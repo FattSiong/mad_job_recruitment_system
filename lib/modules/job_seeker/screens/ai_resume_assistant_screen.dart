@@ -11,6 +11,8 @@ import '../widgets/load_error_view.dart';
 import '../widgets/resume_review/resume_review_widgets.dart';
 import 'build_resume_screen.dart';
 import 'resume_review_result_screen.dart';
+import '../../../shared_widgets/confirm_dialog.dart';
+import '../../../shared_widgets/surface_card.dart';
 
 /// AI Resume Assistant: pick a resume (uploaded or built in the app), optionally
 /// a target job, and get AI feedback on how to improve it.
@@ -22,13 +24,6 @@ class AiResumeAssistantScreen extends StatefulWidget {
 }
 
 class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
-  static const Color _primary = AppColors.primary;
-  static const Color _background = AppColors.background;
-  static const Color _textPrimary = AppColors.textDark;
-  static const Color _textMuted = AppColors.textMuted;
-  static const Color _surfaceAlt = AppColors.surfaceAlt;
-  static const Color _border = AppColors.border;
-
   static const List<String> _suggestedRoles = [
     'Software Developer',
     'Data Analyst',
@@ -116,13 +111,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
     } on ResumeReviewException catch (e) {
       if (!mounted) return;
       setState(() => _isReviewing = false);
-      SnackBarHelper.showStyled(
-        context,
-        message: e.message,
-        icon: Icons.error_outline_rounded,
-        accentColor: AppColors.errorRed,
-        duration: const Duration(seconds: 4),
-      );
+      SnackBarHelper.showError(context, e.message, duration: const Duration(seconds: 4));
       // The resume may have changed (e.g. removed) - refresh the choices.
       if (e.code == 'no_resume' || e.code == 'resume_unreadable') _load();
     }
@@ -147,40 +136,19 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
   }
 
   Future<void> _confirmDelete(ResumeReviewModel item) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Delete review?'),
-        content: Text(
-          'The review from ${DateFormat('d MMM yyyy').format(item.createdAt)} will be permanently deleted.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.errorRed),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Delete review?',
+      message: 'The review from ${DateFormat('d MMM yyyy').format(item.createdAt)} will be permanently deleted.',
     );
-    if (confirmed != true) return;
+    if (!confirmed) return;
 
     final ok = await _controller.deleteReview(item.reviewID);
     if (!mounted) return;
     if (ok) {
       setState(() => _history.removeWhere((h) => h.reviewID == item.reviewID));
     } else {
-      SnackBarHelper.showStyled(
-        context,
-        message: 'Unable to delete the review.',
-        icon: Icons.error_outline_rounded,
-        accentColor: AppColors.errorRed,
-      );
+      SnackBarHelper.showError(context, 'Unable to delete the review.');
     }
   }
 
@@ -191,10 +159,10 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: _primary))
+            ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
             : _loadError != null
             ? LoadErrorView(
                 message: _loadError!,
@@ -204,7 +172,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
                 },
               )
             : RefreshIndicator(
-                color: _primary,
+                color: AppColors.primary,
                 onRefresh: _load,
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
@@ -272,41 +240,14 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
     );
   }
 
-  Widget _surfaceCard({required List<Widget> children}) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
-    );
-  }
-
-  Widget _sectionTitle(String title, String subtitle) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _textPrimary)),
-          const SizedBox(height: 6),
-          Text(subtitle, style: const TextStyle(color: _textMuted, height: 1.4)),
-        ],
-      ),
-    );
-  }
-
   // ---- Resume choice ---------------------------------------------------
 
   Widget _buildResumePickerCard() {
     final s = _sources;
     if (s == null) {
-      return _surfaceCard(children: [
+      return SurfaceCard(children: [
         const Text('Unable to load your resumes. Pull down to try again.',
-            style: TextStyle(color: _textMuted)),
+            style: TextStyle(color: AppColors.textMuted)),
       ]);
     }
 
@@ -322,9 +263,11 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
             : 'Saved in the app'
         : 'Not built yet – tap to create one in a few steps.';
 
-    return _surfaceCard(
+    return SurfaceCard(
       children: [
-        _sectionTitle('Resume to Review', 'Choose which resume the assistant should check.'),
+        SectionTitle('Resume to Review',
+          subtitle: 'Choose which resume the assistant should check.',
+        ),
         _sourceTile(
           source: ResumeReviewSource.uploaded,
           icon: Icons.upload_file_rounded,
@@ -339,7 +282,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
                     s.uploadedURL!,
                     title: 'My Resume',
                   ),
-                  icon: const Icon(Icons.visibility_outlined, color: _primary),
+                  icon: const Icon(Icons.visibility_outlined, color: AppColors.primary),
                 )
               : null,
         ),
@@ -354,7 +297,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
               ? IconButton(
                   tooltip: 'Edit',
                   onPressed: _isReviewing ? null : _openBuilder,
-                  icon: const Icon(Icons.edit_outlined, color: _primary),
+                  icon: const Icon(Icons.edit_outlined, color: AppColors.primary),
                 )
               : null,
         ),
@@ -397,7 +340,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Material(
-        color: selected ? AppColors.primarySoft : _surfaceAlt,
+        color: selected ? AppColors.primarySoft : AppColors.surfaceAlt,
         borderRadius: BorderRadius.circular(18),
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
@@ -410,17 +353,17 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
             padding: const EdgeInsets.fromLTRB(14, 14, 6, 14),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: selected ? _primary : _border, width: selected ? 1.4 : 1),
+              border: Border.all(color: selected ? AppColors.primary : AppColors.border, width: selected ? 1.4 : 1),
             ),
             child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: _primary.withValues(alpha: available ? 0.10 : 0.05),
+                    color: AppColors.primary.withValues(alpha: available ? 0.10 : 0.05),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Icon(icon, color: available ? _primary : _textMuted),
+                  child: Icon(icon, color: available ? AppColors.primary : AppColors.textMuted),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -431,7 +374,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
                         title,
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: available ? _textPrimary : _textMuted,
+                          color: available ? AppColors.textDark : AppColors.textMuted,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -439,7 +382,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
                         subtitle,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: _textMuted, fontSize: 13, height: 1.35),
+                        style: const TextStyle(color: AppColors.textMuted, fontSize: 13, height: 1.35),
                       ),
                     ],
                   ),
@@ -453,7 +396,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
                         : available
                             ? Icons.radio_button_off_rounded
                             : Icons.chevron_right_rounded,
-                    color: selected ? _primary : _textMuted,
+                    color: selected ? AppColors.primary : AppColors.textMuted,
                   ),
                 ),
               ],
@@ -467,11 +410,10 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
   // ---- Target job ------------------------------------------------------
 
   Widget _buildRoleCard() {
-    return _surfaceCard(
+    return SurfaceCard(
       children: [
-        _sectionTitle(
-          'Target Job (Optional)',
-          'Add the job you are applying for to get keywords and tips for that job.',
+        SectionTitle('Target Job (Optional)',
+          subtitle: 'Add the job you are applying for to get keywords and tips for that job.',
         ),
         TextField(
           controller: _roleController,
@@ -483,27 +425,27 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
           decoration: InputDecoration(
             hintText: 'e.g. Junior Data Analyst',
             counterText: '',
-            prefixIcon: const Icon(Icons.work_outline, color: _primary),
+            prefixIcon: const Icon(Icons.work_outline, color: AppColors.primary),
             suffixIcon: _roleController.text.isEmpty
                 ? null
                 : IconButton(
                     tooltip: 'Clear',
                     onPressed: _isReviewing ? null : _roleController.clear,
-                    icon: const Icon(Icons.close_rounded, color: _textMuted),
+                    icon: const Icon(Icons.close_rounded, color: AppColors.textMuted),
                   ),
             filled: true,
-            fillColor: _surfaceAlt,
+            fillColor: AppColors.surfaceAlt,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: _border),
+              borderSide: const BorderSide(color: AppColors.border),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: _border),
+              borderSide: const BorderSide(color: AppColors.border),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: _primary, width: 1.2),
+              borderSide: const BorderSide(color: AppColors.primary, width: 1.2),
             ),
           ),
         ),
@@ -518,10 +460,10 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
               selected: selected,
               onSelected: _isReviewing ? null : (_) => _setRole(role),
               selectedColor: AppColors.primarySoft,
-              backgroundColor: _surfaceAlt,
-              side: BorderSide(color: selected ? _primary : _border),
+              backgroundColor: AppColors.surfaceAlt,
+              side: BorderSide(color: selected ? AppColors.primary : AppColors.border),
               labelStyle: TextStyle(
-                color: selected ? _primary : _textPrimary,
+                color: selected ? AppColors.primary : AppColors.textDark,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
               ),
               showCheckmark: false,
@@ -536,9 +478,11 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
   // ---- What is checked -------------------------------------------------
 
   Widget _buildChecklistCard() {
-    return _surfaceCard(
+    return SurfaceCard(
       children: [
-        _sectionTitle('What the Assistant Checks', 'You get a score out of 100 and tips for each area.'),
+        SectionTitle('What the Assistant Checks',
+          subtitle: 'You get a score out of 100 and tips for each area.',
+        ),
         _checklistItem(Icons.fact_check_outlined, 'Content & completeness',
             'Contact details, summary, education, experience and skills.'),
         _checklistItem(Icons.trending_up_rounded, 'Impact & achievements',
@@ -563,20 +507,20 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: _surfaceAlt,
+              color: AppColors.surfaceAlt,
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(icon, color: _primary, size: 21),
+            child: Icon(icon, color: AppColors.primary, size: 21),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(color: _textPrimary, fontWeight: FontWeight.bold)),
+                Text(title, style: const TextStyle(color: AppColors.textDark, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4),
                 Text(subtitle,
-                    style: const TextStyle(color: _textMuted, fontSize: 13, height: 1.35)),
+                    style: const TextStyle(color: AppColors.textMuted, fontSize: 13, height: 1.35)),
               ],
             ),
           ),
@@ -588,15 +532,15 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
   // ---- History ---------------------------------------------------------
 
   Widget _buildHistoryCard() {
-    return _surfaceCard(
+    return SurfaceCard(
       children: [
-        _sectionTitle('Past Reviews', 'Tap to view a previous report.'),
+        SectionTitle('Past Reviews', subtitle: 'Tap to view a previous report.'),
         ..._history.map((h) {
           final color = resumeScoreColor(h.overallScore);
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Material(
-              color: _surfaceAlt,
+              color: AppColors.surfaceAlt,
               borderRadius: BorderRadius.circular(18),
               child: InkWell(
                 borderRadius: BorderRadius.circular(18),
@@ -625,14 +569,14 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
                               h.roleLabel,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontWeight: FontWeight.bold, color: _textPrimary),
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               '${DateFormat('d MMM yyyy').format(h.createdAt)} · ${h.source.label}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: _textMuted, fontSize: 12),
+                              style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
                             ),
                           ],
                         ),
@@ -667,7 +611,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
                 child: Text(
                   'Reading your resume and preparing feedback… this can take up to a minute.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: _textMuted, fontSize: 13),
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 13),
                 ),
               ),
             SizedBox(
@@ -683,9 +627,9 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
                     : const Icon(Icons.auto_awesome_rounded),
                 label: Text(_isReviewing ? 'Reviewing…' : 'Review My Resume'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _primary,
+                  backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
-                  disabledBackgroundColor: const Color(0xFFD7E3F3),
+                  disabledBackgroundColor: AppColors.disabled,
                   disabledForegroundColor: Colors.white,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(vertical: 16),

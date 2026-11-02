@@ -31,7 +31,8 @@ import 'skill_gap_analysis_screen.dart';
 import 'guidance_reports_screen.dart';
 import 'ai_resume_assistant_screen.dart';
 import 'build_resume_screen.dart';
-import 'career_tools_mockup_screen.dart';
+import '../../../shared_widgets/hero_icon_button.dart';
+import '../../../shared_widgets/surface_card.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -41,12 +42,6 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  static const Color _primary = AppColors.primary;
-  static const Color _textPrimary = AppColors.textDark;
-  static const Color _textMuted = AppColors.textMuted;
-  static const Color _surfaceAlt = AppColors.surfaceAlt;
-  static const Color _border = AppColors.border;
-
   /// Profile state (profile, skills, edit mode, saving) lives here (MVC).
   final MyProfileController _myProfile = MyProfileController();
 
@@ -112,7 +107,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (_skills.isEmpty) {
       return _buildEmptyInfoCard('No skills added yet.');
     }
-    return _buildSurfaceCard(child: SkillChips(skills: _skills));
+    return SurfaceCard(child: SkillChips(skills: _skills));
   }
 
   void _populateControllers() {
@@ -212,7 +207,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Text(
                   message,
                   style: const TextStyle(
-                    color: _textPrimary,
+                    color: AppColors.textDark,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     height: 1.3,
@@ -290,16 +285,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 16),
               const Text(
                 'Profile Photo',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _textPrimary),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textDark),
               ),
               const SizedBox(height: 8),
               ListTile(
-                leading: const Icon(Icons.photo_camera_outlined, color: _primary),
+                leading: const Icon(Icons.photo_camera_outlined, color: AppColors.primary),
                 title: const Text('Take photo'),
                 onTap: () => Navigator.pop(sheetContext, 'camera'),
               ),
               ListTile(
-                leading: const Icon(Icons.photo_library_outlined, color: _primary),
+                leading: const Icon(Icons.photo_library_outlined, color: AppColors.primary),
                 title: const Text('Choose from library'),
                 onTap: () => Navigator.pop(sheetContext, 'gallery'),
               ),
@@ -361,10 +356,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       uiSettings: [
         AndroidUiSettings(
           toolbarTitle: 'Adjust Profile Photo',
-          toolbarColor: _primary,
+          toolbarColor: AppColors.primary,
           toolbarWidgetColor: Colors.white,
           backgroundColor: Colors.black,
-          activeControlsWidgetColor: _primary,
+          activeControlsWidgetColor: AppColors.primary,
           lockAspectRatio: true,
           hideBottomControls: false,
           cropStyle: CropStyle.circle,
@@ -432,7 +427,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 padding: EdgeInsets.all(8),
                 child: Icon(
                   Icons.camera_alt_rounded,
-                  color: _primary,
+                  color: AppColors.primary,
                   size: 18,
                 ),
               ),
@@ -444,7 +439,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   ButtonStyle _primaryButtonStyle() {
     return ElevatedButton.styleFrom(
-      backgroundColor: _primary,
+      backgroundColor: AppColors.primary,
       foregroundColor: Colors.white,
       elevation: 0,
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 18),
@@ -456,29 +451,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   ButtonStyle _secondaryButtonStyle() {
     return OutlinedButton.styleFrom(
-      foregroundColor: _textPrimary,
+      foregroundColor: AppColors.textDark,
       backgroundColor: Colors.white,
       elevation: 0,
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
-      side: const BorderSide(color: _border),
+      side: const BorderSide(color: AppColors.border),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
-    );
-  }
-
-  Widget _buildSurfaceCard({
-    required Widget child,
-    EdgeInsetsGeometry padding = const EdgeInsets.all(22),
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: padding,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: child,
     );
   }
 
@@ -493,7 +473,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               style: const TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
-                color: _textPrimary,
+                color: AppColors.textDark,
               ),
             ),
           ),
@@ -506,7 +486,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 style: TextStyle(fontWeight: FontWeight.w700),
               ),
               style: TextButton.styleFrom(
-                foregroundColor: _primary,
+                foregroundColor: AppColors.primary,
               ),
             ),
         ],
@@ -554,7 +534,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const Spacer(),
               if (!_isEditing && _profile != null)
-                _buildHeroActionButton(
+                HeroIconButton(
                   icon: Icons.qr_code_rounded,
                   tooltip: 'Show QR',
                   onTap: () => showProfileQrDialog(context, _profile!.seekerID),
@@ -593,29 +573,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildHeroActionButton({
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback onTap,
-  }) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.white.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: SizedBox(
-            width: 42,
-            height: 42,
-            child: Icon(icon, color: Colors.white, size: 20),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildEditableField({
     required String label,
     required TextEditingController controller,
@@ -644,7 +601,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: _surfaceAlt,
+                color: AppColors.surfaceAlt,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Center(child: icon),
@@ -658,7 +615,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     label,
                     style: const TextStyle(
                       fontSize: 13,
-                      color: _textMuted,
+                      color: AppColors.textMuted,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -671,7 +628,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       style: TextStyle(
                         fontSize: 15,
                         height: 1.45,
-                        color: (!isEmpty && isLink) ? _primary : _textPrimary,
+                        color: (!isEmpty && isLink) ? AppColors.primary : AppColors.textDark,
                         fontWeight: (!isEmpty && isLink) ? FontWeight.w600 : FontWeight.w500,
                         decoration: (!isEmpty && isLink)
                             ? TextDecoration.underline
@@ -695,7 +652,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         readOnly: isReadOnly,
         validator: validator,
         style: TextStyle(
-          color: isReadOnly ? Colors.grey.shade500 : _textPrimary,
+          color: isReadOnly ? Colors.grey.shade500 : AppColors.textDark,
         ),
         decoration: InputDecoration(
           labelText: label,
@@ -704,7 +661,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: icon,
           ),
           filled: true,
-          fillColor: isReadOnly ? Colors.grey.shade200 : _surfaceAlt,
+          fillColor: isReadOnly ? Colors.grey.shade200 : AppColors.surfaceAlt,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
             borderSide: BorderSide(color: Colors.grey.shade300),
@@ -715,7 +672,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: _primary, width: 1.6),
+            borderSide: const BorderSide(color: AppColors.primary, width: 1.6),
           ),
         ),
       ),
@@ -723,19 +680,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildEmptyInfoCard(String message) {
-    return _buildSurfaceCard(
+    return SurfaceCard(
       child: Row(
         children: [
           Container(
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: _surfaceAlt,
+              color: AppColors.surfaceAlt,
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(
               Icons.inbox_outlined,
-              color: _textMuted,
+              color: AppColors.textMuted,
             ),
           ),
           const SizedBox(width: 14),
@@ -743,7 +700,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Text(
               message,
               style: const TextStyle(
-                color: _textMuted,
+                color: AppColors.textMuted,
                 fontSize: 14,
                 fontStyle: FontStyle.italic,
               ),
@@ -755,7 +712,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildResumeSection() {
-    return _buildSurfaceCard(
+    return SurfaceCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -773,7 +730,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               icon: const Icon(Icons.description_outlined),
               label: const Text('Build Resume'),
               style: _secondaryButtonStyle().copyWith(
-                foregroundColor: WidgetStateProperty.all(_primary),
+                foregroundColor: WidgetStateProperty.all(AppColors.primary),
                 side: WidgetStateProperty.all(
                   const BorderSide(color: AppColors.borderActive),
                 ),
@@ -806,14 +763,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
-                          color: _textPrimary,
+                          color: AppColors.textDark,
                         ),
                       ),
                       SizedBox(height: 4),
                       Text(
                         'Your latest resume is ready to preview.',
                         style: TextStyle(
-                          color: _textMuted,
+                          color: AppColors.textMuted,
                           fontSize: 13,
                         ),
                       ),
@@ -829,7 +786,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   icon: const Icon(Icons.visibility_outlined, size: 16),
                   label: const Text('View'),
                   style: TextButton.styleFrom(
-                    foregroundColor: _primary,
+                    foregroundColor: AppColors.primary,
                   ),
                 ),
               ],
@@ -840,18 +797,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: _surfaceAlt,
+                color: AppColors.surfaceAlt,
                 borderRadius: BorderRadius.circular(18),
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.description_outlined, color: _textMuted),
+                  Icon(Icons.description_outlined, color: AppColors.textMuted),
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       'No resume uploaded yet. Add a ${FileLimits.resumeTypesLabel} file (max ${FileLimits.resumeMB} MB).',
                       style: TextStyle(
-                        color: _textMuted,
+                        color: AppColors.textMuted,
                         fontSize: 14,
                         height: 1.4,
                       ),
@@ -877,7 +834,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _profile!.resumeURL != null ? 'Upload New Resume' : 'Upload Resume',
               ),
               style: _secondaryButtonStyle().copyWith(
-                foregroundColor: WidgetStateProperty.all(_primary),
+                foregroundColor: WidgetStateProperty.all(AppColors.primary),
                 side: WidgetStateProperty.all(
                   const BorderSide(color: AppColors.borderActive),
                 ),
@@ -899,7 +856,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               icon: const Icon(Icons.auto_awesome_rounded),
               label: const Text('AI Resume Assistant'),
               style: _secondaryButtonStyle().copyWith(
-                foregroundColor: WidgetStateProperty.all(_primary),
+                foregroundColor: WidgetStateProperty.all(AppColors.primary),
                 side: WidgetStateProperty.all(
                   const BorderSide(color: AppColors.borderActive),
                 ),
@@ -928,7 +885,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _experienceCard(WorkExperienceModel exp) {
     return ProfileRecordCard(
       icon: Icons.work_outline_rounded,
-      iconColor: _primary,
+      iconColor: AppColors.primary,
       title: exp.jobTitle,
       subtitle: exp.companyName,
       dateRange: formatProfileDateRange(exp.startDate, exp.endDate, exp.isCurrent),
@@ -991,7 +948,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildCareerToolButton({
     required String label,
     required IconData icon,
-    required CareerToolMockupType type,
+    required Widget destination,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -1001,21 +958,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           onPressed: () {
             Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (context) =>
-                    switch (type) {
-                      CareerToolMockupType.aiCareerAdvisor => const AiCareerAdvisorScreen(),
-                      CareerToolMockupType.mockInterview => const MockInterviewSetupScreen(),
-                      CareerToolMockupType.skillGapAnalysis => const SkillGapAnalysisScreen(),
-                      CareerToolMockupType.guidanceReports => const GuidanceReportsScreen(),
-                    },
-              ),
+              MaterialPageRoute(builder: (context) => destination),
             );
           },
           icon: Icon(icon),
           label: Text(label),
           style: _secondaryButtonStyle().copyWith(
-            foregroundColor: WidgetStateProperty.all(_primary),
+            foregroundColor: WidgetStateProperty.all(AppColors.primary),
             side: WidgetStateProperty.all(
               const BorderSide(color: AppColors.borderActive),
             ),
@@ -1051,7 +1000,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _buildHeroHeader(),
                 const SizedBox(height: 24),
 
-                _buildSurfaceCard(
+                SurfaceCard(
                   child: Form(
                     key: _profileFormKey,
                     child: Column(
@@ -1063,7 +1012,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             style: const TextStyle(
                               fontSize: 26,
                               fontWeight: FontWeight.bold,
-                              color: _textPrimary,
+                              color: AppColors.textDark,
                             ),
                           ),
                           const SizedBox(height: 20),
@@ -1074,7 +1023,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             controller: _nameController,
                             icon: const Icon(
                               Icons.person_outline_rounded,
-                              color: _textMuted,
+                              color: AppColors.textMuted,
                               size: 20,
                             ),
                           ),
@@ -1083,7 +1032,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           controller: _emailController,
                           icon: const Icon(
                             Icons.email_outlined,
-                            color: _textMuted,
+                            color: AppColors.textMuted,
                             size: 20,
                           ),
                           isReadOnly: true,
@@ -1091,7 +1040,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         _buildEditableField(
                           label: 'Phone Number',
                           controller: _phoneController,
-                          icon: const Icon(Icons.phone_outlined, color: _textMuted, size: 20),
+                          icon: const Icon(Icons.phone_outlined, color: AppColors.textMuted, size: 20),
                           validator: (value) {
                             final text = value?.trim() ?? '';
                             if (text.isEmpty) return null;
@@ -1104,7 +1053,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           controller: _locationController,
                           icon: const Icon(
                             Icons.location_on_outlined,
-                            color: _textMuted,
+                            color: AppColors.textMuted,
                             size: 20,
                           ),
                         ),
@@ -1113,7 +1062,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           controller: _bioController,
                           icon: const Icon(
                             Icons.menu_book_outlined,
-                            color: _textMuted,
+                            color: AppColors.textMuted,
                             size: 20,
                           ),
                           maxLines: 4,
@@ -1123,7 +1072,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           controller: _linkedinController,
                           icon: const FaIcon(
                             FontAwesomeIcons.linkedin,
-                            color: _textMuted,
+                            color: AppColors.textMuted,
                             size: 18,
                           ),
                           isLink: true,
@@ -1150,7 +1099,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           controller: _githubController,
                           icon: const FaIcon(
                             FontAwesomeIcons.github,
-                            color: _textMuted,
+                            color: AppColors.textMuted,
                             size: 18,
                           ),
                           isLink: true,
@@ -1177,8 +1126,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
 
-
-
                 _buildSectionHeader('Resume Document'),
                 _buildResumeSection(),
 
@@ -1186,22 +1133,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _buildCareerToolButton(
                   label: 'AI Career Advisor',
                   icon: Icons.smart_toy_outlined,
-                  type: CareerToolMockupType.aiCareerAdvisor,
+                  destination: const AiCareerAdvisorScreen(),
                 ),
                 _buildCareerToolButton(
                   label: 'Mock Interview',
                   icon: Icons.record_voice_over_outlined,
-                  type: CareerToolMockupType.mockInterview,
+                  destination: const MockInterviewSetupScreen(),
                 ),
                 _buildCareerToolButton(
                   label: 'Skill Gap Analysis',
                   icon: Icons.insights_outlined,
-                  type: CareerToolMockupType.skillGapAnalysis,
+                  destination: const SkillGapAnalysisScreen(),
                 ),
                 _buildCareerToolButton(
                   label: 'Guidance Reports',
                   icon: Icons.assignment_outlined,
-                  type: CareerToolMockupType.guidanceReports,
+                  destination: const GuidanceReportsScreen(),
                 ),
 
                 _buildSectionHeader(
@@ -1260,7 +1207,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        backgroundColor: _primary,
+        backgroundColor: AppColors.primary,
         elevation: 0,
       )
           : null,

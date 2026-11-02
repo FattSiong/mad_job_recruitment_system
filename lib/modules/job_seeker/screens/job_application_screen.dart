@@ -10,6 +10,8 @@ import '../../../models/job_model.dart';
 import '../../../models/pre_screening_question_model.dart';
 import '../controllers/application_controller.dart';
 import '../widgets/load_error_view.dart';
+import '../../../shared_widgets/hero_icon_button.dart';
+import '../../../shared_widgets/surface_card.dart';
 
 class JobApplicationScreen extends StatefulWidget {
   final JobModel job;
@@ -21,13 +23,6 @@ class JobApplicationScreen extends StatefulWidget {
 }
 
 class _JobApplicationScreenState extends State<JobApplicationScreen> {
-  static const Color _primary = AppColors.primary;
-  static const Color _primarySoft = AppColors.primarySoft;
-  static const Color _textPrimary = AppColors.textDark;
-  static const Color _textMuted = AppColors.textMuted;
-  static const Color _surfaceAlt = AppColors.surfaceAlt;
-  static const Color _border = AppColors.border;
-
   final ApplicationController _appController = ApplicationController();
   final PageController _pageController = PageController();
 
@@ -113,7 +108,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
 
   ButtonStyle _primaryButtonStyle() {
     return ElevatedButton.styleFrom(
-      backgroundColor: _primary,
+      backgroundColor: AppColors.primary,
       foregroundColor: Colors.white,
       elevation: 0,
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 18),
@@ -125,52 +120,14 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
 
   ButtonStyle _secondaryButtonStyle() {
     return OutlinedButton.styleFrom(
-      foregroundColor: _textPrimary,
+      foregroundColor: AppColors.textDark,
       backgroundColor: Colors.white,
       elevation: 0,
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
-      side: const BorderSide(color: _border),
+      side: const BorderSide(color: AppColors.border),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
-    );
-  }
-
-  Widget _buildHeroActionButton({
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback onTap,
-  }) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.white.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: SizedBox(
-            width: 42,
-            height: 42,
-            child: Icon(icon, color: Colors.white, size: 20),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSurfaceCard({
-    required Widget child,
-    EdgeInsetsGeometry padding = const EdgeInsets.all(22),
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: padding,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: child,
     );
   }
 
@@ -180,7 +137,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     required bool isActive,
     required bool isDone,
   }) {
-    final Color color = isDone || isActive ? _primary : const Color(0xFFB0B9C5);
+    final Color color = isDone || isActive ? AppColors.primary : AppColors.iconDisabled;
 
     return Expanded(
       child: Row(
@@ -189,10 +146,10 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: isDone || isActive ? _primarySoft : Colors.white,
+              color: isDone || isActive ? AppColors.primarySoft : Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: isDone || isActive ? AppColors.borderActive : _border,
+                color: isDone || isActive ? AppColors.borderActive : AppColors.border,
               ),
             ),
             child: Center(
@@ -200,7 +157,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                   ? const Icon(
                 Icons.check_rounded,
                 size: 18,
-                color: _primary,
+                color: AppColors.primary,
               )
                   : Text(
                 '$stepNumber',
@@ -216,7 +173,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
             child: Text(
               title,
               style: TextStyle(
-                color: isActive ? _textPrimary : _textMuted,
+                color: isActive ? AppColors.textDark : AppColors.textMuted,
                 fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
                 fontSize: 12,
               ),
@@ -237,7 +194,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      child: _buildSurfaceCard(
+      child: SurfaceCard(
         padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -247,7 +204,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: _textPrimary,
+                color: AppColors.textDark,
               ),
             ),
             const SizedBox(height: 10),
@@ -258,7 +215,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                 decoration: InputDecoration(
                   hintText: 'Enter your answer',
                   filled: true,
-                  fillColor: _surfaceAlt,
+                  fillColor: AppColors.surfaceAlt,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
                     borderSide: BorderSide(color: Colors.grey.shade300),
@@ -269,7 +226,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: _primary, width: 1.5),
+                    borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
                   ),
                 ),
               )
@@ -307,7 +264,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                       icon: const Icon(Icons.upload_file_rounded),
                       label: Text(isFileSelected ? 'Change File' : 'Upload File'),
                       style: _secondaryButtonStyle().copyWith(
-                        foregroundColor: WidgetStateProperty.all(_primary),
+                        foregroundColor: WidgetStateProperty.all(AppColors.primary),
                         side: WidgetStateProperty.all(
                           const BorderSide(color: AppColors.borderActive),
                         ),
@@ -329,7 +286,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                     IconButton(
                       icon: const Icon(
                         Icons.visibility_outlined,
-                        color: _primary,
+                        color: AppColors.primary,
                       ),
                       tooltip: 'Preview File',
                       onPressed: () =>
@@ -339,7 +296,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                     const Expanded(
                       child: Text(
                         'No file selected',
-                        style: TextStyle(color: _textMuted),
+                        style: TextStyle(color: AppColors.textMuted),
                       ),
                     ),
                   ],
@@ -357,7 +314,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSurfaceCard(
+          SurfaceCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -366,14 +323,14 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
-                    color: _textPrimary,
+                    color: AppColors.textDark,
                   ),
                 ),
                 const SizedBox(height: 8),
                 const Text(
                   'The employer requires answers to these questions before you continue.',
                   style: TextStyle(
-                    color: _textMuted,
+                    color: AppColors.textMuted,
                     height: 1.4,
                   ),
                 ),
@@ -406,7 +363,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: selected ? AppColors.borderActive : _border,
+            color: selected ? AppColors.borderActive : AppColors.border,
             width: selected ? 2 : 1,
           ),
         ),
@@ -417,10 +374,10 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
               width: 46,
               height: 46,
               decoration: BoxDecoration(
-                color: selected ? _primarySoft : _surfaceAlt,
+                color: selected ? AppColors.primarySoft : AppColors.surfaceAlt,
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(icon, color: selected ? _primary : _textMuted),
+              child: Icon(icon, color: selected ? AppColors.primary : AppColors.textMuted),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -432,14 +389,14 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
-                      color: _textPrimary,
+                      color: AppColors.textDark,
                     ),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     subtitle,
                     style: const TextStyle(
-                      color: _textMuted,
+                      color: AppColors.textMuted,
                       fontSize: 13.5,
                       height: 1.4,
                     ),
@@ -450,7 +407,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
             if (trailing != null) trailing,
             Icon(
               selected ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
-              color: selected ? _primary : Colors.grey,
+              color: selected ? AppColors.primary : Colors.grey,
             ),
           ],
         ),
@@ -464,7 +421,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSurfaceCard(
+          SurfaceCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -473,14 +430,14 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
-                    color: _textPrimary,
+                    color: AppColors.textDark,
                   ),
                 ),
                 const SizedBox(height: 8),
                 const Text(
                   'Choose your existing resume or upload a fresh version for this application.',
                   style: TextStyle(
-                    color: _textMuted,
+                    color: AppColors.textMuted,
                     height: 1.4,
                   ),
                 ),
@@ -495,7 +452,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                     trailing: IconButton(
                       icon: const Icon(
                         Icons.visibility_outlined,
-                        color: _primary,
+                        color: AppColors.primary,
                       ),
                       tooltip: 'Preview',
                       onPressed: () => FilePreviewHelper.previewNetworkFile(
@@ -527,7 +484,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                       ? IconButton(
                     icon: const Icon(
                       Icons.visibility_outlined,
-                      color: _primary,
+                      color: AppColors.primary,
                     ),
                     tooltip: 'Preview',
                     onPressed: () => FilePreviewHelper.previewLocalFile(
@@ -619,7 +576,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                               children: [
                                 Row(
                                   children: [
-                                    _buildHeroActionButton(
+                                    HeroIconButton(
                                       icon: Icons.arrow_back_rounded,
                                       tooltip: 'Back',
                                       onTap: () {
@@ -634,7 +591,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                                       },
                                     ),
                                     const Spacer(),
-                                    _buildHeroActionButton(
+                                    HeroIconButton(
                                       icon: Icons.close_rounded,
                                       tooltip: 'Cancel',
                                       onTap: () => Navigator.pop(context),
@@ -701,7 +658,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                             ),
                           ),
                           SizedBox(height: sectionGap),
-                          _buildSurfaceCard(
+                          SurfaceCard(
                             padding: EdgeInsets.all(isCompact ? 14 : 18),
                             child: Column(
                               children: [
@@ -728,7 +685,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                                               widthFactor: progress,
                                               child: Container(
                                                 decoration: BoxDecoration(
-                                                  color: _primary,
+                                                  color: AppColors.primary,
                                                   borderRadius: BorderRadius.circular(999),
                                                 ),
                                               ),

@@ -734,7 +734,7 @@ class _ActiveChatScreenState extends State<ActiveChatScreen> {
                   duration: const Duration(milliseconds: 180),
                   decoration: BoxDecoration(
                     color: _hasMessageText
-                        ? AppColors.primaryBlue
+                        ? AppColors.primary
                         : const Color(0xFFD7E3F3),
                     borderRadius: BorderRadius.circular(18),
                   ),
