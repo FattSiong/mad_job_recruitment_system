@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../services/auth_service.dart';
 import '../../../shared_widgets/login_screen.dart';
 import '../../chat/screens/chat_inbox_screen.dart';
-import '../../community/screens/community_dashboard.dart';
+import '../../community_hub/screens/community_hub_screen.dart';
 import '../../job_seeker/screens/qr_scanner_screen.dart';
 import 'company_list_screen.dart';
 import 'create_job_screen.dart';
@@ -662,7 +662,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
       return const Center(child: Text('Not logged in'));
     }
 
-    return CommunityDashboard(currentUserID: _currentUser!.id);
+    return CommunityHubScreen(currentUserID: _currentUser!.id);
   }
 
   Widget _buildProfileTab() {

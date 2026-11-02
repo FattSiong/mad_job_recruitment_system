@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/constants/table_constants.dart';
+import 'password_recovery_service.dart';
 import 'push_service.dart';
 
 class AuthService {
@@ -88,11 +89,26 @@ class AuthService {
   // 3. Password Reset Function
   Future<void> resetPassword({required String email}) async {
     try {
-      await _supabase.auth.resetPasswordForEmail(email);
+      // The link opens the app (myapp://reset-password), not the Site URL.
+      await _supabase.auth.resetPasswordForEmail(
+        email,
+        redirectTo: PasswordRecoveryService.redirectUrl,
+      );
     } on AuthException catch (e) {
       throw Exception(e.message);
     } catch (e) {
       throw Exception('Failed to send reset email: $e');
+    }
+  }
+
+  // Sets the new password after the user opened the reset link.
+  Future<void> updatePassword(String newPassword) async {
+    try {
+      await _supabase.auth.updateUser(UserAttributes(password: newPassword));
+    } on AuthException catch (e) {
+      throw Exception(e.message);
+    } catch (e) {
+      throw Exception('Failed to update password: $e');
     }
   }
 

@@ -24,7 +24,7 @@ class ChatListTile extends StatelessWidget {
     final unreadLabel = room.unreadCount > 99 ? '99+' : '${room.unreadCount}';
 
     return Material(
-      color: isUnread ? const Color(0xFFF9FCFF) : AppColors.surface,
+      color: isUnread ? AppColors.surfaceAlt : AppColors.surface,
       borderRadius: BorderRadius.circular(24),
       child: InkWell(
         onTap: onTap,

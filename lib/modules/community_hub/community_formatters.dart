@@ -1,0 +1,24 @@
+import 'package:intl/intl.dart';
+
+/// Time labels used by the Community Hub.
+class CommunityFormatters {
+  CommunityFormatters._();
+
+  /// "Just now", "5m", "3h", "2d", "1w", or "12 Mar 2026" for older posts.
+  static String relative(DateTime time) {
+    final diff = DateTime.now().difference(time.toLocal());
+    if (diff.isNegative || diff.inSeconds < 60) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+    if (diff.inHours < 24) return '${diff.inHours}h';
+    if (diff.inDays < 7) return '${diff.inDays}d';
+    if (diff.inDays < 30) return '${diff.inDays ~/ 7}w';
+    return DateFormat('d MMM yyyy').format(time.toLocal());
+  }
+
+  /// "1.2k" for big counts.
+  static String count(int n) {
+    if (n < 1000) return '$n';
+    final k = n / 1000;
+    return '${k.toStringAsFixed(k < 10 ? 1 : 0)}k';
+  }
+}

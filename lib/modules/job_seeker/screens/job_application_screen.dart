@@ -540,6 +540,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                       onPressed: () => FilePreviewHelper.previewNetworkFile(
                         context,
                         _existingResumeUrl!,
+                        title: 'My Resume',
                       ),
                     ),
                   ),
@@ -549,12 +550,12 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                   title: 'Upload a new resume',
                   subtitle: _newResumeFile != null
                       ? 'Selected: ${_newResumeFile!.path.split('/').last}'
-                      : 'Accepted file types are PDF, DOCX, RTF, or TXT.',
+                      : 'Accepted: ${FileLimits.resumeTypesLabel}, up to ${FileLimits.resumeMB} MB.',
                   onTap: () async {
                     setState(() => _resumeSelection = 'new');
 
                     final pickedFile = await FilePickerHelper.pickFile(
-                      allowedExtensions: ['pdf', 'doc', 'docx', 'rtf', 'txt'],
+                      allowedExtensions: FileLimits.resumeExtensions,
                       maxSizeMB: FileLimits.resumeMB,
                       onTooLarge: _showFileTooLarge,
                     );

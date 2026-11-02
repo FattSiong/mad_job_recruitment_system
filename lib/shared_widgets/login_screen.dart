@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 // Import your other screens here once they are built:
 import '../modules/job_seeker/screens/seeker_dashboard.dart';
+import 'forgot_password_screen.dart';
 import 'role_selection_screen.dart';
 import '../modules/employer/screens/employer_dashboard.dart';
 import '../modules/admin/screens/admin_dashboard.dart';
@@ -35,13 +36,6 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _emailError;
   String? _passwordError;
   String? _successMessage;
-
-  void _showSuccessMessage(String message) {
-    if (!mounted) return;
-    setState(() {
-      _successMessage = message;
-    });
-  }
 
   void _clearSuccessMessage() {
     if (_successMessage == null) return;
@@ -121,25 +115,14 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleForgotPassword() async {
-    final email = _emailController.text.trim();
-    if (email.isEmpty) {
-      _setValidationErrors(
-        emailError: 'Please enter your email address first',
-      );
-      return;
-    }
-
-    try {
-      _setValidationErrors();
-      _clearSuccessMessage();
-      await _authService.resetPassword(email: email);
-      if (!mounted) return;
-      _showSuccessMessage('Password reset link sent to your email!');
-    } catch (e) {
-      _setValidationErrors(
-        emailError: e.toString().replaceAll('Exception: ', ''),
-      );
-    }
+    _setValidationErrors();
+    _clearSuccessMessage();
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ForgotPasswordScreen(initialEmail: _emailController.text.trim()),
+      ),
+    );
   }
 
   @override

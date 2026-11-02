@@ -1,6 +1,17 @@
 import 'package:flutter/material.dart';
-import '../../../core/theme/app_colors.dart';
 
+import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/snackbar_helper.dart';
+import '../controllers/resume_builder_controller.dart';
+import '../widgets/load_error_view.dart';
+import '../widgets/resume/resume_record_steps.dart';
+import '../widgets/resume/resume_sections_step.dart';
+import '../widgets/resume/resume_skills_step.dart';
+import 'resume_preview_screen.dart';
+
+/// In-app resume builder:
+/// name -> phone -> address -> education -> work experience -> skills -> more sections,
+/// then a PDF preview. The resume is saved as its own copy after every step.
 class BuildResumeScreen extends StatefulWidget {
   const BuildResumeScreen({super.key});
 
@@ -8,74 +19,163 @@ class BuildResumeScreen extends StatefulWidget {
   State<BuildResumeScreen> createState() => _BuildResumeScreenState();
 }
 
+class _ResumeStep {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+
+  const _ResumeStep(this.title, this.subtitle, this.icon);
+}
+
 class _BuildResumeScreenState extends State<BuildResumeScreen> {
-  int _currentStep = 0;
-
-  static const Color _primary = AppColors.primary;
-  static const Color _background = AppColors.background;
-  static const Color _textPrimary = AppColors.textDark;
-  static const Color _textMuted = AppColors.textMuted;
-  static const Color _surfaceAlt = AppColors.surfaceAlt;
-  static const Color _border = AppColors.border;
-
-  final List<String> _stepTitles = [
-    'Personal Details',
-    'Education',
-    'Work Experience',
-    'Skills',
+  static const List<_ResumeStep> _steps = [
+    _ResumeStep('Your Name', 'How your name should appear at the top of your resume.', Icons.person_outline_rounded),
+    _ResumeStep('Phone Number', 'Employers will call you on this number.', Icons.phone_outlined),
+    _ResumeStep('Address', 'Your city and state are usually enough.', Icons.location_on_outlined),
+    _ResumeStep('Education', 'Your schools and qualifications, newest first.', Icons.school_outlined),
+    _ResumeStep('Work Experience', 'Jobs, internships and part-time work.', Icons.work_outline_rounded),
+    _ResumeStep('Skills', 'What you are good at. Add a level if you like.', Icons.psychology_outlined),
+    _ResumeStep('More Sections', 'Add a summary, projects, awards, languages and more.', Icons.dashboard_customize_outlined),
   ];
 
-  void _nextStep() {
-    if (_currentStep < 3) {
-      setState(() => _currentStep++);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Resume mockup completed.')),
-      );
-    }
-  }
+  final ResumeBuilderController _controller = ResumeBuilderController();
+  final _formKey = GlobalKey<FormState>();
+  final TextEditingController _name = TextEditingController();
+  final TextEditingController _email = TextEditingController();
+  final TextEditingController _phone = TextEditingController();
+  final TextEditingController _address = TextEditingController();
 
-  void _backStep() {
-    if (_currentStep == 0) {
-      Navigator.pop(context);
-    } else {
-      setState(() => _currentStep--);
-    }
+  int _step = 0;
+  bool _fieldsFilled = false;
+
+  bool get _isLast => _step == _steps.length - 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_fillFieldsOnce);
+    _controller.load();
   }
 
   @override
+  void dispose() {
+    _controller.removeListener(_fillFieldsOnce);
+    if (_controller.hasUnsavedChanges) _controller.save(); // keep the draft when leaving
+    _controller.dispose();
+    _name.dispose();
+    _email.dispose();
+    _phone.dispose();
+    _address.dispose();
+    super.dispose();
+  }
+
+  void _fillFieldsOnce() {
+    if (_fieldsFilled || _controller.isLoading || _controller.error != null) return;
+    final r = _controller.resume;
+    _name.text = r.fullName;
+    _email.text = r.email;
+    _phone.text = r.phone;
+    _address.text = r.address;
+    _fieldsFilled = true;
+  }
+
+  // ---------------------------------------------------------------------
+  // Navigation
+  // ---------------------------------------------------------------------
+
+  Future<void> _next() async {
+    FocusScope.of(context).unfocus();
+    if (_step <= 2 && !(_formKey.currentState?.validate() ?? true)) return;
+
+    final saved = await _controller.save();
+    if (!mounted) return;
+    if (!saved) {
+      SnackBarHelper.showStyled(
+        context,
+        message: 'Could not save your progress. Check your connection; your changes are kept for now.',
+        icon: Icons.cloud_off_rounded,
+        accentColor: AppColors.warning,
+      );
+    }
+
+    if (!_isLast) {
+      setState(() => _step++);
+      return;
+    }
+
+    final problem = _controller.validateForPdf();
+    if (problem != null) {
+      SnackBarHelper.showStyled(
+        context,
+        message: problem,
+        icon: Icons.info_outline_rounded,
+        accentColor: AppColors.errorRed,
+      );
+      setState(() => _step = _controller.resume.fullName.isEmpty ? 0 : 1);
+      return;
+    }
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ResumePreviewScreen(controller: _controller)),
+    );
+  }
+
+  void _back() {
+    FocusScope.of(context).unfocus();
+    if (_step == 0) {
+      Navigator.pop(context);
+    } else {
+      setState(() => _step--);
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------------------
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _background,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 110),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(),
-              const SizedBox(height: 20),
-              _buildStepIndicator(),
-              const SizedBox(height: 20),
-              _buildFormCard(),
-            ],
+    return ListenableBuilder(
+      listenable: _controller,
+      builder: (context, _) {
+        return Scaffold(
+          backgroundColor: AppColors.background,
+          body: SafeArea(
+            child: _controller.isLoading
+                ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+                : _controller.error != null
+                    ? LoadErrorView(message: _controller.error!, onRetry: _controller.load)
+                    : SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildHeader(),
+                            const SizedBox(height: 18),
+                            _buildProgress(),
+                            if (_controller.prefilledFromProfile && _step == 0) ...[
+                              const SizedBox(height: 14),
+                              _buildPrefillNote(),
+                            ],
+                            const SizedBox(height: 18),
+                            _buildStepCard(),
+                          ],
+                        ),
+                      ),
           ),
-        ),
-      ),
-      bottomNavigationBar: _buildBottomButtons(),
+          bottomNavigationBar:
+              (_controller.isLoading || _controller.error != null) ? null : _buildBottomButtons(),
+        );
+      },
     );
   }
 
   Widget _buildHeader() {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.primary, AppColors.primaryLight],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        gradient: AppColors.headerGradient,
         borderRadius: BorderRadius.circular(28),
       ),
       child: Row(
@@ -84,246 +184,279 @@ class _BuildResumeScreenState extends State<BuildResumeScreen> {
             onPressed: () => Navigator.pop(context),
             icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'Build Resume',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.bold),
                 ),
-                SizedBox(height: 6),
+                SizedBox(height: 4),
                 Text(
-                  'Create your digital resume step by step.',
+                  'Create a professional PDF resume step by step.',
                   style: TextStyle(color: Colors.white70, fontSize: 14),
                 ),
               ],
             ),
           ),
+          if (_controller.isSaving)
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildStepIndicator() {
-    final steps = ['Personal', 'Education', 'Experience', 'Skills'];
-
+  Widget _buildProgress() {
+    final step = _steps[_step];
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Row(
-        children: List.generate(steps.length, (index) {
-          final isActive = index == _currentStep;
-          final isDone = index < _currentStep;
-
-          return Expanded(
-            child: Column(
-              children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: isActive || isDone ? _primary : _surfaceAlt,
-                  child: Icon(
-                    isDone ? Icons.check_rounded : Icons.circle,
-                    size: isDone ? 18 : 8,
-                    color: isActive || isDone ? Colors.white : _textMuted,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  steps[index],
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: isActive ? FontWeight.bold : FontWeight.w600,
-                    color: isActive ? _primary : _textMuted,
-                  ),
-                ),
-              ],
-            ),
-          );
-        }),
-      ),
-    );
-  }
-
-  Widget _buildFormCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(22),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            _stepTitles[_currentStep],
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: _textPrimary,
+          Row(
+            children: [
+              Icon(step.icon, color: AppColors.primary, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Step ${_step + 1} of ${_steps.length}',
+                  style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.textDark),
+                ),
+              ),
+              Text(
+                _isLast ? 'Last step' : 'Next: ${_steps[_step + 1].title}',
+                style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: (_step + 1) / _steps.length,
+              minHeight: 6,
+              color: AppColors.primary,
+              backgroundColor: AppColors.primarySoft,
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            _getSubtitle(),
-            style: const TextStyle(
-              color: _textMuted,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 22),
-          ..._getFields(),
         ],
       ),
     );
   }
 
-  String _getSubtitle() {
-    switch (_currentStep) {
+  Widget _buildPrefillNote() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.primarySoft,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.auto_awesome_outlined, color: AppColors.primary),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'We filled this in from your profile. Changes here only affect your resume.',
+              style: TextStyle(color: AppColors.primary, height: 1.35, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStepCard() {
+    final step = _steps[_step];
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            step.title,
+            style: const TextStyle(fontSize: 23, fontWeight: FontWeight.bold, color: AppColors.textDark),
+          ),
+          const SizedBox(height: 6),
+          Text(step.subtitle, style: const TextStyle(color: AppColors.textMuted, height: 1.4)),
+          const SizedBox(height: 20),
+          _buildStepBody(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStepBody() {
+    switch (_step) {
       case 0:
-        return 'Enter the information shown at the top of your resume.';
+        return Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              _field(
+                controller: _name,
+                label: 'Full name*',
+                icon: Icons.person_outline_rounded,
+                capitalization: TextCapitalization.words,
+                onChanged: _controller.setName,
+                validator: (v) => (v == null || v.trim().length < 2) ? 'Please enter your full name' : null,
+              ),
+              const SizedBox(height: 14),
+              _field(
+                controller: _email,
+                label: 'Email (optional)',
+                icon: Icons.email_outlined,
+                keyboard: TextInputType.emailAddress,
+                onChanged: _controller.setEmail,
+                validator: (v) {
+                  final text = v?.trim() ?? '';
+                  if (text.isEmpty) return null;
+                  return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(text)
+                      ? null
+                      : 'Enter a valid email address';
+                },
+              ),
+            ],
+          ),
+        );
       case 1:
-        return 'Add your academic background.';
+        return Form(
+          key: _formKey,
+          child: _field(
+            controller: _phone,
+            label: 'Phone number*',
+            icon: Icons.phone_outlined,
+            keyboard: TextInputType.phone,
+            hint: 'e.g. 012-345 6789',
+            onChanged: _controller.setPhone,
+            validator: (v) {
+              final text = v?.trim() ?? '';
+              if (text.isEmpty) return 'Please enter your phone number';
+              return RegExp(r'^[0-9+\-\s()]{8,20}$').hasMatch(text) ? null : 'Enter a valid phone number';
+            },
+          ),
+        );
       case 2:
-        return 'Add your current or previous work experience.';
+        return Form(
+          key: _formKey,
+          child: _field(
+            controller: _address,
+            label: 'Address*',
+            icon: Icons.location_on_outlined,
+            hint: 'e.g. Petaling Jaya, Selangor',
+            maxLines: 3,
+            capitalization: TextCapitalization.words,
+            onChanged: _controller.setAddress,
+            validator: (v) => (v == null || v.trim().length < 3) ? 'Please enter your address' : null,
+          ),
+        );
+      case 3:
+        return ResumeEducationStep(controller: _controller);
+      case 4:
+        return ResumeExperienceStep(controller: _controller);
+      case 5:
+        return ResumeSkillsStep(controller: _controller);
       default:
-        return 'Add your skills, certifications, and licences.';
+        return ResumeSectionsStep(controller: _controller);
     }
   }
 
-  List<Widget> _getFields() {
-    switch (_currentStep) {
-      case 0:
-        return const [
-          _MockInput(label: 'Full Name', icon: Icons.person_outline_rounded),
-          _MockInput(label: 'Email', icon: Icons.email_outlined),
-          _MockInput(label: 'Phone Number', icon: Icons.phone_outlined),
-          _MockInput(label: 'Location', icon: Icons.location_on_outlined),
-          _MockInput(label: 'Professional Summary', icon: Icons.notes_rounded, maxLines: 4),
-        ];
-      case 1:
-        return const [
-          _MockInput(label: 'Institution Name', icon: Icons.school_outlined),
-          _MockInput(label: 'Degree / Qualification', icon: Icons.workspace_premium_outlined),
-          _MockInput(label: 'Field of Study', icon: Icons.menu_book_outlined),
-          _MockInput(label: 'Start Date', icon: Icons.calendar_today_outlined),
-          _MockInput(label: 'End Date', icon: Icons.event_outlined),
-        ];
-      case 2:
-        return const [
-          _MockInput(label: 'Job Title', icon: Icons.work_outline_rounded),
-          _MockInput(label: 'Company Name', icon: Icons.business_outlined),
-          _MockInput(label: 'Start Date', icon: Icons.calendar_today_outlined),
-          _MockInput(label: 'End Date', icon: Icons.event_outlined),
-          _MockInput(label: 'Job Description', icon: Icons.description_outlined, maxLines: 4),
-        ];
-      default:
-        return const [
-          _MockInput(label: 'Skills', icon: Icons.psychology_outlined, maxLines: 3),
-          _MockInput(label: 'Certifications', icon: Icons.verified_outlined, maxLines: 3),
-          _MockInput(label: 'Licences', icon: Icons.badge_outlined, maxLines: 3),
-        ];
-    }
+  Widget _field({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    required ValueChanged<String> onChanged,
+    String? Function(String?)? validator,
+    String? hint,
+    int maxLines = 1,
+    TextInputType? keyboard,
+    TextCapitalization capitalization = TextCapitalization.none,
+  }) {
+    return TextFormField(
+      controller: controller,
+      onChanged: onChanged,
+      validator: validator,
+      maxLines: maxLines,
+      keyboardType: keyboard,
+      textCapitalization: capitalization,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: Icon(icon, color: AppColors.textMuted),
+        filled: true,
+        fillColor: AppColors.surfaceAlt,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+        ),
+      ),
+    );
   }
 
   Widget _buildBottomButtons() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 12,
-            offset: const Offset(0, -4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: OutlinedButton(
-              onPressed: _backStep,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: _textPrimary,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                side: const BorderSide(color: _border),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, -4)),
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: _back,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.textDark,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  side: const BorderSide(color: AppColors.border),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                child: Text(_step == 0 ? 'Cancel' : 'Back'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: ElevatedButton.icon(
+                onPressed: _controller.isSaving ? null : _next,
+                icon: Icon(_isLast ? Icons.picture_as_pdf_outlined : Icons.arrow_forward_rounded),
+                label: Text(_isLast ? 'Preview PDF' : 'Next'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
               ),
-              child: Text(_currentStep == 0 ? 'Cancel' : 'Back'),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: ElevatedButton(
-              onPressed: _nextStep,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _primary,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              child: Text(_currentStep == 3 ? 'Finish' : 'Next'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MockInput extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final int maxLines;
-
-  const _MockInput({
-    required this.label,
-    required this.icon,
-    this.maxLines = 1,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: TextField(
-        maxLines: maxLines,
-        decoration: InputDecoration(
-          labelText: label,
-          prefixIcon: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Icon(icon, color: AppColors.textMuted, size: 20),
-          ),
-          filled: true,
-          fillColor: AppColors.surfaceAlt,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: Colors.grey.shade300),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: Colors.grey.shade300),
-          ),
-          focusedBorder: const OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(16)),
-            borderSide: BorderSide(color: AppColors.primary, width: 1.6),
-          ),
+          ],
         ),
       ),
     );
