@@ -165,10 +165,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _pickAndUploadResume() async {
     FilePickerResult? result = await FilePicker.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['pdf', 'doc', 'docx'],
+      allowedExtensions: FileLimits.resumeExtensions,
     );
 
     if (result != null && result.files.single.path != null) {
+      if (!FileLimits.isAllowedResume(result.files.single.path!)) {
+        _showStyledSnackBar(
+          message: 'Please choose a ${FileLimits.resumeTypesLabel} file.',
+          icon: Icons.info_outline_rounded,
+          accentColor: AppColors.errorRed,
+        );
+        return;
+      }
       setState(() => _isUploading = true);
 
       final file = File(result.files.single.path!);
@@ -871,6 +879,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onPressed: () => FilePreviewHelper.previewNetworkFile(
                     context,
                     _profile!.resumeURL!,
+                    title: 'My Resume',
                   ),
                   icon: const Icon(Icons.visibility_outlined, size: 16),
                   label: const Text('View'),
@@ -895,7 +904,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'No resume uploaded yet. Add one to strengthen your profile.',
+                      'No resume uploaded yet. Add a ${FileLimits.resumeTypesLabel} file (max ${FileLimits.resumeMB} MB).',
                       style: TextStyle(
                         color: _textMuted,
                         fontSize: 14,

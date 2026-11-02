@@ -32,4 +32,6 @@ class TableConstants {
   static const String mockInterviewAnswer = 'MockInterviewAnswer';
   static const String skillGapAnalysisRecord = 'SkillGapAnalysisRecord';
   static const String guidanceReport = 'GuidanceReport';
+  static const String resume = 'Resume';
+  static const String userDevice = 'UserDevice';
 }

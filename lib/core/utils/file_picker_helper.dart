@@ -10,6 +10,14 @@ class FileLimits {
   static const int resumeMB = 5;
   static const int imageMB = 5;
   static const int answerFileMB = 10;
+
+  /// Resume files: PDF (previewed in the app) and DOCX (read by Skill Gap
+  /// Analysis). Older .doc, .rtf and .txt files are not supported.
+  static const List<String> resumeExtensions = ['pdf', 'docx'];
+  static const String resumeTypesLabel = 'PDF or Word (.docx)';
+
+  static bool isAllowedResume(String path) =>
+      resumeExtensions.contains(path.split('.').last.toLowerCase());
 }
 
 class FilePickerHelper {
