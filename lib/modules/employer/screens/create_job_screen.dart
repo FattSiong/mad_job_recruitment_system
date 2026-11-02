@@ -292,10 +292,10 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
 
   bool get _hasActiveSubscription {
     if (_selectedCompanyID == null) return false;
-    final company =
-    _myCompanies.firstWhere((c) => c.companyID == _selectedCompanyID);
-    if (company.currentPlanType.toUpperCase() == 'FREE') return false;
-    return true;
+    final matches =
+        _myCompanies.where((c) => c.companyID == _selectedCompanyID);
+    if (matches.isEmpty) return false;
+    return matches.first.hasActiveSubscription;
   }
 
   Future<void> _generateQuestionWithAi(int index) async {
@@ -1430,11 +1430,15 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
                               ),
                             )
                                 : IconButton(
-                              icon: const Icon(
-                                Icons.auto_awesome,
-                                color: Colors.amber,
+                              icon: Icon(
+                                _hasActiveSubscription
+                                    ? Icons.auto_awesome
+                                    : Icons.lock,
+                                color: Colors.amber.shade700,
                               ),
-                              tooltip: 'Generate with AI',
+                              tooltip: _hasActiveSubscription
+                                  ? 'Generate with AI'
+                                  : 'AI Question Generator (Premium)',
                               onPressed: () =>
                                   _generateQuestionWithAi(index),
                             ),
