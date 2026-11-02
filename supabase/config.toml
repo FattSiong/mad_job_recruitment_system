@@ -441,3 +441,10 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/skill-gap-analysis/deno.json"
 entrypoint = "./functions/skill-gap-analysis/index.ts"
+
+[functions.resume-review]
+enabled = true
+# Verifies the user's token inside the function (works with sb_publishable_ keys).
+verify_jwt = false
+import_map = "./functions/resume-review/deno.json"
+entrypoint = "./functions/resume-review/index.ts"

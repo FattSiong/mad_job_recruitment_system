@@ -34,4 +34,5 @@ class TableConstants {
   static const String guidanceReport = 'GuidanceReport';
   static const String resume = 'Resume';
   static const String userDevice = 'UserDevice';
+  static const String resumeReviewRecord = 'ResumeReviewRecord';
 }
