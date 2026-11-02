@@ -716,28 +716,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const BuildResumeScreen(),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.description_outlined),
-              label: const Text('Build Resume'),
-              style: _secondaryButtonStyle().copyWith(
-                foregroundColor: WidgetStateProperty.all(AppColors.primary),
-                side: WidgetStateProperty.all(
-                  const BorderSide(color: AppColors.borderActive),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
           if (_profile!.resumeURL != null) ...[
             Row(
               children: [
@@ -791,7 +769,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 16),
           ] else ...[
             Container(
               width: double.infinity,
@@ -817,8 +795,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 16),
           ],
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const BuildResumeScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.description_outlined),
+              label: const Text('Build Resume'),
+              style: _secondaryButtonStyle().copyWith(
+                foregroundColor: WidgetStateProperty.all(AppColors.primary),
+                side: WidgetStateProperty.all(
+                  const BorderSide(color: AppColors.borderActive),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
