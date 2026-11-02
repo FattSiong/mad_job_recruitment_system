@@ -177,22 +177,24 @@ class PostCommentsController extends ChangeNotifier {
     }
   }
 
+  /// Deletes the comment and all replies under it, using the database
+  /// function `delete_my_comment` (checks the caller owns the comment).
   /// Returns an error message, or null when it worked.
   Future<String?> delete(PostCommentModel comment) async {
     if (!comment.isOwnedBy(currentUserID)) return 'You can only delete your own comments.';
     try {
-      await _supabase
-          .from(TableConstants.postComment)
-          .delete()
-          .eq('commentID', comment.commentID)
-          .eq('userID', currentUserID);
+      await _supabase.rpc('delete_my_comment', params: {'p_comment_id': comment.commentID});
       if (_replyingTo?.commentID == comment.commentID) _replyingTo = null;
       _expanded.remove(comment.commentID);
       await load();
       return null;
+    } on PostgrestException catch (e) {
+      debugPrint('Delete comment failed: ${e.code} ${e.message}');
+      if (e.message.contains('not_owner')) return 'You can only delete your own comments.';
+      return 'Unable to delete this comment. Please try again.';
     } catch (e) {
       debugPrint('Delete comment failed: $e');
-      return 'Unable to delete this comment. If it has replies, it may not be removable.';
+      return 'Unable to delete this comment. Please try again.';
     }
   }
 

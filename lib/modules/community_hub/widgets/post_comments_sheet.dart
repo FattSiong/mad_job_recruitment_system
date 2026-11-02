@@ -151,7 +151,7 @@ class _PostCommentsSheetState extends State<PostCommentsSheet> {
       builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: const Text('Delete comment?'),
-        content: const Text('This comment will be permanently deleted.'),
+        content: const Text('This comment and any replies to it will be permanently deleted.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),

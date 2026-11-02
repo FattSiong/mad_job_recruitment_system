@@ -209,26 +209,21 @@ class PostListController extends ChangeNotifier {
     }
   }
 
-  /// Deletes the post with its likes, saves and comments.
+  /// Deletes the post with its comments, likes, saves and reports.
+  /// Done by the database function `delete_my_post`, which checks the caller
+  /// owns the post (the app can't delete other people's likes or comments).
   /// Returns an error message, or null when it worked.
   Future<String?> deletePost(FeedPostModel post) async {
     if (!post.isOwnedBy(currentUserID)) return 'You can only delete your own posts.';
     try {
-      await _supabase.from(TableConstants.postLike).delete().eq('postID', post.postID);
-      await _supabase.from(TableConstants.postSaved).delete().eq('postID', post.postID);
-      await _supabase.from(TableConstants.postComment).delete().eq('postID', post.postID);
-      final deleted = await _supabase
-          .from(TableConstants.communityPost)
-          .delete()
-          .eq('postID', post.postID)
-          .eq('authorID', currentUserID)
-          .select('postID');
-      if ((deleted as List).isEmpty) {
-        return 'Unable to delete this post.';
-      }
+      await _supabase.rpc('delete_my_post', params: {'p_post_id': post.postID});
       _posts.removeWhere((p) => p.postID == post.postID);
       _notify();
       return null;
+    } on PostgrestException catch (e) {
+      debugPrint('deletePost failed: ${e.code} ${e.message}');
+      if (e.message.contains('not_owner')) return 'You can only delete your own posts.';
+      return 'Unable to delete this post. Please try again.';
     } catch (e) {
       debugPrint('deletePost failed: $e');
       return 'Unable to delete this post. Please try again.';
