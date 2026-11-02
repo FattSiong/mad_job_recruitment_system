@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/data_load_exception.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/skill_gap_model.dart';
 import '../controllers/skill_gap_controller.dart';
@@ -9,6 +10,7 @@ import 'add_skill_screen.dart';
 import 'education_screen.dart';
 import 'skill_gap_result_screen.dart';
 import 'work_experience_screen.dart';
+import '../widgets/load_error_view.dart';
 
 /// Use Case 4.60: choose a target role and run the skill gap analysis.
 class SkillGapAnalysisScreen extends StatefulWidget {
@@ -59,17 +61,33 @@ class _SkillGapAnalysisScreenState extends State<SkillGapAnalysisScreen> {
     super.dispose();
   }
 
+  String? _loadError;
+
   Future<void> _load() async {
-    final results = await Future.wait([
-      _controller.fetchReadiness(),
-      _controller.fetchHistory(),
-    ]);
-    if (!mounted) return;
-    setState(() {
-      _readiness = results[0] as SkillGapReadiness?;
-      _history = results[1] as List<SkillGapAnalysisModel>;
-      _isLoading = false;
-    });
+    try {
+      final results = await Future.wait([
+        _controller.fetchReadiness(),
+        _controller.fetchHistory(),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _readiness = results[0] as SkillGapReadiness?;
+        _history = results[1] as List<SkillGapAnalysisModel>;
+        _loadError = null;
+        _isLoading = false;
+      });
+    } on DataLoadException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadError = e.message;
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _retryLoad() async {
+    setState(() => _isLoading = true);
+    await _load();
   }
 
   bool get _canAnalyse =>
@@ -206,6 +224,8 @@ class _SkillGapAnalysisScreenState extends State<SkillGapAnalysisScreen> {
       body: SafeArea(
         child: _isLoading
             ? const Center(child: CircularProgressIndicator(color: _primary))
+            : _loadError != null
+            ? LoadErrorView(message: _loadError!, onRetry: _retryLoad)
             : SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
                 child: Column(
@@ -224,7 +244,7 @@ class _SkillGapAnalysisScreenState extends State<SkillGapAnalysisScreen> {
                 ),
               ),
       ),
-      bottomNavigationBar: _isLoading ? null : _buildBottomButton(),
+      bottomNavigationBar: _isLoading || _loadError != null ? null : _buildBottomButton(),
     );
   }
 

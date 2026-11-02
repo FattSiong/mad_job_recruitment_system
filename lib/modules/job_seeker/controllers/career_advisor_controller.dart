@@ -208,7 +208,7 @@ class CareerAdvisorController extends ChangeNotifier {
   static const String _unavailableMessage =
       'The AI Advisor is currently unavailable. Please try again later.';
 
-  /// Past conversations, newest first.
+  /// Past conversations, newest first. Throws [DataLoadException].
   Future<List<AdvisorConversationModel>> fetchConversations() async {
     try {
       final response = await _supabase
@@ -221,9 +221,13 @@ class CareerAdvisorController extends ChangeNotifier {
           .map((json) =>
               AdvisorConversationModel.fromJson(json as Map<String, dynamic>))
           .toList();
+    } on DataLoadException {
+      rethrow;
     } catch (e) {
       debugPrint('Error fetching advisor conversations: $e');
-      return [];
+      throw DataLoadException(
+        'Unable to load your conversations. Please check your connection and try again.',
+      );
     }
   }
 

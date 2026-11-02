@@ -180,11 +180,15 @@ class ApplicationController extends ChangeNotifier {
       return response?['resumeURL'] as String?;
     } catch (e) {
       debugPrint('Error fetching resume: $e');
-      return null;
+      throw DataLoadException(
+        'Unable to load the application form. Please check your connection and try again.',
+      );
     }
   }
 
   /// True if the current user already applied for this job (fix #1).
+  /// Returns false if it can't be checked: the server still blocks a
+  /// duplicate application when it is submitted.
   Future<bool> hasApplied(String jobId) async {
     try {
       final row = await _supabase

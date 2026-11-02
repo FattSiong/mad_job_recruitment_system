@@ -2,18 +2,16 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/table_constants.dart';
+import '../../../core/utils/data_load_exception.dart';
 import '../../../models/guidance_report_model.dart';
 import '../../../models/mock_interview_model.dart';
 import '../../../models/skill_gap_model.dart';
 import '../../../core/utils/session_helper.dart';
 
 /// Thrown when reports can't be loaded (use case A2: database error).
-class GuidanceReportException implements Exception {
-  final String message;
-  GuidanceReportException(this.message);
-
-  @override
-  String toString() => message;
+/// A [DataLoadException], like every other failed load in the app.
+class GuidanceReportException extends DataLoadException {
+  GuidanceReportException(super.message);
 }
 
 class GuidanceReportController {
@@ -44,7 +42,8 @@ class GuidanceReportController {
   // Data for the PDF export
   // ---------------------------------------------------------------------
 
-  /// Name printed on the PDF.
+  /// Name printed on the PDF. Optional: returns '' instead of throwing,
+  /// so the PDF can still be made without it.
   Future<String> fetchApplicantName() async {
     try {
       final row = await _supabase

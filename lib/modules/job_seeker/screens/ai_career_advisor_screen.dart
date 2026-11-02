@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/data_load_exception.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/advisor_conversation_model.dart';
 import '../../../models/advisor_message_model.dart';
@@ -780,6 +781,31 @@ class _ConversationHistorySheetState extends State<_ConversationHistorySheet> {
                         padding: EdgeInsets.all(24),
                         child: Center(
                           child: CircularProgressIndicator(color: _primary),
+                        ),
+                      );
+                    }
+                    if (snapshot.hasError) {
+                      final error = snapshot.error;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              error is DataLoadException
+                                  ? error.message
+                                  : 'Unable to load your conversations.',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: _textMuted, height: 1.45),
+                            ),
+                            TextButton.icon(
+                              onPressed: () => setState(
+                                () => _future = widget.controller.fetchConversations(),
+                              ),
+                              icon: const Icon(Icons.refresh_rounded),
+                              label: const Text('Try Again'),
+                            ),
+                          ],
                         ),
                       );
                     }

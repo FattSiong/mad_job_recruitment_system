@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/table_constants.dart';
+import '../../../core/utils/data_load_exception.dart';
 import '../../../models/skill_gap_model.dart';
 import '../../../core/utils/session_helper.dart';
 
@@ -66,6 +67,7 @@ class SkillGapController {
   }
 
   /// Counts of the profile data the analysis will use.
+  /// Throws [DataLoadException] if they can't be loaded.
   Future<SkillGapReadiness?> fetchReadiness() async {
     try {
       final row = await _supabase
@@ -89,13 +91,17 @@ class SkillGapController {
         experienceCount: count('WorkExperience'),
         resumeURL: row['resumeURL'] as String?,
       );
+    } on DataLoadException {
+      rethrow; // session expired
     } catch (e) {
       debugPrint('Error fetching skill gap readiness: $e');
-      return null;
+      throw DataLoadException(
+        'Unable to load your profile. Please check your connection and try again.',
+      );
     }
   }
 
-  /// Past analyses, newest first.
+  /// Past analyses, newest first. Throws [DataLoadException].
   Future<List<SkillGapAnalysisModel>> fetchHistory() async {
     try {
       final response = await _supabase
@@ -106,12 +112,17 @@ class SkillGapController {
       return (response as List<dynamic>)
           .map((e) => SkillGapAnalysisModel.fromJson(e as Map<String, dynamic>))
           .toList();
+    } on DataLoadException {
+      rethrow; // session expired
     } catch (e) {
       debugPrint('Error fetching skill gap history: $e');
-      return [];
+      throw DataLoadException(
+        'Unable to load your past analyses. Please check your connection and try again.',
+      );
     }
   }
 
+  /// One analysis, or null if it no longer exists. Throws [DataLoadException].
   Future<SkillGapAnalysisModel?> fetchAnalysis(String analysisID) async {
     try {
       final row = await _supabase
@@ -121,9 +132,13 @@ class SkillGapController {
           .eq('seekerID', _currentSeekerID)
           .maybeSingle();
       return row == null ? null : SkillGapAnalysisModel.fromJson(row);
+    } on DataLoadException {
+      rethrow; // session expired
     } catch (e) {
       debugPrint('Error fetching skill gap analysis: $e');
-      return null;
+      throw DataLoadException(
+        'Unable to load this report. Please check your connection and try again.',
+      );
     }
   }
 

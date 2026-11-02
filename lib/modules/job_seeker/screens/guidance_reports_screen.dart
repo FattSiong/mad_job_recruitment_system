@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/data_load_exception.dart';
 import '../../../core/utils/guidance_pdf_builder.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/guidance_report_model.dart';
@@ -103,13 +104,19 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
       );
     } else {
       setState(() => _openingID = item.reportID);
-      final analysis = await _skillGapController.fetchAnalysis(item.reportID);
+      SkillGapAnalysisModel? analysis;
+      String? error;
+      try {
+        analysis = await _skillGapController.fetchAnalysis(item.reportID);
+      } on DataLoadException catch (e) {
+        error = e.message;
+      }
       if (!mounted) return;
       setState(() => _openingID = null);
       if (analysis == null) {
         SnackBarHelper.showStyled(
           context,
-          message: 'Unable to load this report. It may have been deleted.',
+          message: error ?? 'This report no longer exists. It may have been deleted.',
           icon: Icons.error_outline_rounded,
           accentColor: AppColors.errorRed,
         );

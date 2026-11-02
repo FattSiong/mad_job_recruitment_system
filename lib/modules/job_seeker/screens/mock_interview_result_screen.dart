@@ -5,6 +5,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/guidance_pdf_builder.dart';
 import '../../../models/mock_interview_model.dart';
 import '../controllers/guidance_report_controller.dart';
+import '../../../core/utils/data_load_exception.dart';
+import '../widgets/load_error_view.dart';
 import '../controllers/mock_interview_controller.dart';
 import 'guidance_pdf_viewer_screen.dart';
 import 'mock_interview_setup_screen.dart';
@@ -44,6 +46,8 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
         : _controller.fetchInterview(widget.sessionID);
   }
 
+  void _retry() => setState(() => _future = _controller.fetchInterview(widget.sessionID));
+
   Color _scoreColor(int score) {
     if (score >= 75) return AppColors.successGreen;
     if (score >= 50) return _warning;
@@ -65,6 +69,24 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator(color: _primary));
             }
+            if (snapshot.hasError) {
+              return Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    _buildHeader(null),
+                    Expanded(
+                      child: LoadErrorView(
+                        message: snapshot.error is DataLoadException
+                            ? (snapshot.error as DataLoadException).message
+                            : 'Unable to load this interview report.',
+                        onRetry: _retry,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
             final record = snapshot.data;
             if (record == null) {
               return Padding(
@@ -75,7 +97,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
                     const Expanded(
                       child: Center(
                         child: Text(
-                          'Unable to load this interview report.',
+                          'This interview report no longer exists.',
                           style: TextStyle(color: _textMuted),
                         ),
                       ),

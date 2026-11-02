@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/table_constants.dart';
+import '../../../core/utils/data_load_exception.dart';
 import '../../../core/utils/file_picker_helper.dart';
 import '../../../core/utils/session_helper.dart';
 import '../../../core/utils/storage_url_helper.dart';
@@ -24,7 +25,11 @@ import '../../../services/user_directory.dart';
 class ChatRoomController extends ChangeNotifier {
   static const String attachmentsBucket = 'chat_attachments';
   static const int maxAttachmentMB = 10;
-  static const int pageSize = 200;
+
+  /// The live stream keeps the newest [pageSize] messages; older ones are
+  /// fetched [olderPageSize] at a time when the user scrolls up.
+  static const int pageSize = 50;
+  static const int olderPageSize = 50;
 
   final String roomID;
   final ChatParticipant otherUser;
@@ -34,8 +39,12 @@ class ChatRoomController extends ChangeNotifier {
   final _supabase = Supabase.instance.client;
   late final String currentUserID = SessionHelper.requireUserId();
 
-  List<MessageModel> _messages = [];
+  List<MessageModel> _messages = []; // live window, newest first
+  List<MessageModel> _older = []; // loaded on scroll, newest first, all older than _messages
   final List<MessageModel> _pending = []; // sent, waiting for the server echo
+  bool _hasOlder = false;
+  bool _isLoadingOlder = false;
+  String? _olderError;
   bool _isLoading = true;
   String? _error;
   bool _isUploading = false;
@@ -47,12 +56,20 @@ class ChatRoomController extends ChangeNotifier {
   String? get error => _error;
   bool get isUploading => _isUploading;
 
-  /// Newest first (for a reversed ListView), including messages still sending.
+  /// More messages exist before the oldest one shown.
+  bool get hasOlder => _hasOlder;
+  bool get isLoadingOlder => _isLoadingOlder;
+
+  /// Set when loading older messages failed (the screen offers a retry).
+  String? get olderError => _olderError;
+
+  /// Newest first (for a reversed ListView), including messages still sending
+  /// and older messages loaded by [loadOlder].
   List<MessageModel> get messages {
-    if (_pending.isEmpty) return _messages;
     final serverIds = _messages.map((m) => m.messageID).toSet();
     final stillPending = _pending.where((m) => !serverIds.contains(m.messageID)).toList();
-    return [...stillPending.reversed, ..._messages];
+    final older = _older.where((m) => !serverIds.contains(m.messageID));
+    return [...stillPending.reversed, ..._messages, ...older];
   }
 
   bool isPending(MessageModel message) =>
@@ -81,7 +98,10 @@ class ChatRoomController extends ChangeNotifier {
         .map((rows) => rows.map(MessageModel.fromJson).toList())
         .listen(
           (rows) {
+            _keepMessagesLeavingWindow(rows);
             _messages = rows;
+            // A full page means there may be more before it (unless already loaded).
+            if (_older.isEmpty) _hasOlder = rows.length >= pageSize;
             _pending.removeWhere((p) => rows.any((m) => m.messageID == p.messageID));
             _isLoading = false;
             _error = null;
@@ -95,6 +115,55 @@ class ChatRoomController extends ChangeNotifier {
             _notify();
           },
         );
+  }
+
+  /// When a new message arrives, the oldest one drops out of the live window
+  /// (it only holds [pageSize] rows). Keep it in [_older] so nothing the user
+  /// has already seen disappears from the screen.
+  void _keepMessagesLeavingWindow(List<MessageModel> rows) {
+    if (_messages.isEmpty || rows.isEmpty) return;
+    final newIds = rows.map((m) => m.messageID).toSet();
+    final oldestInWindow = rows.last.sentAt;
+    final leaving = _messages
+        .where((m) => !newIds.contains(m.messageID) && !m.sentAt.isAfter(oldestInWindow))
+        .toList();
+    if (leaving.isEmpty) return;
+    final olderIds = _older.map((m) => m.messageID).toSet();
+    _older = [...leaving.where((m) => !olderIds.contains(m.messageID)), ..._older]
+      ..sort((a, b) => b.sentAt.compareTo(a.sentAt));
+    _hasOlder = true;
+  }
+
+  /// Loads the next [olderPageSize] messages before the oldest one shown.
+  /// Called when the user scrolls near the top. A failure sets [olderError].
+  Future<void> loadOlder() async {
+    if (_isLoadingOlder || !_hasOlder) return;
+    final shown = [..._messages, ..._older];
+    if (shown.isEmpty) return;
+    final oldest = shown.map((m) => m.sentAt).reduce((a, b) => a.isBefore(b) ? a : b);
+
+    _isLoadingOlder = true;
+    _olderError = null;
+    _notify();
+    try {
+      final rows = await _supabase
+          .from(TableConstants.message)
+          .select()
+          .eq('roomID', roomID)
+          .lt('sentAt', oldest.toUtc().toIso8601String())
+          .order('sentAt', ascending: false)
+          .limit(olderPageSize);
+      final loaded = rows.map(MessageModel.fromJson).toList();
+      final known = shown.map((m) => m.messageID).toSet();
+      _older = [..._older, ...loaded.where((m) => !known.contains(m.messageID))];
+      _hasOlder = loaded.length >= olderPageSize;
+    } catch (e) {
+      debugPrint('Error loading older messages: $e');
+      _olderError = 'Unable to load older messages.';
+    } finally {
+      _isLoadingOlder = false;
+      _notify();
+    }
   }
 
   /// Marks the other person's messages as read (shortly after they arrive).
@@ -254,6 +323,23 @@ class ChatRoomController extends ChangeNotifier {
       return false;
     }
     await _deleteAttachmentFile(message.mediaURL);
+    // Older messages are not in the live stream, so update the copy shown.
+    final i = _older.indexWhere((m) => m.messageID == message.messageID);
+    if (i != -1) {
+      final m = _older[i];
+      _older[i] = MessageModel(
+        messageID: m.messageID,
+        roomID: m.roomID,
+        senderID: m.senderID,
+        content: 'This message was deleted',
+        isRead: m.isRead,
+        sentAt: m.sentAt,
+        mediaType: m.mediaType,
+        mediaURL: null,
+        isDeleted: true,
+      );
+      _notify();
+    }
     return true;
   }
 
@@ -271,6 +357,7 @@ class ChatRoomController extends ChangeNotifier {
   }
 
   /// Photos and files shared in this chat, newest first.
+  /// Throws [DataLoadException] if they can't be loaded.
   Future<List<MessageModel>> fetchSharedAttachments() async {
     try {
       final rows = await _supabase
@@ -284,7 +371,9 @@ class ChatRoomController extends ChangeNotifier {
       return rows.map(MessageModel.fromJson).toList();
     } catch (e) {
       debugPrint('Error loading shared attachments: $e');
-      return [];
+      throw DataLoadException(
+        'Unable to load shared photos and files. Please check your connection and try again.',
+      );
     }
   }
 

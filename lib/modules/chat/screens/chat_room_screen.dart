@@ -34,16 +34,19 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       ChatRoomController(roomID: widget.roomID, otherUser: widget.otherUser);
   final VoiceRecorderController _recorder = VoiceRecorderController();
   final TextEditingController _textController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   bool _isStartingCall = false;
 
   @override
   void initState() {
     super.initState();
     _controller.start();
+    _scrollController.addListener(_onScroll);
   }
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _recorder.dispose();
     _controller.dispose();
     _textController.dispose();
@@ -53,6 +56,16 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   // ---------------------------------------------------------------------
   // Actions (all data work is in the controllers)
   // ---------------------------------------------------------------------
+
+  /// The list is reversed, so the top of the chat is the END of the scroll.
+  /// Near it, load older messages (not again after a failure: the user taps retry).
+  void _onScroll() {
+    final position = _scrollController.position;
+    if (position.pixels >= position.maxScrollExtent - 400 &&
+        _controller.olderError == null) {
+      _controller.loadOlder();
+    }
+  }
 
   void _showError(String message) {
     if (!mounted) return;
@@ -383,14 +396,20 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       );
     }
 
+    // One extra row at the top while older messages load (or failed to).
+    final showOlderRow = _controller.hasOlder || _controller.olderError != null;
+
     return ListView.builder(
+      controller: _scrollController,
       reverse: true,
       padding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
-      itemCount: messages.length,
+      itemCount: messages.length + (showOlderRow ? 1 : 0),
       itemBuilder: (context, index) {
+        if (index == messages.length) return _buildOlderRow();
         final message = messages[index];
         final older = index + 1 < messages.length ? messages[index + 1] : null;
-        final showDay = older == null || !ChatFormatters.isSameDay(message.sentAt, older.sentAt);
+        final showDay = (older == null && !_controller.hasOlder) ||
+            (older != null && !ChatFormatters.isSameDay(message.sentAt, older.sentAt));
 
         return Column(
           key: ValueKey(message.messageID),
@@ -406,6 +425,35 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           ],
         );
       },
+    );
+  }
+
+  /// Shown above the oldest message: a spinner while loading, or a retry.
+  Widget _buildOlderRow() {
+    if (_controller.olderError != null) {
+      return Center(
+        child: TextButton.icon(
+          onPressed: _controller.loadOlder,
+          icon: const Icon(Icons.refresh_rounded),
+          label: Text('${_controller.olderError} Tap to retry'),
+        ),
+      );
+    }
+    // Short chats never scroll, so start loading as soon as this row appears.
+    if (!_controller.isLoadingOlder) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _controller.olderError == null) _controller.loadOlder();
+      });
+    }
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 12),
+      child: Center(
+        child: SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+        ),
+      ),
     );
   }
 }

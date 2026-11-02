@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/data_load_exception.dart';
 import '../../../core/utils/file_preview_helper.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/resume_review_model.dart';
 import '../controllers/resume_review_controller.dart';
+import '../widgets/load_error_view.dart';
 import '../widgets/resume_review/resume_review_widgets.dart';
 import 'build_resume_screen.dart';
 import 'resume_review_result_screen.dart';
@@ -58,16 +60,29 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
     super.dispose();
   }
 
+  String? _loadError;
+
   Future<void> _load() async {
-    final results = await Future.wait([
-      _controller.fetchSources(),
-      _controller.fetchHistory(),
-    ]);
+    final List<Object?> results;
+    try {
+      results = await Future.wait([
+        _controller.fetchSources(),
+        _controller.fetchHistory(),
+      ]);
+    } on DataLoadException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadError = e.message;
+        _isLoading = false;
+      });
+      return;
+    }
     if (!mounted) return;
     final sources = results[0] as ResumeReviewSources?;
     setState(() {
       _sources = sources;
       _history = results[1] as List<ResumeReviewModel>;
+      _loadError = null;
       _isLoading = false;
       // Keep the user's choice if it is still available, otherwise pick one.
       if (_selected == null || !(sources?.isAvailable(_selected!) ?? false)) {
@@ -180,6 +195,14 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
       body: SafeArea(
         child: _isLoading
             ? const Center(child: CircularProgressIndicator(color: _primary))
+            : _loadError != null
+            ? LoadErrorView(
+                message: _loadError!,
+                onRetry: () {
+                  setState(() => _isLoading = true);
+                  _load();
+                },
+              )
             : RefreshIndicator(
                 color: _primary,
                 onRefresh: _load,
@@ -205,7 +228,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
                 ),
               ),
       ),
-      bottomNavigationBar: _isLoading ? null : _buildBottomButton(),
+      bottomNavigationBar: _isLoading || _loadError != null ? null : _buildBottomButton(),
     );
   }
 
