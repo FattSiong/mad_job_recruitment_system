@@ -258,12 +258,12 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
         _buildActionButton(
           icon: Icons.history_rounded,
           tooltip: 'Past conversations',
-          onPressed: _showHistorySheet,
+          onPressed: _isSending ? null : _showHistorySheet,
         ),
         _buildActionButton(
           icon: Icons.add_comment_outlined,
           tooltip: 'New conversation',
-          onPressed: _startNewConversation,
+          onPressed: _isSending ? null : _startNewConversation,
         ),
         const SizedBox(width: 8),
       ],
@@ -273,7 +273,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
   Widget _buildActionButton({
     required IconData icon,
     required String tooltip,
-    required VoidCallback onPressed,
+    required VoidCallback? onPressed, // null = disabled
   }) {
     return Container(
       margin: const EdgeInsets.only(left: 8),

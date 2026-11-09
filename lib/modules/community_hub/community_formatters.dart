@@ -19,6 +19,9 @@ class CommunityFormatters {
   static String count(int n) {
     if (n < 1000) return '$n';
     final k = n / 1000;
-    return '${k.toStringAsFixed(k < 10 ? 1 : 0)}k';
+    // One decimal below 10k ("1.2k"); whole numbers from 10k ("15k").
+    // Rounded first, so 9,999 shows "10k" rather than "10.0k".
+    final oneDecimal = (k * 10).round() / 10;
+    return oneDecimal < 10 ? '${oneDecimal.toStringAsFixed(1)}k' : '${k.round()}k';
   }
 }

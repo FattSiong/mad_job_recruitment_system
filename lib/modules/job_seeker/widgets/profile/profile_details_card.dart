@@ -146,6 +146,10 @@ class ProfileDetailsCard extends StatelessWidget {
               controller: fields.bio,
               icon: const Icon(Icons.menu_book_outlined, color: _iconColor, size: 20),
               maxLines: 4,
+              // The AI tools read up to about 600 characters of the bio
+              validator: (value) => (value?.trim().length ?? 0) > 600
+                  ? 'Keep your bio under 600 characters'
+                  : null,
             ),
             field(
               label: 'Career Goal',

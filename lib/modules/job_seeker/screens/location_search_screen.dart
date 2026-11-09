@@ -75,24 +75,48 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
         throw Exception('Location permissions are permanently denied.');
       }
 
-      Position position = await Geolocator.getCurrentPosition();
-      List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
-
-      if (placemarks.isNotEmpty) {
-        Placemark place = placemarks[0];
-        String city = place.locality ?? place.subAdministrativeArea ?? 'Unknown Location';
-
-        if (city != 'Unknown Location') {
-          _selectLocation(city);
-        } else {
-          throw Exception('Could not determine city from current location.');
-        }
+      // Give up after 10 s indoors / with weak GPS instead of spinning forever
+      Position position;
+      try {
+        position = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+            timeLimit: Duration(seconds: 10),
+          ),
+        );
+      } catch (_) {
+        final last = await Geolocator.getLastKnownPosition();
+        if (last == null) throw Exception('Could not get your location. Please try again or type a city.');
+        position = last;
       }
+      final placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
+
+      // Android often gives "" (not null) for a missing part, so skip empty ones
+      String? firstFilled(List<String?> parts) {
+        for (final p in parts) {
+          if (p != null && p.trim().isNotEmpty) return p.trim();
+        }
+        return null;
+      }
+
+      final city = placemarks.isEmpty
+          ? null
+          : firstFilled([
+              placemarks.first.locality,
+              placemarks.first.subAdministrativeArea,
+              placemarks.first.administrativeArea,
+            ]);
+      if (city == null) throw Exception('Could not find the city for your location. Please type it instead.');
+      if (!mounted) return;
+      _selectLocation(city);
     } catch (e) {
       if (mounted) {
+        final text = e.toString();
         SnackBarHelper.showStyled(
           context,
-          message: e.toString().replaceAll('Exception: ', ''),
+          message: text.startsWith('Exception: ')
+              ? text.substring('Exception: '.length)
+              : 'Could not get your location. Please try again or type a city.',
           icon: Icons.location_off_rounded,
           accentColor: AppColors.coral,
         );

@@ -150,8 +150,10 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
         pageSize: _pageSize,
       );
       if (!mounted || requestId != _requestId) return;
+      // A job posted while scrolling shifts the pages by one: skip repeats.
+      final shown = _jobs.map((j) => j.jobID).toSet();
       setState(() {
-        _jobs = [..._jobs, ...page.jobs];
+        _jobs = [..._jobs, ...page.jobs.where((j) => !shown.contains(j.jobID))];
         _nextOffset = page.nextOffset;
         _hasMoreJobs = page.hasMore;
         _isFetchingMore = false;
@@ -245,6 +247,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
       ),
     );
 
+    if (!mounted) return;
     if (result != null && result is Map<String, String>) {
       setState(() {
         _keywordController.text = result['keyword'] ?? '';

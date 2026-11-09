@@ -60,6 +60,11 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
 
   bool get _alreadyApplied => widget.disableApplyButton || _hasApplied;
 
+  /// Closed by the employer or past its expiry date (e.g. opened from Bookmarks).
+  /// The server would refuse the application anyway, after the whole form.
+  bool get _isClosed =>
+      widget.job.status.trim().toLowerCase() != 'active' || widget.job.isExpired;
+
   Future<void> _openApplication() async {
     final applied = await Navigator.push<bool>(
       context,
@@ -596,7 +601,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
-                          onPressed: (_alreadyApplied || _isCheckingApplied)
+                          onPressed: (_alreadyApplied || _isCheckingApplied || _isClosed)
                               ? null
                               : _openApplication,
                           style: ElevatedButton.styleFrom(
@@ -617,10 +622,14 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                                   child: CircularProgressIndicator(strokeWidth: 2),
                                 )
                               : Icon(
-                                  _alreadyApplied ? Icons.check_circle_outline : Icons.send_rounded,
+                                  _alreadyApplied
+                                      ? Icons.check_circle_outline
+                                      : (_isClosed ? Icons.block_rounded : Icons.send_rounded),
                                 ),
                           label: Text(
-                            _alreadyApplied ? 'Already Applied' : 'Apply Now',
+                            _alreadyApplied
+                                ? 'Already Applied'
+                                : (_isClosed ? 'Applications Closed' : 'Apply Now'),
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,

@@ -1,9 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+
+import '../../../core/utils/snackbar_helper.dart';
 import 'public_profile_screen.dart';
 
 class QRScannerScreen extends StatefulWidget {
   const QRScannerScreen({super.key});
+
+  static final RegExp _uuid = RegExp(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+    caseSensitive: false,
+  );
+
+  /// The seeker ID in a profile QR code ("profile:<id>" or a link with
+  /// /profile/<id>), or null for any other QR code.
+  static String? seekerIdFrom(String rawValue) {
+    final text = rawValue.trim();
+    String? id;
+    if (text.startsWith('profile:')) {
+      id = text.substring('profile:'.length);
+    } else {
+      final segments = Uri.tryParse(text)?.pathSegments.where((s) => s.isNotEmpty).toList() ?? const [];
+      final i = segments.indexOf('profile');
+      if (i != -1 && i + 1 < segments.length) id = segments[i + 1];
+    }
+    id = id?.trim();
+    return id != null && _uuid.hasMatch(id) ? id : null;
+  }
 
   @override
   State<QRScannerScreen> createState() => _QRScannerScreenState();
@@ -17,6 +40,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
   );
 
   bool _isNavigating = false; // Prevents multiple pushes if scanned twice quickly
+  DateTime? _lastWrongCodeHint;
 
   @override
   void dispose() {
@@ -24,46 +48,47 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
     super.dispose();
   }
 
+  /// "Not a profile QR code", at most every 3 seconds (the camera sees it many times).
+  void _showWrongCodeHint() {
+    final now = DateTime.now();
+    final last = _lastWrongCodeHint;
+    if (last != null && now.difference(last) < const Duration(seconds: 3)) return;
+    _lastWrongCodeHint = now;
+    SnackBarHelper.showError(context, 'This QR code is not a job seeker profile.');
+  }
+
   void _onDetect(BarcodeCapture capture) {
     if (_isNavigating) return;
 
-    final List<Barcode> barcodes = capture.barcodes;
-    for (final barcode in barcodes) {
-      final String? rawValue = barcode.rawValue;
-      if (rawValue != null) {
+    var sawOtherCode = false;
+    for (final barcode in capture.barcodes) {
+      final rawValue = barcode.rawValue;
+      if (rawValue == null) continue;
 
-        String? scannedSeekerId;
-
-        // Link format: .../profile/<seekerID>
-        if (rawValue.contains('/profile/')) {
-          scannedSeekerId = rawValue.split('/').last;
-        }
-        // Short format: profile:<seekerID>
-        else if (rawValue.startsWith('profile:')) {
-          scannedSeekerId = rawValue.replaceFirst('profile:', '');
-        }
-
-        // If we successfully extracted an ID, stop scanning and navigate
-        if (scannedSeekerId != null && scannedSeekerId.isNotEmpty) {
-          setState(() => _isNavigating = true);
-          _scannerController.stop(); // Stop camera to save battery
-
-          // Open the read-only public profile
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => PublicProfileScreen(seekerId: scannedSeekerId!),
-            ),
-          ).then((_) {
-            if (!mounted) return;
-            setState(() => _isNavigating = false);
-            _scannerController.start();
-          });
-
-          break; // Stop checking other barcodes
-        }
+      final scannedSeekerId = QRScannerScreen.seekerIdFrom(rawValue);
+      if (scannedSeekerId == null) {
+        sawOtherCode = true;
+        continue;
       }
+
+      // Found a profile: stop scanning and open it
+      setState(() => _isNavigating = true);
+      _scannerController.stop(); // Stop camera to save battery
+
+      // Open the read-only public profile
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PublicProfileScreen(seekerId: scannedSeekerId),
+        ),
+      ).then((_) {
+        if (!mounted) return;
+        setState(() => _isNavigating = false);
+        _scannerController.start();
+      });
+      return;
     }
+    if (sawOtherCode) _showWrongCodeHint();
   }
 
   @override

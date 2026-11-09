@@ -16,8 +16,10 @@ class UserDirectory {
     final ids = userIds.where((id) => id.isNotEmpty).toSet();
     final missing = ids.where((id) => !_cache.containsKey(id)).toList();
 
+    final temporary = <String, ChatParticipant>{}; // shown now, not cached
     if (missing.isNotEmpty) {
       final supabase = Supabase.instance.client;
+      var lookupFailed = false;
 
       Future<List<Map<String, dynamic>>> safeSelect(
         String table,
@@ -29,6 +31,7 @@ class UserDirectory {
           return List<Map<String, dynamic>>.from(rows);
         } catch (e) {
           debugPrint('UserDirectory: $table lookup failed: $e');
+          lookupFailed = true;
           return [];
         }
       }
@@ -52,16 +55,26 @@ class UserDirectory {
           return (text == null || text.isEmpty) ? null : text;
         }
 
-        _cache[id] = ChatParticipant(
+        final participant = ChatParticipant(
           userID: id,
           displayName: clean(profile?['fullName']) ?? clean(user?['username']) ?? 'Unknown user',
           role: clean(user?['role']) ?? (employers.containsKey(id) ? 'employer' : 'job_seeker'),
           photoUrl: clean(profile?['profilePictureURL']),
         );
+        // A failed lookup (e.g. no connection) must not save "Unknown user"
+        // for the rest of the session: try again next time instead.
+        if (lookupFailed && profile == null && user == null) {
+          temporary[id] = participant;
+        } else {
+          _cache[id] = participant;
+        }
       }
     }
 
-    return {for (final id in ids) if (_cache[id] != null) id: _cache[id]!};
+    return {
+      for (final id in ids)
+        if (_cache[id] != null) id: _cache[id]! else if (temporary[id] != null) id: temporary[id]!,
+    };
   }
 
   static Future<ChatParticipant> fetchOne(String userId) async {
