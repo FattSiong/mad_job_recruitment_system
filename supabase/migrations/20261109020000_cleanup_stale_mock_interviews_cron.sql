@@ -9,17 +9,20 @@
 -- CASCADE). Completed interviews are never touched.
 -- =====================================================================
 
-create extension if not exists pg_cron with schema pg_catalog;
+-- pg_cron is already enabled by 20261101010000_deactivate_expired_jobs_cron.sql.
+-- (Running "create extension pg_cron" again on Supabase fails with
+--  "dependent privileges exist", so it is not repeated here. If pg_cron is
+--  not enabled yet: Dashboard > Database > Extensions > pg_cron > Enable.)
 
 -- Only the scheduler (database owner) runs it, not app users through the API
 revoke execute on function public.cleanup_stale_mock_interviews() from public;
 revoke execute on function public.cleanup_stale_mock_interviews() from anon, authenticated;
 
--- Every day at 03:17 Malaysia time (19:17 UTC). Re-running this file keeps one job.
+-- Every day at 03:15 Malaysia time (19:15 UTC). Re-running this file keeps one job.
 select cron.unschedule(jobid) from cron.job where jobname = 'cleanup-stale-mock-interviews';
 select cron.schedule(
   'cleanup-stale-mock-interviews',
-  '17 19 * * *',
+  '15 19 * * *',
   $$select public.cleanup_stale_mock_interviews();$$
 );
 
