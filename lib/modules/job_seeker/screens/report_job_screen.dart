@@ -284,6 +284,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
                                 TextField(
                                   controller: _detailsController,
                                   maxLines: 4,
+                                  maxLength: ReportController.maxDetailsLength,
                                   decoration: InputDecoration(
                                     hintText: 'Describe your problem below...',
                                     filled: true,

@@ -9,6 +9,9 @@ enum JobReportResult { submitted, alreadyReported, failed }
 
 class ReportController {
   final _supabase = Supabase.instance.client;
+
+  /// Longest "Additional details" text (the form shows a counter).
+  static const int maxDetailsLength = 500;
   String get _currentSeekerID => SessionHelper.requireUserId();
 
   /// Sends a report on a job to the admins. A seeker can have only one open
@@ -29,7 +32,8 @@ class ReportController {
         jobID: jobId,
         reporterID: seekerID,
         reportCategory: category,
-        additionalDetails: (details != null && details.trim().isNotEmpty) ? details.trim() : null,
+        additionalDetails: _cleanDetails(details),
+        status: 'pending', // the admin dashboard counts pending reports
       );
       await _supabase.from(TableConstants.reportedJob).insert(newReport.toJson());
       return JobReportResult.submitted;
@@ -37,6 +41,12 @@ class ReportController {
       debugPrint('Error submitting report: $e');
       return JobReportResult.failed;
     }
+  }
+
+  static String? _cleanDetails(String? details) {
+    final text = details?.trim() ?? '';
+    if (text.isEmpty) return null;
+    return text.length > maxDetailsLength ? text.substring(0, maxDetailsLength) : text;
   }
 
   /// True if this seeker already has a report on this job that the admins

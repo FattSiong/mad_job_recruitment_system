@@ -23,6 +23,25 @@ class FileLimits {
 class FilePickerHelper {
   FilePickerHelper._();
 
+  /// A file name Supabase Storage accepts, keeping it readable:
+  /// "Resume #2 (Final).PDF" -> "Resume _2 (Final).pdf", "简历.pdf" -> "file.pdf".
+  /// Storage only allows letters, digits and a few symbols in a file path, so
+  /// names with accents, Chinese characters, # or % made the upload fail.
+  static String storageSafeName(String fileName) {
+    final dot = fileName.lastIndexOf('.');
+    final base = dot > 0 ? fileName.substring(0, dot) : fileName;
+    final ext = dot > 0
+        ? fileName.substring(dot + 1).toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '')
+        : '';
+    var safe = base
+        .replaceAll(RegExp(r'[^A-Za-z0-9 ._()\-]'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .trim();
+    if (safe.length > 80) safe = safe.substring(0, 80).trim();
+    if (RegExp(r'^[_. ]*$').hasMatch(safe)) safe = 'file';
+    return ext.isEmpty ? safe : '$safe.$ext';
+  }
+
   /// Returns an error message if [file] is larger than [maxMB], otherwise null.
   static Future<String?> checkSize(File file, int maxMB) async {
     final bytes = await file.length();

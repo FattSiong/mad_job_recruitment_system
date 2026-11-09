@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/table_constants.dart';
+import '../../../core/utils/storage_url_helper.dart';
 import '../../../models/chat_room_model.dart';
 import '../../../models/feed_post_model.dart';
 import '../../../models/post_filter.dart';
@@ -226,8 +227,13 @@ class PostListController extends ChangeNotifier {
   // ---------------------------------------------------------------------
 
   /// Returns an error message, or null when it worked.
+  /// Posts with a like / save still being sent: a second quick tap is ignored,
+  /// so the request can't race and leave a double like or a wrong count.
+  final Set<String> _likeBusy = {};
+  final Set<String> _saveBusy = {};
+
   Future<String?> toggleLike(FeedPostModel post) async {
-    if (post.isRemoved) return null;
+    if (post.isRemoved || !_likeBusy.add(post.postID)) return null;
     final liked = !post.isLiked;
     _replace(post.copyWith(isLiked: liked, likeCount: post.likeCount + (liked ? 1 : -1)));
     try {
@@ -246,12 +252,14 @@ class PostListController extends ChangeNotifier {
       debugPrint('toggleLike failed: $e');
       _replace(post);
       return 'Unable to update your like. Please try again.';
+    } finally {
+      _likeBusy.remove(post.postID);
     }
   }
 
   /// Returns an error message, or null when it worked.
   Future<String?> toggleSave(FeedPostModel post) async {
-    if (post.isRemoved) return null;
+    if (post.isRemoved || !_saveBusy.add(post.postID)) return null;
     final saved = !post.isSaved;
     final index = _posts.indexWhere((p) => p.postID == post.postID);
 
@@ -283,6 +291,8 @@ class PostListController extends ChangeNotifier {
         _replace(post);
       }
       return 'Unable to update saved posts. Please try again.';
+    } finally {
+      _saveBusy.remove(post.postID);
     }
   }
 
@@ -296,6 +306,8 @@ class PostListController extends ChangeNotifier {
       await _supabase.rpc('delete_my_post', params: {'p_post_id': post.postID});
       _posts.removeWhere((p) => p.postID == post.postID);
       _notify();
+      // The post is gone, so its photo / PDF is no longer needed
+      await StorageUrlHelper.removeOwnFile(post.mediaURL, bucket: 'post_media', userId: currentUserID);
       return null;
     } on PostgrestException catch (e) {
       debugPrint('deletePost failed: ${e.code} ${e.message}');

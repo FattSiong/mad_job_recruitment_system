@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/table_constants.dart';
 import '../../../core/utils/file_picker_helper.dart';
+import '../../../core/utils/storage_url_helper.dart';
 import '../../../models/feed_post_model.dart';
 import '../../../models/post_topic.dart';
 
@@ -26,7 +27,7 @@ class PostEditorController extends ChangeNotifier {
   static const int maxLength = 2000;
   static const int maxAttachmentMB = 10;
   static const List<String> attachmentExtensions = ['pdf', 'jpg', 'jpeg', 'png'];
-  static const String _bucket = 'post_media';
+  static const String bucket = 'post_media';
 
   String _content = '';
   PostTopic _topic = PostTopic.general;
@@ -108,9 +109,10 @@ class PostEditorController extends ChangeNotifier {
 
     _isSaving = true;
     notifyListeners();
+    String? uploadedURL;
     try {
       var mediaURL = _existingMediaURL;
-      if (_newFile != null) mediaURL = await _upload(_newFile!);
+      if (_newFile != null) mediaURL = uploadedURL = await _upload(_newFile!);
 
       if (isEditing) {
         await _supabase
@@ -131,9 +133,16 @@ class PostEditorController extends ChangeNotifier {
           'status': 'active',
         });
       }
+      // The attachment was replaced or removed: its old file is no longer used
+      final oldURL = original?.mediaURL;
+      if (isEditing && oldURL != null && oldURL.isNotEmpty && oldURL != mediaURL) {
+        await StorageUrlHelper.removeOwnFile(oldURL, bucket: bucket, userId: currentUserID);
+      }
       return null;
     } catch (e) {
       debugPrint('Save post failed: $e');
+      // Not saved: don't leave the file that was just uploaded behind
+      await StorageUrlHelper.removeOwnFile(uploadedURL, bucket: bucket, userId: currentUserID);
       return isEditing
           ? 'Unable to save your changes. Please try again.'
           : 'Unable to publish your post. Please try again.';
@@ -146,7 +155,7 @@ class PostEditorController extends ChangeNotifier {
   Future<String> _upload(File file) async {
     final name = file.path.split(Platform.pathSeparator).last.replaceAll(RegExp(r'[^\w.\-]'), '_');
     final path = '$currentUserID/${DateTime.now().millisecondsSinceEpoch}_$name';
-    await _supabase.storage.from(_bucket).upload(path, file);
-    return _supabase.storage.from(_bucket).getPublicUrl(path);
+    await _supabase.storage.from(bucket).upload(path, file);
+    return _supabase.storage.from(bucket).getPublicUrl(path);
   }
 }
