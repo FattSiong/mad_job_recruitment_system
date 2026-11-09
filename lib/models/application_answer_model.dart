@@ -4,6 +4,7 @@ class ApplicationAnswerModel {
   final String applicantID;
   final String? answerText;
   final String? answerFileURL;
+  final int? score; // Nullable: null = ungraded (?/5), 0..5 = employer marks
 
   ApplicationAnswerModel({
     this.answerID,
@@ -11,6 +12,7 @@ class ApplicationAnswerModel {
     required this.applicantID,
     this.answerText,
     this.answerFileURL,
+    this.score,
   });
 
   factory ApplicationAnswerModel.fromJson(Map<String, dynamic> json) {
@@ -20,6 +22,7 @@ class ApplicationAnswerModel {
       applicantID: json['applicantID'] as String,
       answerText: json['answerText'] as String?,
       answerFileURL: json['answerFileURL'] as String?,
+      score: (json['score'] as num?)?.toInt(),
     );
   }
 
@@ -30,6 +33,7 @@ class ApplicationAnswerModel {
       'applicantID': applicantID,
       if (answerText != null) 'answerText': answerText,
       if (answerFileURL != null) 'answerFileURL': answerFileURL,
+      if (score != null) 'score': score,
     };
   }
 }

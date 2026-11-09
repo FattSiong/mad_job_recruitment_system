@@ -39,6 +39,14 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
   bool get _hasActiveSubscription =>
       _jobCompany?.hasActiveSubscription ?? false;
 
+  int get _acceptedApplicantsCount => _applicants
+      .where(
+        (a) =>
+            (a['applicationStatus'] ?? '').toString().trim().toLowerCase() ==
+            'accepted',
+      )
+      .length;
+
   @override
   void initState() {
     super.initState();
@@ -92,6 +100,18 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     setState(() {
       _applicants = applicants;
       _isApplicantsLoading = false;
+    });
+  }
+
+  Future<void> _refreshJobRecord() async {
+    final jobId = _currentJob.jobID;
+    if (jobId == null || jobId.trim().isEmpty) return;
+    final latestJob = await _employerService.getJobById(jobId);
+    if (!mounted || latestJob == null) return;
+    setState(() {
+      _currentJob = latestJob.copyWith(
+        companyName: latestJob.companyName ?? _currentJob.companyName,
+      );
     });
   }
 
@@ -378,6 +398,10 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                 '${_applicants.length} applicants',
               ),
               _buildHeroMetric(
+                Icons.how_to_reg_rounded,
+                'Hired $_acceptedApplicantsCount/${_currentJob.vacancies}',
+              ),
+              _buildHeroMetric(
                 Icons.schedule_rounded,
                 _currentJob.jobType,
               ),
@@ -568,6 +592,12 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
               ),
               const SizedBox(height: 14),
               _buildInfoRow(
+                Icons.groups_2_rounded,
+                'Candidates to Hire (Vacancies)',
+                '${_currentJob.vacancies} ${_currentJob.vacancies == 1 ? 'Candidate' : 'Candidates'} ($_acceptedApplicantsCount Hired)',
+              ),
+              const SizedBox(height: 14),
+              _buildInfoRow(
                 Icons.maps_home_work_rounded,
                 'Work Arrangement',
                 _formatWorkplaceLabel(_currentJob.workplaceType),
@@ -667,6 +697,39 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
       }
     }
 
+    final dynamic rawAnswers = data['ApplicationAnswer'];
+    final int preScreenCount = rawAnswers is List ? rawAnswers.length : 0;
+    final int preScreenMaxMarks = preScreenCount * 5;
+    int preScreenGradedCount = 0;
+    int preScreenEarnedMarks = 0;
+    if (rawAnswers is List) {
+      for (final item in rawAnswers) {
+        if (item is Map) {
+          final int? s = (item['score'] as num?)?.toInt();
+          if (s != null) {
+            preScreenGradedCount++;
+            preScreenEarnedMarks += s;
+          }
+        }
+      }
+    }
+
+    Color preScreenFg = const Color(0xFF687588);
+    Color preScreenBg = const Color(0xFFEFF3F8);
+    if (preScreenGradedCount > 0 && preScreenMaxMarks > 0) {
+      final double pct = preScreenEarnedMarks / preScreenMaxMarks;
+      if (pct >= 0.7) {
+        preScreenFg = const Color(0xFF2D8A5D);
+        preScreenBg = const Color(0xFFE5F6ED);
+      } else if (pct >= 0.4) {
+        preScreenFg = const Color(0xFF9A640C);
+        preScreenBg = const Color(0xFFFEF3DC);
+      } else {
+        preScreenFg = const Color(0xFFC24E4E);
+        preScreenBg = const Color(0xFFFDECEC);
+      }
+    }
+
     return Material(
       color: const Color(0xFFF7F9FC),
       borderRadius: BorderRadius.circular(22),
@@ -679,10 +742,15 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                 applicantData: data,
                 jobTitle: _currentJob.title,
                 jobStatus: _currentJob.status,
+                jobId: _currentJob.jobID,
+                jobVacancies: _currentJob.vacancies,
               ),
             ),
           );
-          await _loadApplicants();
+          await Future.wait([
+            _loadApplicants(),
+            _refreshJobRecord(),
+          ]);
         },
         borderRadius: BorderRadius.circular(22),
         child: Padding(
@@ -792,6 +860,27 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                   ],
                 ],
               ),
+              if (preScreenCount > 0) ...[
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _buildApplicantsMetaChip(
+                      icon: preScreenGradedCount == 0
+                          ? Icons.quiz_outlined
+                          : Icons.fact_check_rounded,
+                      text: preScreenGradedCount == 0
+                          ? 'Pre-screen ?/$preScreenMaxMarks'
+                          : (preScreenGradedCount == preScreenCount
+                              ? 'Pre-screen $preScreenEarnedMarks/$preScreenMaxMarks'
+                              : 'Pre-screen $preScreenEarnedMarks/$preScreenMaxMarks ($preScreenGradedCount/$preScreenCount)'),
+                      color: preScreenFg,
+                      backgroundColor: preScreenBg,
+                    ),
+                  ],
+                ),
+              ],
               if (aiFeedback.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 Container(
@@ -1044,6 +1133,13 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                     text: '${_applicants.length} total',
                     color: const Color(0xFF163B65),
                     backgroundColor: const Color(0xFFDCEBFB),
+                  ),
+                  _buildApplicantsMetaChip(
+                    icon: Icons.verified_rounded,
+                    text:
+                        '$_acceptedApplicantsCount/${_currentJob.vacancies} hired',
+                    color: const Color(0xFF2D8A5D),
+                    backgroundColor: const Color(0xFFE5F6ED),
                   ),
                   _buildApplicantsMetaChip(
                     icon: Icons.access_time_outlined,
@@ -1492,6 +1588,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
 
   Widget _buildApplicantStatusBadge(String status) {
     Color color;
+    String label = status.toUpperCase();
 
     switch (status.toLowerCase()) {
       case 'pending':
@@ -1500,14 +1597,22 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
       case 'scheduled':
         color = const Color(0xFF6B4FD3);
         break;
+      case 'interviewed':
+        color = const Color(0xFF1E8F8B);
+        break;
+      case 'offered':
+        color = const Color(0xFF4C6EF5);
+        label = 'OFFER SENT';
+        break;
       case 'accepted':
         color = const Color(0xFF2D8A5D);
         break;
+      case 'offer_declined':
+        color = const Color(0xFFC77700);
+        label = 'OFFER DECLINED';
+        break;
       case 'rejected':
         color = const Color(0xFFC24E4E);
-        break;
-      case 'interviewed':
-        color = const Color(0xFF1E8F8B);
         break;
       default:
         color = const Color(0xFF687588);
@@ -1520,7 +1625,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        status.toUpperCase(),
+        label,
         style: TextStyle(
           color: color,
           fontSize: 11,
