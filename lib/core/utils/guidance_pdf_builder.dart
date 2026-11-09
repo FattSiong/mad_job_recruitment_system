@@ -418,6 +418,8 @@ class GuidancePdfBuilder {
       _para('Comfortable pace is about 110-165 words per minute. Hesitations are pauses of 1 second or more '
           'and repeated words; long pauses are 2.5 seconds or more.', color: _muted, size: 8),
 
+      ..._bodyLanguage(r),
+
       if (r.summary.isNotEmpty) ...[_section('AI Feedback'), _para(r.summary)],
       if (r.strengths.isNotEmpty) ...[_subTitle('Strengths', color: _green), ..._bullets(r.strengths, color: _green)],
       if (r.improvements.isNotEmpty) ...[
@@ -430,6 +432,30 @@ class GuidancePdfBuilder {
         _section('Question-by-Question'),
         for (final a in r.answers) ..._answerBlock(a),
       ],
+    ];
+  }
+
+  /// Camera cues (feedback only, not part of the scores).
+  static List<pw.Widget> _bodyLanguage(MockInterviewRecordModel r) {
+    final withCamera = r.answersWithCamera;
+    if (withCamera == 0) return const [];
+    final body = r.bodyLanguage;
+    final lookAways = (body['totalLookAways'] as num?)?.round() ??
+        r.answers.fold<int>(0, (sum, a) => sum + (a.lookAwayCount ?? 0));
+    final feedback = body['feedback'] as String? ?? '';
+    String percent(int? v) => v == null ? '-' : '$v%';
+
+    return [
+      _section('Body Language'),
+      _table(
+        headers: ['Eye contact', 'Smiling', 'Look-aways (1s+)', 'Answers on camera'],
+        rows: [
+          [percent(r.eyeContactPercent), percent(r.smilePercent), '$lookAways', '$withCamera of ${r.answers.length}'],
+        ],
+      ),
+      if (feedback.isNotEmpty) _para(feedback),
+      _para('Estimated on the phone (Google ML Kit) from head direction and expression while answering with '
+          'the camera on. Video is not recorded or uploaded. Not part of the scores.', color: _muted, size: 8),
     ];
   }
 
@@ -461,7 +487,8 @@ class GuidancePdfBuilder {
         ),
       ),
       _para('${a.wordsPerMinute?.round() ?? 0} wpm${a.paceLabel.isEmpty ? '' : ' (${a.paceLabel})'}  ·  '
-          '${a.fillerWordCount ?? 0} filler words  ·  ${a.hesitationCount ?? 0} hesitations',
+          '${a.fillerWordCount ?? 0} filler words  ·  ${a.hesitationCount ?? 0} hesitations'
+          '${a.eyeContactPercent == null ? '' : '  ·  ${a.eyeContactPercent}% eye contact'}',
           color: _muted, size: 8),
       if (a.transcriptText.isNotEmpty) ...[
         _subTitle('Your answer'),
@@ -474,6 +501,7 @@ class GuidancePdfBuilder {
         ..._bullets(a.improvements, color: _amber),
       ],
       if (a.deliveryFeedback.isNotEmpty) _para('Delivery: ${a.deliveryFeedback}'),
+      if (a.bodyLanguageFeedback.isNotEmpty) _para('Body language: ${a.bodyLanguageFeedback}'),
       if (a.improvedAnswer.isNotEmpty) _callout('Stronger sample answer', _cut(a.improvedAnswer, 1200)),
     ];
   }

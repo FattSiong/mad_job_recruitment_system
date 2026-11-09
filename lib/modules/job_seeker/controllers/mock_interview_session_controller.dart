@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
 import '../../../models/mock_interview_model.dart';
+import '../../../services/face_cue_analyzer.dart';
 import 'mock_interview_controller.dart';
 
 /// Where the session is for the question on screen.
@@ -14,8 +16,10 @@ enum InterviewStage { ready, recording, evaluating, reviewed, finishing }
 /// State of a running mock interview (Use Case 4.59, steps 2-6): the
 /// questions, the answers so far, and recording / evaluating each answer.
 ///
-/// The camera preview stays in the screen (it is display only and is never
-/// recorded or sent anywhere).
+/// The camera preview stays in the screen. While an answer is recorded with
+/// the camera on, [FaceCueAnalyzer] estimates eye contact and smiling on the
+/// phone; only those numbers are sent with the answer (video never leaves the
+/// phone, and the numbers are feedback only, not part of the score).
 class MockInterviewSessionController extends ChangeNotifier {
   final String sessionID;
 
@@ -31,13 +35,16 @@ class MockInterviewSessionController extends ChangeNotifier {
 
   final MockInterviewController _api;
   final AudioRecorder _recorder = AudioRecorder();
+  final FaceCueAnalyzer _faceCues;
 
   MockInterviewSessionController({
     required this.sessionID,
     required this.requestedQuestionCount,
     required List<InterviewQuestion> initialQuestions,
     MockInterviewController? api,
+    FaceCueAnalyzer? faceCues,
   })  : _api = api ?? MockInterviewController(),
+        _faceCues = faceCues ?? FaceCueAnalyzer(),
         _questions = List.of(initialQuestions);
 
   static const Duration maxAnswerLength = Duration(minutes: 3);
@@ -78,6 +85,14 @@ class MockInterviewSessionController extends ChangeNotifier {
   bool get isBusy => _stage == InterviewStage.evaluating || _stage == InterviewStage.finishing;
   bool get currentAnswered => _answers.containsKey(current.index);
   MockInterviewAnswerModel? get currentAnswer => _answers[current.index];
+
+  // ---------------------------------------------------------------------
+  // Camera (body language cues)
+  // ---------------------------------------------------------------------
+
+  /// The screen passes its preview camera here when it is ready, and null
+  /// before turning it off. Frames are only checked while recording.
+  Future<void> setCamera(CameraController? camera) => _faceCues.setCamera(camera);
 
   // ---------------------------------------------------------------------
   // Recording (mono AAC, 16 kHz)
@@ -136,6 +151,8 @@ class MockInterviewSessionController extends ChangeNotifier {
       _notify();
       if (_elapsed >= maxAnswerLength) stopAndEvaluate(); // auto stop
     });
+
+    await _faceCues.beginAnswer(); // does nothing if the camera is off
   }
 
   Future<void> _stopRecorderOnly() async {
@@ -150,6 +167,7 @@ class MockInterviewSessionController extends ChangeNotifier {
   /// Throws away the answer being recorded.
   Future<void> cancelRecording() async {
     await _stopRecorderOnly();
+    await _faceCues.cancelAnswer();
     await _recorder.cancel(); // also deletes the file
     _recordingPath = null;
     _stage = currentAnswered ? InterviewStage.reviewed : InterviewStage.ready;
@@ -163,6 +181,7 @@ class MockInterviewSessionController extends ChangeNotifier {
     if (_stage != InterviewStage.recording) return;
     await _stopRecorderOnly();
     final path = await _recorder.stop() ?? _recordingPath;
+    final faceMetrics = await _faceCues.endAnswer(); // null if the camera was off
 
     if (_disposed) {
       await _deleteRecordingFile();
@@ -188,6 +207,7 @@ class MockInterviewSessionController extends ChangeNotifier {
         audioFile: File(path),
         amplitudeDb: List.of(_amplitudeTrack),
         amplitudeIntervalMs: _amplitudeIntervalMs,
+        faceMetrics: faceMetrics,
       );
       _answers[questionIndex] = result.answer;
       if (result.questions != null && result.questions!.isNotEmpty) {
@@ -260,6 +280,7 @@ class MockInterviewSessionController extends ChangeNotifier {
     _ticker?.cancel();
     _amplitudeSub?.cancel();
     _recorder.dispose();
+    _faceCues.dispose();
     _deleteRecordingFile();
     super.dispose();
   }

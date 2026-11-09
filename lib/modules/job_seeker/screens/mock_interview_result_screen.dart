@@ -105,6 +105,8 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
                   const SizedBox(height: 20),
                   _buildSpeechCard(record),
                   const SizedBox(height: 20),
+                  _buildBodyLanguageCard(record),
+                  const SizedBox(height: 20),
                   _buildSummaryCard(record),
                   const SizedBox(height: 20),
                   _buildQuestionsCard(record),
@@ -311,6 +313,70 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
     );
   }
 
+  /// Eye contact and smiling from the camera. Feedback only (not in the score).
+  Widget _buildBodyLanguageCard(MockInterviewRecordModel record) {
+    final withCamera = record.answersWithCamera;
+    if (withCamera == 0) {
+      return const SurfaceCard(
+        children: [
+          SectionTitle('Body Language'),
+          Row(
+            children: [
+              Icon(Icons.videocam_off_outlined, color: AppColors.textMuted),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'The camera was off. Turn it on next time to get feedback on eye contact and smiling.',
+                  style: TextStyle(color: AppColors.textMuted, height: 1.4),
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    final body = record.bodyLanguage;
+    final lookAways = (body['totalLookAways'] as num?)?.round() ??
+        record.answers.fold<int>(0, (sum, a) => sum + (a.lookAwayCount ?? 0));
+    final feedback = body['feedback'] as String? ?? '';
+    String percent(int? v) => v == null ? '–' : '$v%';
+
+    return SurfaceCard(
+      children: [
+        const SectionTitle('Body Language'),
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 1.6,
+          children: [
+            _metricTile(Icons.visibility_outlined, percent(record.eyeContactPercent),
+                'Eye contact', 'Facing the camera'),
+            _metricTile(Icons.sentiment_satisfied_alt_outlined, percent(record.smilePercent),
+                'Smiling', 'Of the time in view'),
+            _metricTile(Icons.swap_horiz_rounded, '$lookAways',
+                'Look-aways', 'Away for 1s or more'),
+            _metricTile(Icons.videocam_outlined, '$withCamera / ${record.answers.length}',
+                'Answers on camera', 'Camera turned on'),
+          ],
+        ),
+        if (feedback.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Text(feedback, style: const TextStyle(color: AppColors.textDark, height: 1.5)),
+        ],
+        const SizedBox(height: 12),
+        const Text(
+          'Estimated on your phone from your head direction and expression. '
+          'Video is never recorded or uploaded, and this does not change your score.',
+          style: TextStyle(color: AppColors.textMuted, fontSize: 12, height: 1.4),
+        ),
+      ],
+    );
+  }
+
   Widget _metricTile(IconData icon, String value, String label, String hint) {
     return Container(
       padding: const EdgeInsets.all(14),
@@ -456,6 +522,8 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
                 _chip('${a.wordsPerMinute?.round() ?? 0} wpm${a.paceLabel.isEmpty ? '' : ' (${a.paceLabel})'}'),
                 _chip('${a.fillerWordCount ?? 0} fillers'),
                 _chip('${a.hesitationCount ?? 0} hesitations'),
+                if (a.eyeContactPercent != null) _chip('${a.eyeContactPercent}% eye contact'),
+                if (a.smilePercent != null) _chip('${a.smilePercent}% smiling'),
               ],
             ),
             const SizedBox(height: 14),
@@ -465,6 +533,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
                 AppColors.successGreen),
             _bulletSection('What to improve', a.improvements, Icons.trending_up_rounded, AppColors.warning),
             if (a.deliveryFeedback.isNotEmpty) _detailBlock('Delivery', a.deliveryFeedback),
+            if (a.bodyLanguageFeedback.isNotEmpty) _detailBlock('Body language', a.bodyLanguageFeedback),
             if (a.improvedAnswer.isNotEmpty)
               Container(
                 width: double.infinity,

@@ -68,6 +68,13 @@ class MockInterviewAnswerModel {
   final int? hesitationCount;
   final double? responseLatencySeconds;
 
+  // Body language from the camera (ML Kit on the phone). Null = camera off.
+  // Feedback only: not part of contentScore / deliveryScore.
+  final int? eyeContactPercent;
+  final int? smilePercent;
+  final int? facePresentPercent;
+  final int? lookAwayCount;
+
   // Gemini feedback
   final int? contentScore;
   final int? deliveryScore;
@@ -87,6 +94,10 @@ class MockInterviewAnswerModel {
     this.longPauseCount,
     this.hesitationCount,
     this.responseLatencySeconds,
+    this.eyeContactPercent,
+    this.smilePercent,
+    this.facePresentPercent,
+    this.lookAwayCount,
     this.contentScore,
     this.deliveryScore,
     this.feedback = const {},
@@ -97,6 +108,12 @@ class MockInterviewAnswerModel {
   String get improvedAnswer => feedback['improvedAnswer'] as String? ?? '';
   List<String> get strengths => _stringList(feedback['strengths']);
   List<String> get improvements => _stringList(feedback['improvements']);
+
+  /// The camera was on while answering.
+  bool get hasBodyLanguage => facePresentPercent != null;
+
+  /// One or two sentences about eye contact and expression (camera on only).
+  String get bodyLanguageFeedback => feedback['bodyLanguageFeedback'] as String? ?? '';
 
   /// "slow" | "good" | "fast"
   String get paceLabel =>
@@ -117,6 +134,10 @@ class MockInterviewAnswerModel {
       longPauseCount: _toInt(json['longPauseCount']),
       hesitationCount: _toInt(json['hesitationCount']),
       responseLatencySeconds: _toDouble(json['responseLatencySeconds']),
+      eyeContactPercent: _toInt(json['eyeContactPercent']),
+      smilePercent: _toInt(json['smilePercent']),
+      facePresentPercent: _toInt(json['facePresentPercent']),
+      lookAwayCount: _toInt(json['lookAwayCount']),
       contentScore: _toInt(json['contentScore']),
       deliveryScore: _toInt(json['deliveryScore']),
       feedback: (json['feedback'] as Map?)?.cast<String, dynamic>() ?? const {},
@@ -136,6 +157,12 @@ class MockInterviewRecordModel {
   final int? overallScore;
   final int? contentScore;
   final int? deliveryScore;
+
+  /// Averages of the answers recorded with the camera on (null = camera never on).
+  /// Feedback only: not part of [overallScore].
+  final int? eyeContactPercent;
+  final int? smilePercent;
+
   final Map<String, dynamic> aiEvaluationReport;
   final DateTime createdAt;
   final DateTime? completedAt;
@@ -152,6 +179,8 @@ class MockInterviewRecordModel {
     this.overallScore,
     this.contentScore,
     this.deliveryScore,
+    this.eyeContactPercent,
+    this.smilePercent,
     this.aiEvaluationReport = const {},
     required this.createdAt,
     this.completedAt,
@@ -165,6 +194,14 @@ class MockInterviewRecordModel {
   List<String> get tips => _stringList(aiEvaluationReport['tips']);
   Map<String, dynamic> get speech =>
       (aiEvaluationReport['speech'] as Map?)?.cast<String, dynamic>() ?? const {};
+
+  /// {answersWithCamera, eyeContactPercent, smilePercent, totalLookAways, feedback}
+  /// Empty when the camera was never on.
+  Map<String, dynamic> get bodyLanguage =>
+      (aiEvaluationReport['bodyLanguage'] as Map?)?.cast<String, dynamic>() ?? const {};
+
+  /// Answers recorded with the camera on.
+  int get answersWithCamera => answers.where((a) => a.hasBodyLanguage).length;
 
   factory MockInterviewRecordModel.fromJson(Map<String, dynamic> json) {
     final answersJson = json['MockInterviewAnswer'] as List? ?? [];
@@ -184,6 +221,8 @@ class MockInterviewRecordModel {
       overallScore: _toInt(json['overallScore']),
       contentScore: _toInt(json['contentScore']),
       deliveryScore: _toInt(json['deliveryScore']),
+      eyeContactPercent: _toInt(json['eyeContactPercent']),
+      smilePercent: _toInt(json['smilePercent']),
       aiEvaluationReport:
           (json['aiEvaluationReport'] as Map?)?.cast<String, dynamic>() ?? const {},
       createdAt: DateTime.parse(json['createdAt'] as String).toLocal(),

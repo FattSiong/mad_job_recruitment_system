@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/table_constants.dart';
 import '../../../core/utils/data_load_exception.dart';
+import '../../../models/face_metrics.dart';
 import '../../../models/mock_interview_model.dart';
 import '../../../core/utils/session_helper.dart';
 
@@ -97,12 +98,14 @@ class MockInterviewController {
   }
 
   /// Sends one recorded answer (mono AAC .m4a) for transcription + evaluation.
+  /// [faceMetrics] (camera on) are saved as body language feedback only.
   Future<EvaluateAnswerResult> evaluateAnswer({
     required String sessionID,
     required int questionIndex,
     required File audioFile,
     List<double> amplitudeDb = const [],
     int amplitudeIntervalMs = 100,
+    FaceMetrics? faceMetrics,
   }) async {
     final bytes = await audioFile.readAsBytes();
     final data = await _invoke(
@@ -118,6 +121,8 @@ class MockInterviewController {
             'intervalMs': amplitudeIntervalMs,
             'db': amplitudeDb.map((v) => (v * 10).round() / 10).toList(),
           },
+        // Eye contact / smiling estimated on the phone (no video is sent)
+        if (faceMetrics != null) 'face': faceMetrics.toJson(),
       },
       // The introduction also generates the questions, so allow extra time
       timeout: const Duration(seconds: 90),
