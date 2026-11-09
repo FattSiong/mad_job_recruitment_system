@@ -1,7 +1,7 @@
 class ReportedJobModel {
   final String? reportID;
   final String jobID;
-  final String seekerID;
+  final String reporterID; // the job seeker who reported the job
   final String reportCategory;
   final String? additionalDetails;
   final String? status;
@@ -13,7 +13,7 @@ class ReportedJobModel {
   ReportedJobModel({
     this.reportID,
     required this.jobID,
-    required this.seekerID,
+    required this.reporterID,
     required this.reportCategory,
     this.additionalDetails,
     this.status,
@@ -27,7 +27,7 @@ class ReportedJobModel {
     return ReportedJobModel(
       reportID: json['reportID'] as String?,
       jobID: json['jobID'] as String,
-      seekerID: json['seekerID'] as String,
+      reporterID: json['reporterID'] as String,
       reportCategory: json['reportCategory'] as String,
       additionalDetails: json['additionalDetails'] as String?,
       status: json['status'] as String?,
@@ -42,7 +42,7 @@ class ReportedJobModel {
     return {
       if (reportID != null) 'reportID': reportID,
       'jobID': jobID,
-      'seekerID': seekerID,
+      'reporterID': reporterID,
       'reportCategory': reportCategory,
       if (additionalDetails != null) 'additionalDetails': additionalDetails,
       if (status != null) 'status': status,

@@ -27,7 +27,7 @@ class ReportController {
 
       final newReport = ReportedJobModel(
         jobID: jobId,
-        seekerID: seekerID,
+        reporterID: seekerID,
         reportCategory: category,
         additionalDetails: (details != null && details.trim().isNotEmpty) ? details.trim() : null,
       );
@@ -47,7 +47,7 @@ class ReportController {
           .from(TableConstants.reportedJob)
           .select('jobID')
           .eq('jobID', jobId)
-          .eq('seekerID', seekerID)
+          .eq('reporterID', seekerID)
           .or('status.is.null,status.ilike.%pending%')
           .limit(1);
       return (rows as List).isNotEmpty;
