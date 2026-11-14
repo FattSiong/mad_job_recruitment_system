@@ -1085,7 +1085,7 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
                                   ? null
                                   : () async {
                                       final res =
-                                          await FilePicker.platform.pickFiles(
+                                          await FilePicker.pickFiles(
                                         type: FileType.custom,
                                         allowedExtensions: const ['pdf'],
                                       );

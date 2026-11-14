@@ -1417,7 +1417,7 @@ Return ONLY a valid JSON object in this exact format (no markdown fences, no ext
     }
   }
 
-  /// Uploads an Offer Letter PDF into the private `answer_files` bucket under `<seekerId>/offer_...`
+  /// Uploads an Offer Letter PDF into the private `offer_letters` bucket under `<seekerId>/offer_...`
   /// so both the employer and the candidate can open it via signed URLs.
   Future<String?> uploadOfferLetterFile({
     required File file,
@@ -1438,7 +1438,7 @@ Return ONLY a valid JSON object in this exact format (no markdown fences, no ext
       final storagePath =
           '$cleanSeekerId/offer_${cleanApplicantId}_${DateTime.now().millisecondsSinceEpoch}_$sanitizedName';
 
-      await _supabase.storage.from('answer_files').uploadBinary(
+      await _supabase.storage.from('offer_letters').uploadBinary(
             storagePath,
             bytes,
             fileOptions: const FileOptions(
@@ -1447,7 +1447,7 @@ Return ONLY a valid JSON object in this exact format (no markdown fences, no ext
             ),
           );
 
-      return _supabase.storage.from('answer_files').getPublicUrl(storagePath);
+      return _supabase.storage.from('offer_letters').getPublicUrl(storagePath);
     } catch (e) {
       debugPrint('Upload offer letter file error: $e');
       return null;

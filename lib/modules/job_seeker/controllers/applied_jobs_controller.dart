@@ -36,6 +36,7 @@ class AppliedJobsController {
 
         return {
           'application': JobApplicantModel.fromJson(row),
+          'raw': row,
           'job': job,
           'jobStatus': jobStatus,
           'isJobDeleted': isJobDeleted,

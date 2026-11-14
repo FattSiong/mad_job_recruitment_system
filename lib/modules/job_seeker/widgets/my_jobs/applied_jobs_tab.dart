@@ -264,6 +264,7 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
 
   Future<void> _showOfferLetterModal({
     required JobApplicantModel application,
+    required Map<String, dynamic> rawData,
     required String jobTitle,
     required String companyName,
   }) async {
@@ -275,16 +276,21 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
     final isOfferAccepted = statusNorm == 'accepted';
     final isOfferDeclined = statusNorm == 'offer_declined';
 
-    final salary = (application.offerSalary ?? '').trim().isNotEmpty
-        ? application.offerSalary!.trim()
-        : 'As discussed';
-    final startDate = application.offerStartDate != null
-        ? application.offerStartDate!.toIso8601String().split('T').first
-        : 'To be confirmed';
-    final message = (application.offerMessage ?? '').trim().isNotEmpty
-        ? application.offerMessage!.trim()
+    final rawSalary = (rawData['offerSalary'] ?? '').toString().trim();
+    final salary = rawSalary.isNotEmpty ? rawSalary : 'As discussed';
+
+    final rawStart = (rawData['offerStartDate'] ?? '').toString().trim();
+    final parsedStart =
+        rawStart.isNotEmpty ? DateTime.tryParse(rawStart) : null;
+    final startDate = parsedStart != null
+        ? parsedStart.toIso8601String().split('T').first
+        : (rawStart.isNotEmpty ? rawStart : 'To be confirmed');
+
+    final rawMessage = (rawData['offerMessage'] ?? '').toString().trim();
+    final message = rawMessage.isNotEmpty
+        ? rawMessage
         : 'Congratulations! We would like to extend an offer for you to join our team.';
-    final pdfUrl = (application.offerLetterURL ?? '').trim();
+    final pdfUrl = (rawData['offerLetterURL'] ?? '').toString().trim();
 
     bool isSubmitting = false;
     String? errorText;
@@ -731,6 +737,9 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
         itemBuilder: (context, index) {
           final application =
               _appliedJobs[index]['application'] as JobApplicantModel;
+          final rawData =
+              (_appliedJobs[index]['raw'] as Map<String, dynamic>?) ??
+                  const <String, dynamic>{};
           final job = _appliedJobs[index]['job'] as JobModel?;
           final isJobDeleted =
               _appliedJobs[index]['isJobDeleted'] as bool? ?? job == null;
@@ -773,9 +782,9 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
                   : (job?.companyName ?? 'Unknown Company'));
 
           final hasOfferDetails = normStatus == 'offered' ||
-              (application.offerSalary ?? '').trim().isNotEmpty ||
-              (application.offerMessage ?? '').trim().isNotEmpty ||
-              (application.offerLetterURL ?? '').trim().isNotEmpty;
+              (rawData['offerSalary'] ?? '').toString().trim().isNotEmpty ||
+              (rawData['offerMessage'] ?? '').toString().trim().isNotEmpty ||
+              (rawData['offerLetterURL'] ?? '').toString().trim().isNotEmpty;
 
           return Material(
             color: Colors.transparent,
@@ -785,6 +794,7 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
                 if (normStatus == 'offered' && !isJobDeleted) {
                   _showOfferLetterModal(
                     application: application,
+                    rawData: rawData,
                     jobTitle: displayTitle,
                     companyName: job?.companyName ?? 'Company',
                   );
@@ -925,6 +935,7 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
                             ? ElevatedButton.icon(
                                 onPressed: () => _showOfferLetterModal(
                                   application: application,
+                                  rawData: rawData,
                                   jobTitle: displayTitle,
                                   companyName: job?.companyName ?? 'Company',
                                 ),
@@ -949,6 +960,7 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
                             : OutlinedButton.icon(
                                 onPressed: () => _showOfferLetterModal(
                                   application: application,
+                                  rawData: rawData,
                                   jobTitle: displayTitle,
                                   companyName: job?.companyName ?? 'Company',
                                 ),
