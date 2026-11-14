@@ -29,12 +29,14 @@ class _EditJobScreenState extends State<EditJobScreen> {
   final _minSalaryController = TextEditingController();
   final _maxSalaryController = TextEditingController();
   final _experienceController = TextEditingController();
+  final _vacanciesController = TextEditingController();
   final _workingPeriodController = TextEditingController();
 
   final _employerService = EmployerService();
 
   CompanyModel? _jobCompany;
   int _applicantCount = 0;
+  int _acceptedCount = 0;
   bool _isLoadingContext = true;
 
   late String _selectedJobType;
@@ -65,6 +67,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
   String? _minSalaryError;
   String? _maxSalaryError;
   String? _experienceError;
+  String? _vacanciesError;
   String? _workingPeriodError;
 
   static const List<String> _workingPeriodPresets = [
@@ -138,6 +141,16 @@ class _EditJobScreenState extends State<EditJobScreen> {
       _jobCompany = results[0] as CompanyModel?;
       final applicants = results[1] as List<Map<String, dynamic>>;
       _applicantCount = applicants.length;
+      _acceptedCount = applicants
+          .where(
+            (a) =>
+                (a['applicationStatus'] ?? '')
+                    .toString()
+                    .trim()
+                    .toLowerCase() ==
+                'accepted',
+          )
+          .length;
       _isLoadingContext = false;
     });
   }
@@ -148,6 +161,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
     _titleController.text = job.title;
     _descriptionController.text = job.description;
     _experienceController.text = job.minExperienceYears.toString();
+    _vacanciesController.text = job.vacancies.toString();
 
     _workingPeriodController.text =
         (job.workingPeriod != null && job.workingPeriod!.trim().isNotEmpty)
@@ -225,12 +239,14 @@ class _EditJobScreenState extends State<EditJobScreen> {
     if (_titleError != null ||
         _descriptionError != null ||
         _experienceError != null ||
+        _vacanciesError != null ||
         _workingPeriodError != null ||
         _formError != null) {
       setState(() {
         _titleError = null;
         _descriptionError = null;
         _experienceError = null;
+        _vacanciesError = null;
         _workingPeriodError = null;
         _formError = null;
       });
@@ -417,6 +433,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
       _minSalaryError = null;
       _maxSalaryError = null;
       _experienceError = null;
+      _vacanciesError = null;
       _workingPeriodError = null;
     });
 
@@ -427,6 +444,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
     final experienceText = _hasApplicants
         ? widget.job.minExperienceYears.toString()
         : _experienceController.text.trim();
+    final vacanciesText = _vacanciesController.text.trim();
     final workingPeriodText = _workingPeriodController.text.trim();
     final effectiveJobType =
         _hasApplicants ? _originalJobType : _selectedJobType;
@@ -459,6 +477,19 @@ class _EditJobScreenState extends State<EditJobScreen> {
 
     if (experienceText.isNotEmpty && int.tryParse(experienceText) == null) {
       _experienceError = 'Please enter a valid number of years.';
+      hasError = true;
+    }
+
+    final int? parsedVacancies = int.tryParse(vacanciesText);
+    if (vacanciesText.isEmpty || parsedVacancies == null || parsedVacancies < 1) {
+      _vacanciesError = 'Please enter at least 1 candidate to hire.';
+      hasError = true;
+    } else if (parsedVacancies < _acceptedCount) {
+      _vacanciesError =
+          'Cannot set below $_acceptedCount ($_acceptedCount candidate${_acceptedCount == 1 ? ' is' : 's are'} already accepted).';
+      hasError = true;
+    } else if (parsedVacancies > 500) {
+      _vacanciesError = 'Maximum allowed per job posting is 500.';
       hasError = true;
     }
 
@@ -545,6 +576,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
       workplaceType: effectiveWorkplaceType,
       workingPeriod: workingPeriodText,
       qualification: effectiveQualification,
+      vacancies: parsedVacancies ?? widget.job.vacancies,
     );
 
     final success = await _employerService.updateJobPosting(updatedJob);
@@ -575,6 +607,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
     _minSalaryController.dispose();
     _maxSalaryController.dispose();
     _experienceController.dispose();
+    _vacanciesController.dispose();
     _workingPeriodController.dispose();
     super.dispose();
   }
@@ -1099,7 +1132,203 @@ class _EditJobScreenState extends State<EditJobScreen> {
             errorText: _experienceError,
             onChanged: (_) => _clearJobDetailsErrors(),
           ),
+          const SizedBox(height: 16),
+          _buildVacanciesSelector(),
         ],
+      ),
+    );
+  }
+
+  Widget _buildVacanciesSelector() {
+    final minAllowed = _acceptedCount > 1 ? _acceptedCount : 1;
+    final currentVal = int.tryParse(_vacanciesController.text.trim());
+    final canDecrement = currentVal != null && currentVal > minAllowed;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF7F9FC),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: _vacanciesError != null
+                  ? const Color(0xFFC24E4E)
+                  : Colors.transparent,
+            ),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.groups_2_rounded,
+                color: Color(0xFF163B65),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: _vacanciesController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(3),
+                  ],
+                  onChanged: (_) {
+                    _clearJobDetailsErrors();
+                    setState(() {});
+                  },
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1B2433),
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Candidates to Hire (Vacancies)',
+                    labelStyle: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF687588),
+                    ),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(vertical: 4),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              _buildStepperButton(
+                icon: Icons.remove_rounded,
+                enabled: canDecrement,
+                onTap: () {
+                  final next = ((currentVal ?? minAllowed) - 1)
+                      .clamp(minAllowed, 500);
+                  setState(() {
+                    _vacanciesController.text = next.toString();
+                    _vacanciesError = null;
+                    _formError = null;
+                  });
+                },
+              ),
+              const SizedBox(width: 6),
+              _buildStepperButton(
+                icon: Icons.add_rounded,
+                enabled: (currentVal ?? minAllowed) < 500,
+                onTap: () {
+                  final next = ((currentVal ?? (minAllowed - 1)) + 1)
+                      .clamp(minAllowed, 500);
+                  setState(() {
+                    _vacanciesController.text = next.toString();
+                    _vacanciesError = null;
+                    _formError = null;
+                  });
+                },
+              ),
+            ],
+          ),
+        ),
+        if (_vacanciesError != null) ...[
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              _vacanciesError!,
+              style: const TextStyle(
+                color: Color(0xFFC24E4E),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+        if (_acceptedCount > 0) ...[
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.verified_rounded,
+                  size: 15,
+                  color: Color(0xFF2D8A5D),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '$_acceptedCount candidate${_acceptedCount == 1 ? ' is' : 's are'} already accepted (minimum allowed: $minAllowed).',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF2D8A5D),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [1, 2, 3, 5, 10]
+              .where((preset) => preset >= minAllowed)
+              .map((preset) {
+            final isSelected = currentVal == preset;
+            return InkWell(
+              onTap: () {
+                setState(() {
+                  _vacanciesController.text = preset.toString();
+                  _vacanciesError = null;
+                  _formError = null;
+                });
+              },
+              borderRadius: BorderRadius.circular(999),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? const Color(0xFF163B65)
+                      : const Color(0xFFF1F5FA),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '$preset ${preset == 1 ? 'Hire' : 'Hires'}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isSelected ? Colors.white : const Color(0xFF4F5C6C),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStepperButton({
+    required IconData icon,
+    required bool enabled,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: enabled ? Colors.white : const Color(0xFFEDF1F7),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Icon(
+            icon,
+            size: 18,
+            color: enabled ? const Color(0xFF163B65) : const Color(0xFF9AA5B5),
+          ),
+        ),
       ),
     );
   }

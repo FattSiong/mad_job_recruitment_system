@@ -778,15 +778,25 @@ CRITICAL INSTRUCTION: Output ONLY the question/request text itself. Do not use q
       try {
         response = await _supabase
             .from('JobApplicant')
-            .select('*, JobSeeker(*, WorkExperience(*), Education(*))')
+            .select(
+              '*, JobSeeker(*, WorkExperience(*), Education(*)), ApplicationAnswer(answerID, score)',
+            )
             .eq('jobID', jobId)
             .order('appliedAt', ascending: false);
       } catch (_) {
-        response = await _supabase
-            .from('JobApplicant')
-            .select('*, JobSeeker(*)')
-            .eq('jobID', jobId)
-            .order('appliedAt', ascending: false);
+        try {
+          response = await _supabase
+              .from('JobApplicant')
+              .select('*, JobSeeker(*, WorkExperience(*), Education(*))')
+              .eq('jobID', jobId)
+              .order('appliedAt', ascending: false);
+        } catch (_) {
+          response = await _supabase
+              .from('JobApplicant')
+              .select('*, JobSeeker(*)')
+              .eq('jobID', jobId)
+              .order('appliedAt', ascending: false);
+        }
       }
 
       final list = List<Map<String, dynamic>>.from(response);
@@ -817,6 +827,128 @@ CRITICAL INSTRUCTION: Output ONLY the question/request text itself. Do not use q
     } catch (e) {
       print('Fetch applicants error: $e');
       return [];
+    }
+  }
+
+  /// Batch-fetches total applied, pending review, and accepted counts per jobID.
+  /// Returns `jobID -> {'total': int, 'pending': int, 'accepted': int}`.
+  Future<Map<String, Map<String, int>>> getApplicantCountsForJobs(
+    List<String> jobIds,
+  ) async {
+    final cleanIds = jobIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    if (cleanIds.isEmpty) return {};
+
+    try {
+      final rows = await _supabase
+          .from(TableConstants.jobApplicant)
+          .select('jobID, applicationStatus')
+          .inFilter('jobID', cleanIds);
+
+      final Map<String, Map<String, int>> countsByJob = {};
+      for (final raw in (rows as List)) {
+        if (raw is! Map) continue;
+        final jobId = (raw['jobID'] ?? '').toString().trim();
+        if (jobId.isEmpty) continue;
+
+        final status = (raw['applicationStatus'] ?? 'pending')
+            .toString()
+            .trim()
+            .toLowerCase();
+        final entry = countsByJob.putIfAbsent(
+          jobId,
+          () => {'total': 0, 'pending': 0, 'accepted': 0},
+        );
+        entry['total'] = (entry['total'] ?? 0) + 1;
+        if (status == 'pending') {
+          entry['pending'] = (entry['pending'] ?? 0) + 1;
+        } else if (status == 'accepted') {
+          entry['accepted'] = (entry['accepted'] ?? 0) + 1;
+        }
+      }
+      return countsByJob;
+    } catch (e) {
+      debugPrint('Batch fetch applicant counts error: $e');
+      return {};
+    }
+  }
+
+  /// Fetches a single JobModel by jobID.
+  Future<JobModel?> getJobById(String jobId) async {
+    final trimmed = jobId.trim();
+    if (trimmed.isEmpty) return null;
+    try {
+      final row = await _supabase
+          .from(TableConstants.job)
+          .select('*, Company(name)')
+          .eq('jobID', trimmed)
+          .maybeSingle();
+      if (row == null) return null;
+      return JobModel.fromJson(row);
+    } catch (e) {
+      debugPrint('Fetch job by id error: $e');
+      return null;
+    }
+  }
+
+  /// Fetches live hiring quota progress for a job.
+  /// Returns `{'vacancies': int, 'acceptedOtherCount': int, 'acceptedTotalCount': int, 'jobStatus': String}`.
+  Future<Map<String, dynamic>?> getJobHiringProgress(
+    String jobId, {
+    String? excludeApplicantId,
+  }) async {
+    final trimmedJobId = jobId.trim();
+    if (trimmedJobId.isEmpty) return null;
+
+    try {
+      final jobRow = await _supabase
+          .from(TableConstants.job)
+          .select('vacancies, status')
+          .eq('jobID', trimmedJobId)
+          .maybeSingle();
+      if (jobRow == null) return null;
+
+      final rawVacancies = jobRow['vacancies'];
+      final parsedVacancies = rawVacancies is num
+          ? rawVacancies.toInt()
+          : int.tryParse(rawVacancies?.toString() ?? '') ?? 1;
+      final vacancies = parsedVacancies < 1 ? 1 : parsedVacancies;
+      final jobStatus = (jobRow['status'] ?? 'active').toString();
+
+      final applicantRows = await _supabase
+          .from(TableConstants.jobApplicant)
+          .select('applicantID, applicationStatus')
+          .eq('jobID', trimmedJobId);
+
+      int acceptedOtherCount = 0;
+      int acceptedTotalCount = 0;
+      for (final raw in (applicantRows as List)) {
+        if (raw is! Map) continue;
+        final status = (raw['applicationStatus'] ?? '')
+            .toString()
+            .trim()
+            .toLowerCase();
+        if (status == 'accepted') {
+          acceptedTotalCount++;
+          final appId = (raw['applicantID'] ?? '').toString().trim();
+          if (excludeApplicantId == null || appId != excludeApplicantId.trim()) {
+            acceptedOtherCount++;
+          }
+        }
+      }
+
+      return {
+        'vacancies': vacancies,
+        'acceptedOtherCount': acceptedOtherCount,
+        'acceptedTotalCount': acceptedTotalCount,
+        'jobStatus': jobStatus,
+      };
+    } catch (e) {
+      debugPrint('Fetch job hiring progress error: $e');
+      return null;
     }
   }
 
@@ -999,6 +1131,19 @@ Return ONLY a valid JSON object with the exact following keys (no markdown fence
           })
           .eq('applicantID', applicantId);
 
+      if (answers.isNotEmpty) {
+        try {
+          await autoGradeApplicantAnswersWithAI(
+            applicantId: applicantId,
+            job: job,
+            preloadedAnswers: answers,
+            onlyUngraded: true,
+          );
+        } catch (e) {
+          debugPrint('Auto-grade during AI ranking warning: $e');
+        }
+      }
+
       return true;
     } catch (e) {
       print('AI Ranking Error for applicant: $e');
@@ -1044,14 +1189,214 @@ Return ONLY a valid JSON object with the exact following keys (no markdown fence
     try {
       // We JOIN with the PreScreeningQuestion table so we know what question they are answering!
       final response = await _supabase
-          .from('ApplicationAnswer')
+          .from(TableConstants.applicationAnswer)
           .select('*, PreScreeningQuestion(questionText, questionType)')
-          .eq('applicantID', applicantId);
+          .eq('applicantID', applicantId)
+          .order('questionID', ascending: true);
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       print('Fetch answers error: $e');
       return [];
+    }
+  }
+
+  /// Updates an applicant's pre-screening answer mark (`0..5`, or `null` to reset to `?/5`).
+  Future<bool> updateAnswerScore(String answerId, int? score) async {
+    final trimmed = answerId.trim();
+    if (trimmed.isEmpty) return false;
+    if (score != null && (score < 0 || score > 5)) return false;
+
+    try {
+      final updated = await _supabase
+          .from(TableConstants.applicationAnswer)
+          .update({'score': score})
+          .eq('answerID', trimmed)
+          .select('answerID');
+      return (updated as List).isNotEmpty;
+    } catch (e) {
+      debugPrint('Update answer score error: $e');
+      return false;
+    }
+  }
+
+  /// Uses Gemini AI to evaluate an applicant's pre-screening answers (`0..5` marks each)
+  /// against the job requirements and persists the resulting scores to `ApplicationAnswer.score`.
+  /// Returns a map of `answerID -> score (0..5)` for all successfully saved grades.
+  Future<Map<String, int>> autoGradeApplicantAnswersWithAI({
+    required String applicantId,
+    JobModel? job,
+    String? jobId,
+    String? jobTitle,
+    List<Map<String, dynamic>>? preloadedAnswers,
+    bool onlyUngraded = false,
+  }) async {
+    try {
+      final cleanApplicantId = applicantId.trim();
+      if (cleanApplicantId.isEmpty) return {};
+
+      final allAnswers =
+          preloadedAnswers ?? await getApplicantAnswers(cleanApplicantId);
+      final targetAnswers = onlyUngraded
+          ? allAnswers.where((a) => a['score'] == null).toList()
+          : allAnswers;
+      if (targetAnswers.isEmpty) return {};
+
+      JobModel? resolvedJob = job;
+      if (resolvedJob == null && jobId != null && jobId.trim().isNotEmpty) {
+        try {
+          final row = await _supabase
+              .from(TableConstants.job)
+              .select()
+              .eq('jobID', jobId.trim())
+              .maybeSingle();
+          if (row != null) {
+            resolvedJob = JobModel.fromJson(row);
+          }
+        } catch (_) {}
+      }
+
+      const apiKey = 'AIzaSyCPF5BiUdWIoroAWm42IhiUfxDMkQzFJ6U';
+      final model = GenerativeModel(
+        model: 'gemini-3-flash-preview',
+        apiKey: apiKey,
+      );
+
+      final List<Part> attachmentParts = [];
+      final List<String> questionBlocks = [];
+
+      for (int i = 0; i < targetAnswers.length; i++) {
+        final ans = targetAnswers[i];
+        final answerId = (ans['answerID'] ?? '').toString().trim();
+        if (answerId.isEmpty) continue;
+
+        final q = ans['PreScreeningQuestion'] ?? {};
+        final qText = (q['questionText'] ?? 'Question ${i + 1}').toString().trim();
+        final qType = (q['questionType'] ?? 'Text').toString().trim();
+        final aText = (ans['answerText'] ?? '').toString().trim();
+        final fileUrl = (ans['answerFileURL'] ?? '').toString().trim();
+
+        String candidateResponseText;
+        if (qType == 'File') {
+          if (fileUrl.isEmpty) {
+            candidateResponseText = '[No file uploaded]';
+          } else {
+            String extractedFileText = '';
+            try {
+              final resolvedUrl = await StorageUrlHelper.resolve(fileUrl);
+              if (resolvedUrl.startsWith('http')) {
+                final resp = await http
+                    .get(Uri.parse(resolvedUrl))
+                    .timeout(const Duration(seconds: 12));
+                if (resp.statusCode == 200 && resp.bodyBytes.isNotEmpty) {
+                  extractedFileText = _extractPdfTextFallback(resp.bodyBytes);
+                  if (fileUrl.toLowerCase().split('?').first.endsWith('.pdf')) {
+                    attachmentParts.add(
+                      DataPart('application/pdf', resp.bodyBytes),
+                    );
+                  }
+                }
+              }
+            } catch (_) {}
+
+            candidateResponseText = extractedFileText.isNotEmpty
+                ? '[Uploaded file content for answerID $answerId]:\n$extractedFileText'
+                : '[Candidate uploaded a supporting document file]';
+          }
+        } else {
+          candidateResponseText =
+              aText.isNotEmpty ? aText : '[No answer provided]';
+        }
+
+        questionBlocks.add('''
+- answerID: "$answerId"
+  Question Type: $qType
+  Question: $qText
+  Candidate Answer: $candidateResponseText''');
+      }
+
+      if (questionBlocks.isEmpty) return {};
+
+      final String jobContext = resolvedJob != null
+          ? '''
+- Job Title: ${resolvedJob.title}
+- Employment Type: ${resolvedJob.jobType}
+- Work Arrangement: ${resolvedJob.workplaceType}
+- Minimum Qualification: ${resolvedJob.qualification}
+- Minimum Experience Required: ${resolvedJob.minExperienceYears} year(s)
+- Offered Salary Range: ${resolvedJob.salaryRange}
+- Job Description:
+${resolvedJob.description}'''
+          : '- Job Title: ${(jobTitle ?? 'Not specified').trim()}';
+
+      final promptText = '''
+You are an expert AI Technical Recruiter evaluating a candidate's pre-screening question responses for a job application.
+Grade each pre-screening response objectively on an integer scale from 0 to 5 marks.
+
+=== JOB CONTEXT ===
+$jobContext
+
+=== GRADING RUBRIC (0 TO 5 MARKS) ===
+- 5: Excellent — Directly, clearly, and thoroughly answers the question; strongly meets or exceeds the job requirements.
+- 4: Good — Solid, relevant response that meets the job requirements with only minor gaps.
+- 3: Satisfactory / Average — Partially meets requirements or gives a brief/acceptable baseline response.
+- 2: Weak — Vague, incomplete, or noticeably below the job requirements.
+- 1: Poor — Minimal effort, mostly irrelevant, or strong mismatch with the requirement.
+- 0: Unanswered / Empty / Completely non-responsive.
+(Note: For File questions where a valid relevant document was uploaded, award 4 or 5 depending on relevance to the question and job; if no file was uploaded, award 0.)
+
+=== CANDIDATE PRE-SCREENING ANSWERS TO GRADE ===
+${questionBlocks.join('\n\n')}
+
+Return ONLY a valid JSON object in this exact format (no markdown fences, no extra text):
+{
+  "grades": [
+    {
+      "answerID": "<exact answerID string>",
+      "score": <integer from 0 to 5>
+    }
+  ]
+}
+''';
+
+      final List<Part> parts = [TextPart(promptText), ...attachmentParts];
+      final aiResponse = await model.generateContent([Content.multi(parts)]);
+      final rawText = aiResponse.text?.trim() ?? '';
+      if (rawText.isEmpty) return {};
+
+      String cleanedJson = rawText
+          .replaceAll(RegExp(r'^```json\s*', multiLine: true), '')
+          .replaceAll(RegExp(r'^```\s*', multiLine: true), '')
+          .replaceAll(RegExp(r'\s*```$', multiLine: true), '')
+          .trim();
+
+      final startBrace = cleanedJson.indexOf('{');
+      final endBrace = cleanedJson.lastIndexOf('}');
+      if (startBrace != -1 && endBrace != -1 && endBrace > startBrace) {
+        cleanedJson = cleanedJson.substring(startBrace, endBrace + 1);
+      }
+
+      final decoded = jsonDecode(cleanedJson) as Map<String, dynamic>;
+      final rawGrades = decoded['grades'];
+      if (rawGrades is! List) return {};
+
+      final Map<String, int> savedScores = {};
+      for (final item in rawGrades) {
+        if (item is! Map) continue;
+        final ansId = (item['answerID'] ?? '').toString().trim();
+        final rawScore = (item['score'] as num?)?.round();
+        if (ansId.isEmpty || rawScore == null) continue;
+        final int clamped = rawScore.clamp(0, 5);
+        final ok = await updateAnswerScore(ansId, clamped);
+        if (ok) {
+          savedScores[ansId] = clamped;
+        }
+      }
+
+      return savedScores;
+    } catch (e) {
+      debugPrint('AI Auto-Grade pre-screening answers error: $e');
+      return {};
     }
   }
 
@@ -1069,6 +1414,140 @@ Return ONLY a valid JSON object with the exact following keys (no markdown fence
     } catch (e) {
       print('Update status error: $e');
       return false;
+    }
+  }
+
+  /// Uploads an Offer Letter PDF into the private `offer_letters` bucket under `<seekerId>/offer_...`
+  /// so both the employer and the candidate can open it via signed URLs.
+  Future<String?> uploadOfferLetterFile({
+    required File file,
+    required String seekerId,
+    required String applicantId,
+  }) async {
+    try {
+      final cleanSeekerId = seekerId.trim();
+      final cleanApplicantId = applicantId.trim();
+      if (cleanSeekerId.isEmpty || cleanApplicantId.isEmpty) return null;
+
+      final bytes = await file.readAsBytes();
+      final rawName = file.path.split(RegExp(r'[/\\]')).last;
+      final sanitizedName = rawName.replaceAll(
+        RegExp(r'[^a-zA-Z0-9._-]'),
+        '_',
+      );
+      final storagePath =
+          '$cleanSeekerId/offer_${cleanApplicantId}_${DateTime.now().millisecondsSinceEpoch}_$sanitizedName';
+
+      await _supabase.storage.from('offer_letters').uploadBinary(
+            storagePath,
+            bytes,
+            fileOptions: const FileOptions(
+              contentType: 'application/pdf',
+              upsert: true,
+            ),
+          );
+
+      return _supabase.storage.from('offer_letters').getPublicUrl(storagePath);
+    } catch (e) {
+      debugPrint('Upload offer letter file error: $e');
+      return null;
+    }
+  }
+
+  /// Sends an Offer Letter to an interviewed candidate, setting `applicationStatus = 'offered'`
+  /// and storing the offer salary, start date, message, and optional PDF attachment URL.
+  Future<Map<String, dynamic>?> sendOfferLetter({
+    required String applicantId,
+    required String seekerId,
+    required String offerSalary,
+    required DateTime offerStartDate,
+    required String offerMessage,
+    File? offerLetterFile,
+    String? existingOfferLetterUrl,
+  }) async {
+    try {
+      final cleanApplicantId = applicantId.trim();
+      if (cleanApplicantId.isEmpty) return null;
+
+      String? finalOfferUrl = existingOfferLetterUrl?.trim();
+      if (offerLetterFile != null) {
+        final uploadedUrl = await uploadOfferLetterFile(
+          file: offerLetterFile,
+          seekerId: seekerId,
+          applicantId: cleanApplicantId,
+        );
+        if (uploadedUrl == null) {
+          return null;
+        }
+        finalOfferUrl = uploadedUrl;
+      }
+
+      final nowIso = DateTime.now().toIso8601String();
+      final startDateStr = offerStartDate.toIso8601String().split('T').first;
+      final payload = <String, dynamic>{
+        'applicationStatus': 'offered',
+        'offerSalary': offerSalary.trim(),
+        'offerStartDate': startDateStr,
+        'offerMessage': offerMessage.trim(),
+        'offerLetterURL':
+            (finalOfferUrl != null && finalOfferUrl.isNotEmpty)
+                ? finalOfferUrl
+                : null,
+        'offeredAt': nowIso,
+        'offerRespondedAt': null,
+        'offerDeclineReason': null,
+      };
+
+      final updated = await _supabase
+          .from(TableConstants.jobApplicant)
+          .update(payload)
+          .eq('applicantID', cleanApplicantId)
+          .select()
+          .maybeSingle();
+
+      return updated ?? payload;
+    } catch (e) {
+      debugPrint('Send offer letter error: $e');
+      return null;
+    }
+  }
+
+  /// Uses Gemini AI to draft a concise, professional Offer Letter message for the candidate.
+  Future<String?> generateOfferLetterWithAI({
+    required String candidateName,
+    required String jobTitle,
+    required String offerSalary,
+    required DateTime offerStartDate,
+    String? companyName,
+  }) async {
+    try {
+      const apiKey = 'AIzaSyCPF5BiUdWIoroAWm42IhiUfxDMkQzFJ6U';
+      final model = GenerativeModel(
+        model: 'gemini-3-flash-preview',
+        apiKey: apiKey,
+      );
+
+      final startStr = offerStartDate.toIso8601String().split('T').first;
+      final org = (companyName != null && companyName.trim().isNotEmpty)
+          ? companyName.trim()
+          : 'our company';
+
+      final prompt = '''
+Write a professional, warm, and concise job offer letter message (around 100 to 140 words) from $org to candidate "$candidateName" for the position of "$jobTitle".
+Key offer details to include naturally:
+- Offered Compensation: $offerSalary
+- Proposed Start Date: $startStr
+- Next Step: Invite the candidate to review the offer details and click Accept Offer or Decline Offer in the app.
+
+Return ONLY the plain text of the offer letter body (no markdown code blocks, no subject line, no placeholders like [Your Name]). Sign off warmly from the Hiring Team at $org.
+''';
+
+      final response = await model.generateContent([Content.text(prompt)]);
+      final text = response.text?.trim();
+      return (text != null && text.isNotEmpty) ? text : null;
+    } catch (e) {
+      debugPrint('Generate AI offer letter error: $e');
+      return null;
     }
   }
 

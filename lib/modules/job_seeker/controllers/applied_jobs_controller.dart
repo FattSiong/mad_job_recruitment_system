@@ -36,6 +36,7 @@ class AppliedJobsController {
 
         return {
           'application': JobApplicantModel.fromJson(row),
+          'raw': row,
           'job': job,
           'jobStatus': jobStatus,
           'isJobDeleted': isJobDeleted,
@@ -46,6 +47,52 @@ class AppliedJobsController {
       debugPrint('Error fetching applied jobs: $e');
       throw DataLoadException(
         'Unable to load your applications. Please check your connection and try again.',
+      );
+    }
+  }
+
+  /// Accepts (`accept == true`) or declines (`accept == false`) an active job offer (`applicationStatus == 'offered'`).
+  /// Calls the `respond_to_job_offer` RPC in Supabase and notifies listeners on success.
+  Future<String> respondToJobOffer({
+    required String applicantId,
+    required bool accept,
+    String? declineReason,
+  }) async {
+    try {
+      final result = await _supabase.rpc(
+        'respond_to_job_offer',
+        params: {
+          'p_applicant_id': applicantId.trim(),
+          'p_accept': accept,
+          'p_decline_reason':
+              (declineReason != null && declineReason.trim().isNotEmpty)
+                  ? declineReason.trim()
+                  : null,
+        },
+      );
+      notifyChanged();
+      return (result ?? (accept ? 'accepted' : 'offer_declined')).toString();
+    } on PostgrestException catch (e) {
+      final msg = e.message.toLowerCase();
+      if (msg.contains('quota_full')) {
+        throw DataLoadException(
+          'All vacancies for this position have already been filled.',
+        );
+      }
+      if (msg.contains('offer_not_active')) {
+        throw DataLoadException(
+          'This job offer is no longer active.',
+        );
+      }
+      debugPrint('Respond to job offer PostgrestException: ${e.message}');
+      throw DataLoadException(
+        'Could not submit your offer response. Please ensure the offer database migration has been applied.',
+      );
+    } catch (e) {
+      if (e is DataLoadException) rethrow;
+      debugPrint('Respond to job offer error: $e');
+      throw DataLoadException(
+        'Unable to submit your response right now. Please try again.',
       );
     }
   }
