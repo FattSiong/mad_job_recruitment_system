@@ -8,12 +8,19 @@ import '../../../core/theme/app_colors.dart';
 /// My Jobs: Bookmarked / Applied / Interviews tabs.
 /// Each tab lives in widgets/my_jobs/.
 class MyJobsScreen extends StatelessWidget {
-  const MyJobsScreen({super.key});
+  final int initialTabIndex;
+
+  const MyJobsScreen({
+    super.key,
+    this.initialTabIndex = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final canPop = Navigator.of(context).canPop();
     return DefaultTabController(
       length: 3,
+      initialIndex: initialTabIndex.clamp(0, 2),
       child: Scaffold(
         backgroundColor: AppColors.background,
         body: SafeArea(
@@ -39,33 +46,56 @@ class MyJobsScreen extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.14),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.work_outline_rounded,
-                                      size: 16,
-                                      color: Colors.white,
-                                    ),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'My Jobs Workspace',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w600,
+                              Row(
+                                children: [
+                                  if (canPop) ...[
+                                    Material(
+                                      color: Colors.white.withValues(alpha: 0.16),
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(12),
+                                        onTap: () => Navigator.of(context).pop(),
+                                        child: const Padding(
+                                          padding: EdgeInsets.all(8),
+                                          child: Icon(
+                                            Icons.arrow_back_rounded,
+                                            size: 18,
+                                            color: Colors.white,
+                                          ),
+                                        ),
                                       ),
                                     ),
+                                    const SizedBox(width: 10),
                                   ],
-                                ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.14),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.work_outline_rounded,
+                                          size: 16,
+                                          color: Colors.white,
+                                        ),
+                                        SizedBox(width: 8),
+                                        Text(
+                                          'My Jobs Workspace',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ),
                               const SizedBox(height: 20),
                               const Text(
