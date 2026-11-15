@@ -238,9 +238,7 @@ class PostListController extends ChangeNotifier {
     _replace(post.copyWith(isLiked: liked, likeCount: post.likeCount + (liked ? 1 : -1)));
     try {
       if (liked) {
-        await _supabase
-            .from(TableConstants.postLike)
-            .insert({'postID': post.postID, 'userID': currentUserID});
+        await _insertOnce(TableConstants.postLike, post.postID);
       } else {
         await _supabase
             .from(TableConstants.postLike)
@@ -272,9 +270,7 @@ class PostListController extends ChangeNotifier {
 
     try {
       if (saved) {
-        await _supabase
-            .from(TableConstants.postSaved)
-            .insert({'postID': post.postID, 'userID': currentUserID});
+        await _insertOnce(TableConstants.postSaved, post.postID);
       } else {
         await _supabase
             .from(TableConstants.postSaved)
@@ -293,6 +289,16 @@ class PostListController extends ChangeNotifier {
       return 'Unable to update saved posts. Please try again.';
     } finally {
       _saveBusy.remove(post.postID);
+    }
+  }
+
+  /// Adds the user's like / save. One that already exists (e.g. made on
+  /// another phone) counts as done instead of showing an error.
+  Future<void> _insertOnce(String table, String postID) async {
+    try {
+      await _supabase.from(table).insert({'postID': postID, 'userID': currentUserID});
+    } on PostgrestException catch (e) {
+      if (e.code != '23505') rethrow; // 23505 = already there
     }
   }
 

@@ -120,7 +120,7 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
 
           final status = application.applicationStatus;
           final appliedDate =
-              application.appliedAt?.toIso8601String().substring(0, 10) ??
+              application.appliedAt?.toLocal().toIso8601String().substring(0, 10) ??
                   'Unknown date';
 
           final showUnavailableNotice = isJobDeleted || isJobInactive;

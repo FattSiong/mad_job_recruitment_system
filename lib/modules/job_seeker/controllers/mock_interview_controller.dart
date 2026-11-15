@@ -43,8 +43,22 @@ class MockInterviewController {
   String get _currentSeekerID => SessionHelper.requireUserId();
 
   static const String _functionName = 'mock-interview';
-  static const String _unavailable =
+
+  /// Shown when the AI interviewer can't be reached or replies unexpectedly.
+  static const String unavailableMessage =
       'The AI interviewer is currently unavailable. Please try again later.';
+
+  /// Reads the function's reply. A reply in an unexpected shape counts as
+  /// "unavailable", so screens only ever get a [MockInterviewException]
+  /// (a stray TypeError would leave their buttons disabled).
+  static T _read<T>(T Function() parse) {
+    try {
+      return parse();
+    } catch (e) {
+      debugPrint('mock-interview: unexpected reply: $e');
+      throw MockInterviewException('ai_unavailable', unavailableMessage);
+    }
+  }
 
   /// Calls the Edge Function and turns every failure into a [MockInterviewException].
   Future<Map<String, dynamic>> _invoke(
@@ -65,7 +79,7 @@ class MockInterviewController {
         );
       }
       debugPrint('mock-interview FunctionException: ${e.status} ${e.details}');
-      throw MockInterviewException('ai_unavailable', _unavailable);
+      throw MockInterviewException('ai_unavailable', unavailableMessage);
     } on TimeoutException {
       throw MockInterviewException(
         'timeout',
@@ -73,7 +87,7 @@ class MockInterviewController {
       );
     } catch (e) {
       debugPrint('mock-interview error: $e');
-      throw MockInterviewException('ai_unavailable', _unavailable);
+      throw MockInterviewException('ai_unavailable', unavailableMessage);
     }
   }
 
@@ -91,10 +105,10 @@ class MockInterviewController {
       'questionCount': questionCount,
       'consent': consent,
     });
-    return StartInterviewResult(
-      data['sessionId'] as String,
-      InterviewQuestion.listFromJson(data['questions']),
-    );
+    return _read(() => StartInterviewResult(
+          data['sessionId'] as String,
+          InterviewQuestion.listFromJson(data['questions']),
+        ));
   }
 
   /// Sends one recorded answer (mono AAC .m4a) for transcription + evaluation.
@@ -107,7 +121,7 @@ class MockInterviewController {
     int amplitudeIntervalMs = 100,
     FaceMetrics? faceMetrics,
   }) async {
-    final bytes = await audioFile.readAsBytes();
+    final bytes = await _readRecording(audioFile);
     final data = await _invoke(
       {
         'action': 'evaluate-answer',
@@ -128,12 +142,24 @@ class MockInterviewController {
       timeout: const Duration(seconds: 90),
     );
 
-    return EvaluateAnswerResult(
-      MockInterviewAnswerModel.fromJson(data['answer'] as Map<String, dynamic>),
-      data['questions'] == null
-          ? null
-          : InterviewQuestion.listFromJson(data['questions']),
-    );
+    return _read(() => EvaluateAnswerResult(
+          MockInterviewAnswerModel.fromJson(data['answer'] as Map<String, dynamic>),
+          data['questions'] == null
+              ? null
+              : InterviewQuestion.listFromJson(data['questions']),
+        ));
+  }
+
+  static Future<List<int>> _readRecording(File file) async {
+    try {
+      return await file.readAsBytes();
+    } catch (e) {
+      debugPrint('mock-interview: recording could not be read: $e');
+      throw MockInterviewException(
+        'recording_unreadable',
+        'Your recording could not be read. Please record your answer again.',
+      );
+    }
   }
 
   /// Ends the interview and generates the overall scorecard.
@@ -142,13 +168,14 @@ class MockInterviewController {
       {'action': 'finish', 'sessionId': sessionID},
       timeout: const Duration(seconds: 60),
     );
-    final record = data['record'] as Map<String, dynamic>;
+    final basic = _read(
+      () => MockInterviewRecordModel.fromJson(data['record'] as Map<String, dynamic>),
+    );
     // Load again with the answers attached (fall back to the basic record)
     try {
-      return await fetchInterview(record['sessionID'] as String) ??
-          MockInterviewRecordModel.fromJson(record);
+      return await fetchInterview(basic.sessionID) ?? basic;
     } on DataLoadException {
-      return MockInterviewRecordModel.fromJson(record);
+      return basic;
     }
   }
 

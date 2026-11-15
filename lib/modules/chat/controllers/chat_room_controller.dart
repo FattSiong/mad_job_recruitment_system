@@ -222,7 +222,7 @@ class ChatRoomController extends ChangeNotifier {
 
     return _withUpload(() async {
       final url = await _upload(file, fileName);
-      await _insert(_newMessage(
+      await _insertWithFile(_newMessage(
         content: fileName,
         mediaType: isImage ? 'image' : 'file',
         mediaURL: url,
@@ -234,7 +234,7 @@ class ChatRoomController extends ChangeNotifier {
   Future<String?> sendVoice(File file, int seconds) {
     return _withUpload(() async {
       final url = await _upload(file, 'voice_${DateTime.now().millisecondsSinceEpoch}.m4a');
-      await _insert(_newMessage(
+      await _insertWithFile(_newMessage(
         // The "(12s)" part is read by older app versions to show the length.
         content: 'Voice Message (${seconds}s)',
         mediaType: 'audio',
@@ -269,6 +269,17 @@ class ChatRoomController extends ChangeNotifier {
 
   Future<void> _insert(MessageModel message) async {
     await _supabase.from(TableConstants.message).insert(message.toJson());
+  }
+
+  /// Saves a message whose file is already uploaded. If that fails, the file
+  /// is removed again, so no unused upload is left in storage.
+  Future<void> _insertWithFile(MessageModel message) async {
+    try {
+      await _insert(message);
+    } catch (_) {
+      await _deleteAttachmentFile(message.mediaURL);
+      rethrow;
+    }
   }
 
   MessageModel _newMessage({

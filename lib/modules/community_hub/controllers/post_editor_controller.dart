@@ -115,7 +115,7 @@ class PostEditorController extends ChangeNotifier {
       if (_newFile != null) mediaURL = uploadedURL = await _upload(_newFile!);
 
       if (isEditing) {
-        await _supabase
+        final changed = await _supabase
             .from(TableConstants.communityPost)
             .update({
               'content': _content.trim(),
@@ -123,7 +123,13 @@ class PostEditorController extends ChangeNotifier {
               'category': _topic.value,
             })
             .eq('postID', original!.postID)
-            .eq('authorID', currentUserID);
+            .eq('authorID', currentUserID)
+            .select('postID');
+        if (changed.isEmpty) {
+          // Deleted or removed meanwhile: keep its old file, drop the new upload
+          await StorageUrlHelper.removeOwnFile(uploadedURL, bucket: bucket, userId: currentUserID);
+          return 'This post can no longer be edited. It may have been deleted or removed.';
+        }
       } else {
         await _supabase.from(TableConstants.communityPost).insert({
           'authorID': currentUserID,

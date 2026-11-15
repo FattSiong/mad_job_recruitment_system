@@ -29,6 +29,7 @@ class ResumeBuilderController extends ChangeNotifier {
   bool _isLoading = true;
   bool _isSaving = false;
   bool _hasUnsavedChanges = false;
+  int _changeCount = 0; // goes up on every edit
   bool _prefilledFromProfile = false;
   String? _error;
   bool _disposed = false;
@@ -102,6 +103,7 @@ class ResumeBuilderController extends ChangeNotifier {
   /// Saves the resume copy. Returns false (and keeps the changes) on failure.
   Future<bool> save() async {
     if (!_hasUnsavedChanges) return true;
+    final savedChange = _changeCount;
     _isSaving = true;
     _notify();
     try {
@@ -109,7 +111,8 @@ class ResumeBuilderController extends ChangeNotifier {
         'seekerID': SessionHelper.requireUserId(),
         'content': _resume.toJson(),
       });
-      _hasUnsavedChanges = false;
+      // Edits made while this was saving still need saving
+      if (_changeCount == savedChange) _hasUnsavedChanges = false;
       return true;
     } catch (e) {
       debugPrint('Error saving resume: $e');
@@ -123,6 +126,7 @@ class ResumeBuilderController extends ChangeNotifier {
   void _update(ResumeModel next) {
     _resume = next;
     _hasUnsavedChanges = true;
+    _changeCount++;
     _notify();
   }
 

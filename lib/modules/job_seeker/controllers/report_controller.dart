@@ -37,6 +37,11 @@ class ReportController {
       );
       await _supabase.from(TableConstants.reportedJob).insert(newReport.toJson());
       return JobReportResult.submitted;
+    } on PostgrestException catch (e) {
+      // 23505: the same report was just sent (double tap, or another phone)
+      if (e.code == '23505') return JobReportResult.alreadyReported;
+      debugPrint('Error submitting report: ${e.code} ${e.message}');
+      return JobReportResult.failed;
     } catch (e) {
       debugPrint('Error submitting report: $e');
       return JobReportResult.failed;

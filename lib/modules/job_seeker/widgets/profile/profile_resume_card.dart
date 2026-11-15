@@ -14,15 +14,21 @@ class ProfileResumeCard extends StatelessWidget {
   final bool isUploading;
   final VoidCallback onUpload;
 
+  /// Called when Build Resume or the AI Resume Assistant closes
+  /// (Build Resume can set a new profile resume).
+  final VoidCallback? onReturn;
+
   const ProfileResumeCard({
     super.key,
     required this.resumeURL,
     required this.isUploading,
     required this.onUpload,
+    this.onReturn,
   });
 
-  void _open(BuildContext context, Widget screen) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+  Future<void> _open(BuildContext context, Widget screen) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+    onReturn?.call();
   }
 
   @override

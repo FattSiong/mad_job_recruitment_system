@@ -133,7 +133,7 @@ class MyProfileController extends ChangeNotifier {
       ]);
       _profile = results[0] as JobSeekerModel;
       _skills = results[1] as List<SkillModel>;
-      _newPhoto = null;
+      // (a photo picked in edit mode but not saved yet is kept)
     } on DataLoadException catch (e) {
       _loadError = e.message;
     } finally {
@@ -222,6 +222,10 @@ class MyProfileController extends ChangeNotifier {
       );
 
       if (!await _profiles.updateProfileBasics(updated)) {
+        // Not saved: the photo just uploaded isn't used (Save uploads it again)
+        if (pictureUrl != null && pictureUrl != oldPictureUrl) {
+          _profiles.deleteProfilePictureFile(pictureUrl);
+        }
         return 'Failed to update profile.';
       }
 

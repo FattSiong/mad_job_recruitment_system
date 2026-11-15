@@ -231,11 +231,18 @@ class ProfileController {
   // The screen decides what message to show (MVC: no UI code in controllers).
   // ---------------------------------------------------------------------
 
+  /// Saves the fields of the profile form. The resume link and email are not
+  /// in the form, so they are left out: a profile loaded before a new resume
+  /// was set (e.g. from Build Resume) must not put the old link back.
   Future<bool> updateProfileBasics(JobSeekerModel updatedModel) async {
     try {
+      final data = updatedModel.toJson()
+        ..remove('seekerID')
+        ..remove('resumeURL')
+        ..remove('email');
       await _supabase
           .from(TableConstants.jobSeeker)
-          .update(updatedModel.toJson())
+          .update(data)
           .eq('seekerID', updatedModel.seekerID);
       return true;
     } catch (e) {
