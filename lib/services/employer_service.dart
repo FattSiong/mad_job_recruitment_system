@@ -2337,4 +2337,50 @@ Return ONLY a valid JSON object matching this exact structure:
       return null;
     }
   }
+
+  /// Fetches a single applicant's full record together with its parent Job metadata
+  /// so notification taps can open [ApplicantDetailScreen] directly.
+  Future<Map<String, dynamic>?> getApplicantDetailBundle(
+    String applicantId,
+  ) async {
+    final trimmed = applicantId.trim();
+    if (trimmed.isEmpty) return null;
+
+    try {
+      Map<String, dynamic>? row;
+      try {
+        row = await _supabase
+            .from('JobApplicant')
+            .select(
+              '*, JobSeeker(*, WorkExperience(*), Education(*)), ApplicationAnswer(answerID, score), Job(jobID, title, status, vacancies)',
+            )
+            .eq('applicantID', trimmed)
+            .maybeSingle();
+      } catch (_) {
+        row = await _supabase
+            .from('JobApplicant')
+            .select('*, JobSeeker(*), Job(jobID, title, status, vacancies)')
+            .eq('applicantID', trimmed)
+            .maybeSingle();
+      }
+      if (row == null) return null;
+
+      final jobMap = (row['Job'] as Map<String, dynamic>?) ?? {};
+      final rawVac = jobMap['vacancies'];
+      final vacancies = rawVac is num
+          ? rawVac.toInt()
+          : int.tryParse(rawVac?.toString() ?? '') ?? 1;
+
+      return {
+        'applicantData': row,
+        'jobId': (jobMap['jobID'] ?? row['jobID'] ?? '').toString(),
+        'jobTitle': (jobMap['title'] ?? 'Job Posting').toString(),
+        'jobStatus': (jobMap['status'] ?? 'active').toString(),
+        'jobVacancies': vacancies < 1 ? 1 : vacancies,
+      };
+    } catch (e) {
+      debugPrint('Fetch applicant detail bundle error: $e');
+      return null;
+    }
+  }
 }

@@ -25,6 +25,20 @@ Future<void> firebaseBackgroundMessageHandler(RemoteMessage message) async {
     await CallNotifications.showIncomingCall(message.data);
   } else if (type == 'call_cancel') {
     await CallNotifications.cancel(message.data['callID']?.toString());
+  } else if (type == 'recruitment_event' && message.notification == null) {
+    final title =
+        (message.data['title'] ?? 'Recruitment Update').toString();
+    final body = (message.data['body'] ?? '').toString();
+    if (body.isNotEmpty) {
+      await PushService.showRecruitmentLocalNotification(
+        notificationId:
+            (message.data['notificationID'] ?? message.messageId ?? '')
+                .toString(),
+        title: title,
+        body: body,
+        payloadData: message.data,
+      );
+    }
   }
 }
 
@@ -45,6 +59,17 @@ class PushService {
     description: 'New messages from employers and job seekers',
     importance: Importance.high,
   );
+
+  /// Android notification channel for recruitment pipeline events.
+  static const AndroidNotificationChannel recruitmentChannel =
+      AndroidNotificationChannel(
+    'recruitment_updates',
+    'Recruitment Updates',
+    description: 'Application, interview, and offer letter updates',
+    importance: Importance.high,
+  );
+
+  static final Set<String> _shownRecruitmentIds = <String>{};
 
   /// Set by ChatRoomScreen so we don't notify about the chat you're reading.
   static String? activeChatRoomID;
@@ -67,22 +92,27 @@ class PushService {
     FirebaseMessaging.onBackgroundMessage(firebaseBackgroundMessageHandler);
 
     await CallNotifications.ensureInitialized(onTap: _handleNotificationTap);
-    await CallNotifications.plugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(chatChannel);
+    final androidPlugin = CallNotifications.plugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+    await androidPlugin?.createNotificationChannel(chatChannel);
+    await androidPlugin?.createNotificationChannel(recruitmentChannel);
 
     final messaging = FirebaseMessaging.instance;
     await messaging.requestPermission();
 
     FirebaseMessaging.onMessage.listen(_handleWhileOpen);
-    FirebaseMessaging.onMessageOpenedApp.listen((m) => _openChat(m.data));
+    FirebaseMessaging.onMessageOpenedApp.listen(_handlePushOpenedApp);
     messaging.onTokenRefresh.listen(_register);
 
-    // App started by tapping a chat push (shown by Android).
+    // App started by tapping a push notification (shown by Android).
     final initial = await messaging.getInitialMessage();
     if (initial != null) {
       // Give the login check (AuthGate) time to open the dashboard first.
-      Future.delayed(const Duration(seconds: 3), () => _openChat(initial.data));
+      Future.delayed(
+        const Duration(seconds: 3),
+        () => _handlePushOpenedApp(initial),
+      );
     }
 
     // App started from the ringing notification (tap, Answer, or full screen).
@@ -195,10 +225,81 @@ class PushService {
           ),
           payload: jsonEncode(data),
         );
+        return;
+      case 'recruitment_event':
+        final notification = message.notification;
+        final title =
+            (data['title'] ?? notification?.title ?? 'Recruitment Update')
+                .toString();
+        final body = (data['body'] ?? notification?.body ?? '').toString();
+        if (body.isEmpty) return;
+        await showRecruitmentLocalNotification(
+          notificationId:
+              (data['notificationID'] ?? message.messageId ?? '').toString(),
+          title: title,
+          body: body,
+          payloadData: data,
+        );
+        return;
     }
   }
 
-  /// Tap on one of our local notifications (chat while open, or a call).
+  /// Displays a local Android banner for a recruitment event (used by both
+  /// foreground FCM pushes and the real-time Notification table listener,
+  /// deduplicating by [notificationId]).
+  static Future<void> showRecruitmentLocalNotification({
+    required String notificationId,
+    required String title,
+    required String body,
+    required Map<String, dynamic> payloadData,
+  }) async {
+    final cleanId = notificationId.trim();
+    if (cleanId.isNotEmpty) {
+      if (_shownRecruitmentIds.contains(cleanId)) return;
+      _shownRecruitmentIds.add(cleanId);
+    }
+
+    try {
+      await CallNotifications.ensureInitialized(onTap: _handleNotificationTap);
+      await CallNotifications.plugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(recruitmentChannel);
+
+      await CallNotifications.plugin.show(
+        (cleanId.isNotEmpty ? cleanId : DateTime.now().toIso8601String())
+            .hashCode,
+        title,
+        body,
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            recruitmentChannel.id,
+            recruitmentChannel.name,
+            channelDescription: recruitmentChannel.description,
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+        ),
+        payload: jsonEncode({
+          'type': 'recruitment_event',
+          ...payloadData,
+        }),
+      );
+    } catch (e) {
+      debugPrint('PushService: local recruitment banner error: $e');
+    }
+  }
+
+  static void _handlePushOpenedApp(RemoteMessage message) {
+    final data = message.data;
+    if (data['type'] == 'recruitment_event') {
+      NotificationService.openRecruitmentNotificationFromPayload(data);
+    } else {
+      _openChat(data);
+    }
+  }
+
+  /// Tap on one of our local notifications (chat while open, recruitment update, or a call).
   static void _handleNotificationTap(NotificationResponse response, {bool launchedApp = false}) {
     final payload = response.payload;
     if (payload == null || payload.isEmpty) return;
@@ -222,6 +323,15 @@ class PushService {
         delay: launchedApp ? const Duration(seconds: 3) : Duration.zero,
         autoAccept: response.actionId == CallNotifications.answerActionId,
       );
+    } else if (data['type'] == 'recruitment_event') {
+      if (launchedApp) {
+        Future.delayed(
+          const Duration(seconds: 3),
+          () => NotificationService.openRecruitmentNotificationFromPayload(data),
+        );
+      } else {
+        NotificationService.openRecruitmentNotificationFromPayload(data);
+      }
     } else {
       _openChat(data);
     }

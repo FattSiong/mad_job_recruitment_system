@@ -7,6 +7,7 @@ import '../../../core/utils/data_load_exception.dart';
 import '../../../core/utils/session_helper.dart';
 import '../../../models/job_model.dart';
 import '../../../shared_widgets/login_screen.dart';
+import '../../../shared_widgets/notification_bell_button.dart';
 import '../../chat/screens/chat_inbox_screen.dart';
 import '../../community_hub/screens/community_hub_screen.dart';
 import '../controllers/applied_jobs_controller.dart';
@@ -490,6 +491,10 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
                 ),
               ),
               const Spacer(),
+              NotificationBellButton(
+                onReturned: () => AppliedJobsController.notifyChanged(),
+              ),
+              const SizedBox(width: 10),
               _buildHeaderIconButton(
                 icon: Icons.qr_code_scanner,
                 tooltip: 'Scan QR',
