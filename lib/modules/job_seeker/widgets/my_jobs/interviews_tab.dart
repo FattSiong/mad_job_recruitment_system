@@ -242,12 +242,17 @@ class _InterviewsTabState extends State<InterviewsTab> {
         return StatefulBuilder(
           builder: (dialogContext, setDialogState) {
             Future<void> pickPreferredDate() async {
+              final now = DateTime.now();
+              final today = DateTime(now.year, now.month, now.day);
+              final lastDate = today.add(const Duration(days: 365));
+              DateTime initial =
+                  preferredDate ?? today.add(const Duration(days: 1));
+              if (initial.isBefore(today)) initial = today;
               final picked = await showDatePicker(
                 context: dialogContext,
-                initialDate:
-                    preferredDate ?? DateTime.now().add(const Duration(days: 1)),
-                firstDate: DateTime.now(),
-                lastDate: DateTime.now().add(const Duration(days: 365)),
+                initialDate: initial,
+                firstDate: today,
+                lastDate: lastDate,
               );
               if (picked != null) {
                 setDialogState(() {
@@ -572,14 +577,30 @@ class _InterviewsTabState extends State<InterviewsTab> {
                                       'Please select your preferred date, start time, and end time.';
                                   hasError = true;
                                 } else {
+                                  final now = DateTime.now();
+                                  final startDateTime = DateTime(
+                                    preferredDate!.year,
+                                    preferredDate!.month,
+                                    preferredDate!.day,
+                                    preferredStart!.hour,
+                                    preferredStart!.minute,
+                                  );
                                   final startMinutes =
                                       preferredStart!.hour * 60 +
                                           preferredStart!.minute;
                                   final endMinutes = preferredEnd!.hour * 60 +
                                       preferredEnd!.minute;
-                                  if (endMinutes <= startMinutes) {
+                                  if (!startDateTime.isAfter(now)) {
+                                    timeError =
+                                        'Preferred start time has already passed for today. Please choose a future time or date.';
+                                    hasError = true;
+                                  } else if (endMinutes <= startMinutes) {
                                     timeError =
                                         'End time must be after start time.';
+                                    hasError = true;
+                                  } else if (endMinutes - startMinutes < 15) {
+                                    timeError =
+                                        'Preferred slot must be at least 15 minutes long.';
                                     hasError = true;
                                   }
                                 }

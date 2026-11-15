@@ -11,7 +11,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class StorageUrlHelper {
   StorageUrlHelper._();
 
-  static const Set<String> privateBuckets = {'resumes', 'answer_files', 'chat_attachments'};
+  static const Set<String> privateBuckets = {
+    'resumes',
+    'answer_files',
+    'chat_attachments',
+    'offer_letters',
+  };
 
   static final RegExp _storageUrl = RegExp(
     r'/storage/v1/object/(?:public|sign|authenticated)/([^/]+)/([^?]+)',

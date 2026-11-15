@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:open_filex/open_filex.dart';
@@ -20,12 +21,16 @@ class ApplicantDetailScreen extends StatefulWidget {
   final Map<String, dynamic> applicantData;
   final String jobTitle;
   final String jobStatus;
+  final String? jobId;
+  final int? jobVacancies;
 
   const ApplicantDetailScreen({
     super.key,
     required this.applicantData,
     required this.jobTitle,
     required this.jobStatus,
+    this.jobId,
+    this.jobVacancies,
   });
 
   @override
@@ -41,6 +46,8 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
 
   List<Map<String, dynamic>> _answers = [];
   bool _isLoadingAnswers = true;
+  bool _isAutoGradingAnswers = false;
+  final Set<String> _savingAnswerIds = <String>{};
   bool _isUpdating = false;
   bool _isDownloadingFile = false;
 
@@ -50,6 +57,21 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
   String? _scheduleRejectionReason;
   String? _schedulePreferredTime;
   PostInterviewReportModel? _postInterviewReport;
+  late String _effectiveJobStatus;
+  int _vacancies = 1;
+  int _acceptedOtherCount = 0;
+  String? _offerSalary;
+  DateTime? _offerStartDate;
+  String? _offerMessage;
+  String? _offerLetterUrl;
+  String? _offerDeclineReason;
+
+  String get _resolvedJobId =>
+      (widget.jobId ?? widget.applicantData['jobID'] ?? '').toString().trim();
+
+  int get _currentAcceptedTotal =>
+      _acceptedOtherCount +
+      (_currentStatus.toLowerCase() == 'accepted' ? 1 : 0);
 
   bool get _isJobDeleted => widget.jobStatus.toLowerCase() == 'deleted';
 
@@ -57,10 +79,23 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
   void initState() {
     super.initState();
     _currentStatus = widget.applicantData['applicationStatus'] ?? 'pending';
+    _offerSalary = widget.applicantData['offerSalary']?.toString();
+    _offerStartDate = widget.applicantData['offerStartDate'] != null
+        ? DateTime.tryParse(widget.applicantData['offerStartDate'].toString())
+        : null;
+    _offerMessage = widget.applicantData['offerMessage']?.toString();
+    _offerLetterUrl = widget.applicantData['offerLetterURL']?.toString();
+    _offerDeclineReason =
+        widget.applicantData['offerDeclineReason']?.toString();
     _loadAnswers();
     _checkIfScheduled();
     _loadSkills();
+    _effectiveJobStatus = widget.jobStatus;
+    _vacancies = (widget.jobVacancies != null && widget.jobVacancies! >= 1)
+        ? widget.jobVacancies!
+        : 1;
     _loadPostInterviewReport();
+    _loadHiringProgress();
   }
 
   Future<void> _loadSkills() async {
@@ -109,6 +144,103 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
         _isLoadingAnswers = false;
       });
     }
+  }
+
+  Future<void> _setAnswerScore(int index, int? tappedScore) async {
+    if (_isJobDeleted ||
+        _isAutoGradingAnswers ||
+        index < 0 ||
+        index >= _answers.length) {
+      return;
+    }
+    final ans = _answers[index];
+    final answerId = (ans['answerID'] ?? '').toString().trim();
+    if (answerId.isEmpty || _savingAnswerIds.contains(answerId)) return;
+
+    final int? currentScore = (ans['score'] as num?)?.toInt();
+    final int? nextScore =
+        (tappedScore == null || currentScore == tappedScore) ? null : tappedScore;
+    if (currentScore == nextScore) return;
+
+    setState(() {
+      _answers[index] = Map<String, dynamic>.from(ans)..['score'] = nextScore;
+      _savingAnswerIds.add(answerId);
+    });
+
+    final ok = await _employerService.updateAnswerScore(answerId, nextScore);
+    if (!mounted) return;
+
+    setState(() {
+      _savingAnswerIds.remove(answerId);
+      if (!ok && index < _answers.length) {
+        _answers[index] = Map<String, dynamic>.from(_answers[index])
+          ..['score'] = currentScore;
+      }
+    });
+
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Failed to save pre-screening mark. Please ensure the database score migration has been run.',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _autoGradeAnswersWithAI() async {
+    if (_isJobDeleted || _isAutoGradingAnswers || _answers.isEmpty) return;
+
+    final applicantId =
+        (widget.applicantData['applicantID'] ?? '').toString().trim();
+    if (applicantId.isEmpty) return;
+
+    setState(() => _isAutoGradingAnswers = true);
+
+    final savedScores = await _employerService.autoGradeApplicantAnswersWithAI(
+      applicantId: applicantId,
+      jobId: _resolvedJobId,
+      jobTitle: widget.jobTitle,
+      preloadedAnswers: _answers,
+      onlyUngraded: false,
+    );
+
+    if (!mounted) return;
+
+    if (savedScores.isEmpty) {
+      setState(() => _isAutoGradingAnswers = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'AI could not auto-grade the answers. Please check your connection and ensure the database score migration is applied.',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      for (int i = 0; i < _answers.length; i++) {
+        final ansId = (_answers[i]['answerID'] ?? '').toString().trim();
+        if (savedScores.containsKey(ansId)) {
+          _answers[i] = Map<String, dynamic>.from(_answers[i])
+            ..['score'] = savedScores[ansId];
+        }
+      }
+      _isAutoGradingAnswers = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'AI auto-graded ${savedScores.length} answer${savedScores.length == 1 ? '' : 's'}! You can still tap 0–5 to adjust any mark.',
+        ),
+        backgroundColor: const Color(0xFF2D8A5D),
+      ),
+    );
   }
 
   Future<void> _openChat(String targetUserID, String targetUserName) async {
@@ -229,32 +361,297 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
     }
   }
 
+  Future<void> _loadHiringProgress() async {
+    if (_resolvedJobId.isEmpty) return;
+    final applicantId = (widget.applicantData['applicantID'] ?? '').toString();
+    final progress = await _employerService.getJobHiringProgress(
+      _resolvedJobId,
+      excludeApplicantId: applicantId,
+    );
+    if (!mounted || progress == null) return;
+    setState(() {
+      _vacancies = (progress['vacancies'] as int?) ?? _vacancies;
+      _acceptedOtherCount = (progress['acceptedOtherCount'] as int?) ?? 0;
+      _effectiveJobStatus =
+          (progress['jobStatus'] ?? _effectiveJobStatus).toString();
+    });
+  }
+
+  Future<void> _showQuotaFullDialog(int vacancies) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3DC),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Icon(
+                  Icons.groups_2_rounded,
+                  color: Color(0xFFB7791F),
+                  size: 28,
+                ),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'Hiring Quota Reached',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1B2433),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'All $vacancies ${vacancies == 1 ? 'vacancy' : 'vacancies'} for "${widget.jobTitle}" have already been filled.\n\nTo accept another candidate, increase the vacancy count in Edit Job first.',
+                style: const TextStyle(
+                  fontSize: 14,
+                  height: 1.45,
+                  color: Color(0xFF687588),
+                ),
+              ),
+              const SizedBox(height: 22),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF163B65),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: const Text(
+                    'Got It',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _promptSetJobInactiveDialog({
+    required int acceptedTotal,
+    required int vacancies,
+  }) async {
+    if (!mounted || _resolvedJobId.isEmpty) return;
+
+    final shouldDeactivate = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE5F6ED),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Icon(
+                  Icons.verified_rounded,
+                  color: Color(0xFF2D8A5D),
+                  size: 28,
+                ),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'All Vacancies Filled!',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1B2433),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'You have accepted $acceptedTotal of $vacancies ${vacancies == 1 ? 'candidate' : 'candidates'} for "${widget.jobTitle}".\n\nWould you like to set this job posting to Inactive now so new candidates stop applying?',
+                style: const TextStyle(
+                  fontSize: 14,
+                  height: 1.45,
+                  color: Color(0xFF687588),
+                ),
+              ),
+              const SizedBox(height: 22),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(dialogContext, false),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF687588),
+                        side: const BorderSide(color: Color(0xFFD6DEE8)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: const Text(
+                        'Keep Active',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(dialogContext, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF163B65),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: const Text(
+                        'Set Inactive',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (shouldDeactivate == true && mounted) {
+      final closed = await _employerService.updateJobStatus(
+        _resolvedJobId,
+        'inactive',
+      );
+      if (!mounted) return;
+      if (closed) {
+        setState(() {
+          _effectiveJobStatus = 'inactive';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'All vacancies filled — job posting has been set to INACTIVE.',
+            ),
+            backgroundColor: Color(0xFF163B65),
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _updateStatus(String newStatus) async {
     if (_isJobDeleted) return;
+    if (_currentStatus.toLowerCase() == newStatus.toLowerCase()) return;
 
     setState(() => _isUpdating = true);
 
+    final applicantId = (widget.applicantData['applicantID'] ?? '').toString();
+    final isAccepting = newStatus.toLowerCase() == 'accepted';
+
+    int vacancies = _vacancies;
+    int acceptedOtherCount = _acceptedOtherCount;
+    String liveJobStatus = _effectiveJobStatus;
+
+    if (isAccepting && _resolvedJobId.isNotEmpty) {
+      final progress = await _employerService.getJobHiringProgress(
+        _resolvedJobId,
+        excludeApplicantId: applicantId,
+      );
+      if (progress != null) {
+        vacancies = (progress['vacancies'] as int?) ?? vacancies;
+        acceptedOtherCount =
+            (progress['acceptedOtherCount'] as int?) ?? acceptedOtherCount;
+        liveJobStatus =
+            (progress['jobStatus'] ?? liveJobStatus).toString();
+      }
+
+      if (acceptedOtherCount >= vacancies) {
+        if (mounted) {
+          setState(() {
+            _isUpdating = false;
+            _vacancies = vacancies;
+            _acceptedOtherCount = acceptedOtherCount;
+            _effectiveJobStatus = liveJobStatus;
+          });
+          await _showQuotaFullDialog(vacancies);
+        }
+        return;
+      }
+    }
+
     final success = await _employerService.updateApplicationStatus(
-      widget.applicantData['applicantID'],
+      applicantId,
       newStatus,
     );
 
-    if (mounted) {
-      setState(() {
-        _isUpdating = false;
-        if (success) _currentStatus = newStatus;
-      });
+    if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            success
-                ? 'Status updated to ${newStatus.toUpperCase()}'
-                : 'Failed to update status',
-          ),
-          backgroundColor: success ? Colors.green : Colors.red,
+    setState(() {
+      _isUpdating = false;
+      if (success) {
+        _currentStatus = newStatus;
+        _vacancies = vacancies;
+        _acceptedOtherCount = acceptedOtherCount;
+        _effectiveJobStatus = liveJobStatus;
+      }
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          success
+              ? 'Status updated to ${newStatus.toUpperCase()}'
+              : 'Failed to update status',
         ),
-      );
+        backgroundColor: success ? Colors.green : Colors.red,
+      ),
+    );
+
+    if (success) {
+      if (isAccepting) {
+        final newAcceptedTotal = acceptedOtherCount + 1;
+        if (newAcceptedTotal >= vacancies &&
+            liveJobStatus.toLowerCase() == 'active') {
+          await _promptSetJobInactiveDialog(
+            acceptedTotal: newAcceptedTotal,
+            vacancies: vacancies,
+          );
+        }
+      } else {
+        await _loadHiringProgress();
+      }
     }
   }
 
@@ -266,12 +663,615 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
         return Colors.blue;
       case 'interviewed':
         return Colors.teal;
+      case 'offered':
+        return const Color(0xFF4C6EF5);
       case 'accepted':
         return Colors.green;
+      case 'offer_declined':
+        return const Color(0xFFC77700);
       case 'rejected':
         return Colors.red;
       default:
         return Colors.grey;
+    }
+  }
+
+  String _formatStatusDisplay(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending':
+        return 'UNDER REVIEW (PENDING)';
+      case 'scheduled':
+        return 'INTERVIEW SCHEDULED';
+      case 'interviewed':
+        return 'INTERVIEW COMPLETED';
+      case 'offered':
+        return 'OFFER LETTER SENT';
+      case 'accepted':
+        return 'OFFER ACCEPTED (HIRED)';
+      case 'offer_declined':
+        return 'OFFER DECLINED BY CANDIDATE';
+      case 'rejected':
+        return 'REJECTED';
+      default:
+        return status.toUpperCase();
+    }
+  }
+
+  Future<void> _showSendOfferLetterDialog(Map<String, dynamic> seeker) async {
+    if (_isJobDeleted) return;
+
+    final applicantId =
+        (widget.applicantData['applicantID'] ?? '').toString().trim();
+    final seekerId =
+        (widget.applicantData['seekerID'] ?? '').toString().trim();
+    final candidateName = (seeker['fullName'] ?? 'Candidate').toString().trim();
+
+    if (_resolvedJobId.isNotEmpty) {
+      final progress = await _employerService.getJobHiringProgress(
+        _resolvedJobId,
+        excludeApplicantId: applicantId,
+      );
+      if (progress != null && mounted) {
+        final vacancies = (progress['vacancies'] as int?) ?? _vacancies;
+        final acceptedOtherCount =
+            (progress['acceptedOtherCount'] as int?) ?? _acceptedOtherCount;
+        setState(() {
+          _vacancies = vacancies;
+          _acceptedOtherCount = acceptedOtherCount;
+          _effectiveJobStatus =
+              (progress['jobStatus'] ?? _effectiveJobStatus).toString();
+        });
+        if (acceptedOtherCount >= vacancies) {
+          await _showQuotaFullDialog(vacancies);
+          return;
+        }
+      }
+    }
+
+    if (!mounted) return;
+
+    final salaryController = TextEditingController(
+      text: (_offerSalary != null && _offerSalary!.trim().isNotEmpty)
+          ? _offerSalary!.trim()
+          : 'RM 4,000 / month',
+    );
+    DateTime selectedStartDate =
+        _offerStartDate ?? DateTime.now().add(const Duration(days: 14));
+    final messageController = TextEditingController(
+      text: (_offerMessage != null && _offerMessage!.trim().isNotEmpty)
+          ? _offerMessage!.trim()
+          : 'Dear $candidateName,\n\nWe are pleased to offer you the position of ${widget.jobTitle}. Please review the offered compensation, start date, and attached offer letter details, then click Accept Offer or Decline Offer in the app.\n\nWarm regards,\nHiring Team',
+    );
+
+    File? pickedPdfFile;
+    String? pickedPdfName;
+    String? existingPdfUrl = _offerLetterUrl;
+    String? formError;
+    bool isDraftingAi = false;
+    bool isSendingOffer = false;
+
+    final didSend = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            final startDateLabel =
+                selectedStartDate.toIso8601String().split('T').first;
+
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+              ),
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(sheetContext).size.height * 0.88,
+                ),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                ),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(22, 16, 22, 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 42,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDCE4EE),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Row(
+                        children: [
+                          Container(
+                            width: 46,
+                            height: 46,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFDCEBFB),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: const Icon(
+                              Icons.workspace_premium_rounded,
+                              color: Color(0xFF163B65),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Send Offer Letter',
+                                  style: TextStyle(
+                                    fontSize: 19,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF1B2433),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'To $candidateName • ${widget.jobTitle}',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: Color(0xFF687588),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      const Text(
+                        'Offered Salary / Compensation *',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1B2433),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: salaryController,
+                        decoration: InputDecoration(
+                          hintText: 'e.g. RM 4,200 / month',
+                          prefixIcon: const Icon(
+                            Icons.payments_outlined,
+                            color: Color(0xFF163B65),
+                          ),
+                          filled: true,
+                          fillColor: const Color(0xFFF7F9FC),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFDCE4EE),
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFDCE4EE),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      const Text(
+                        'Proposed Start Date *',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1B2433),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      InkWell(
+                        onTap: isSendingOffer
+                            ? null
+                            : () async {
+                                final now = DateTime.now();
+                                final picked = await showDatePicker(
+                                  context: sheetContext,
+                                  initialDate: selectedStartDate.isBefore(now)
+                                      ? now
+                                      : selectedStartDate,
+                                  firstDate: now,
+                                  lastDate:
+                                      now.add(const Duration(days: 365 * 2)),
+                                );
+                                if (picked != null) {
+                                  setSheetState(() {
+                                    selectedStartDate = picked;
+                                  });
+                                }
+                              },
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 14,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF7F9FC),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFDCE4EE)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.event_available_rounded,
+                                color: Color(0xFF163B65),
+                                size: 20,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  startDateLabel,
+                                  style: const TextStyle(
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF1B2433),
+                                  ),
+                                ),
+                              ),
+                              const Text(
+                                'Change',
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF163B65),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Offer Letter Message / Terms *',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF1B2433),
+                              ),
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: (isDraftingAi || isSendingOffer)
+                                ? null
+                                : () async {
+                                    setSheetState(() => isDraftingAi = true);
+                                    final drafted = await _employerService
+                                        .generateOfferLetterWithAI(
+                                      candidateName: candidateName,
+                                      jobTitle: widget.jobTitle,
+                                      offerSalary: salaryController.text.trim().isEmpty
+                                          ? 'Competitive package'
+                                          : salaryController.text.trim(),
+                                      offerStartDate: selectedStartDate,
+                                    );
+                                    if (drafted != null) {
+                                      messageController.text = drafted;
+                                    }
+                                    setSheetState(() => isDraftingAi = false);
+                                  },
+                            icon: isDraftingAi
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.auto_awesome_rounded,
+                                    size: 16,
+                                  ),
+                            label: Text(
+                              isDraftingAi ? 'Drafting...' : 'AI Draft',
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      TextField(
+                        controller: messageController,
+                        maxLines: 5,
+                        decoration: InputDecoration(
+                          hintText:
+                              'Write your offer terms, benefits, and instructions for the candidate...',
+                          filled: true,
+                          fillColor: const Color(0xFFF7F9FC),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFDCE4EE),
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFDCE4EE),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      const Text(
+                        'Official Offer Letter PDF (Optional)',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1B2433),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF7F9FC),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFDCE4EE)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.picture_as_pdf_rounded,
+                              color: Color(0xFFC24E4E),
+                              size: 22,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                pickedPdfName ??
+                                    ((existingPdfUrl != null &&
+                                            existingPdfUrl!.trim().isNotEmpty)
+                                        ? 'Existing Offer Letter PDF attached'
+                                        : 'No PDF attached (optional)'),
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: (pickedPdfName != null ||
+                                          (existingPdfUrl != null &&
+                                              existingPdfUrl!
+                                                  .trim()
+                                                  .isNotEmpty))
+                                      ? const Color(0xFF1B2433)
+                                      : const Color(0xFF687588),
+                                ),
+                              ),
+                            ),
+                            if (pickedPdfFile != null ||
+                                (existingPdfUrl != null &&
+                                    existingPdfUrl!.trim().isNotEmpty))
+                              IconButton(
+                                onPressed: isSendingOffer
+                                    ? null
+                                    : () {
+                                        setSheetState(() {
+                                          pickedPdfFile = null;
+                                          pickedPdfName = null;
+                                          existingPdfUrl = null;
+                                        });
+                                      },
+                                icon: const Icon(
+                                  Icons.close_rounded,
+                                  size: 18,
+                                  color: Color(0xFF687588),
+                                ),
+                                tooltip: 'Remove PDF',
+                              ),
+                            OutlinedButton.icon(
+                              onPressed: isSendingOffer
+                                  ? null
+                                  : () async {
+                                      final res =
+                                          await FilePicker.pickFiles(
+                                        type: FileType.custom,
+                                        allowedExtensions: const ['pdf'],
+                                      );
+                                      if (res != null &&
+                                          res.files.isNotEmpty &&
+                                          res.files.single.path != null) {
+                                        setSheetState(() {
+                                          pickedPdfFile = File(
+                                            res.files.single.path!,
+                                          );
+                                          pickedPdfName = res.files.single.name;
+                                        });
+                                      }
+                                    },
+                              icon: const Icon(
+                                Icons.upload_file_rounded,
+                                size: 16,
+                              ),
+                              label: Text(
+                                pickedPdfFile != null ? 'Replace' : 'Attach PDF',
+                                style: const TextStyle(fontSize: 12.5),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF163B65),
+                                side: const BorderSide(
+                                  color: Color(0xFF163B65),
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (formError != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          formError!,
+                          style: const TextStyle(
+                            color: Color(0xFFC24E4E),
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: isSendingOffer
+                                  ? null
+                                  : () => Navigator.pop(sheetContext, false),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF687588),
+                                side: const BorderSide(
+                                  color: Color(0xFFDCE4EE),
+                                ),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 15),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                              child: const Text(
+                                'Cancel',
+                                style: TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 2,
+                            child: ElevatedButton.icon(
+                              onPressed: isSendingOffer
+                                  ? null
+                                  : () async {
+                                      final sal = salaryController.text.trim();
+                                      final msg = messageController.text.trim();
+                                      if (sal.isEmpty) {
+                                        setSheetState(() {
+                                          formError =
+                                              'Please enter the offered salary / compensation.';
+                                        });
+                                        return;
+                                      }
+                                      if (msg.isEmpty) {
+                                        setSheetState(() {
+                                          formError =
+                                              'Please enter the offer letter message.';
+                                        });
+                                        return;
+                                      }
+                                      setSheetState(() {
+                                        formError = null;
+                                        isSendingOffer = true;
+                                      });
+
+                                      final result =
+                                          await _employerService.sendOfferLetter(
+                                        applicantId: applicantId,
+                                        seekerId: seekerId,
+                                        offerSalary: sal,
+                                        offerStartDate: selectedStartDate,
+                                        offerMessage: msg,
+                                        offerLetterFile: pickedPdfFile,
+                                        existingOfferLetterUrl: existingPdfUrl,
+                                      );
+
+                                      if (result == null) {
+                                        setSheetState(() {
+                                          isSendingOffer = false;
+                                          formError =
+                                              'Failed to send offer letter. Please ensure the offer database migration has been applied.';
+                                        });
+                                        return;
+                                      }
+
+                                      if (mounted) {
+                                        setState(() {
+                                          _currentStatus = 'offered';
+                                          _offerSalary = sal;
+                                          _offerStartDate = selectedStartDate;
+                                          _offerMessage = msg;
+                                          _offerLetterUrl =
+                                              result['offerLetterURL']
+                                                  ?.toString();
+                                          _offerDeclineReason = null;
+                                        });
+                                      }
+
+                                      if (sheetContext.mounted) {
+                                        Navigator.pop(sheetContext, true);
+                                      }
+                                    },
+                              icon: isSendingOffer
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Icon(Icons.send_rounded, size: 18),
+                              label: Text(
+                                isSendingOffer
+                                    ? 'Sending Offer...'
+                                    : 'Send Offer Letter',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF163B65),
+                                foregroundColor: Colors.white,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 15),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (didSend == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Offer letter sent! Waiting for the candidate to accept or decline.',
+          ),
+          backgroundColor: Color(0xFF2D8A5D),
+        ),
+      );
     }
   }
 
@@ -559,6 +1559,13 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
               const SizedBox(height: 18),
             ],
             _buildSectionCard(
+              title: 'Pre-Screening Answers',
+              subtitle:
+                  'Read and grade each candidate response out of 5 marks (employer-only).',
+              child: _buildAnswersSection(),
+            ),
+            const SizedBox(height: 18),
+            _buildSectionCard(
               title: 'Application Status',
               subtitle:
                   'Track the applicant workflow and manage the next ATS action.',
@@ -570,13 +1577,6 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
                   _buildStatusActions(seeker),
                 ],
               ),
-            ),
-            const SizedBox(height: 18),
-            _buildSectionCard(
-              title: 'Pre-Screening Answers',
-              subtitle:
-                  'Read the candidate responses submitted during the application process.',
-              child: _buildAnswersSection(),
             ),
           ],
         ),
@@ -1042,54 +2042,334 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
     );
   }
 
-  Widget _buildCurrentStatusBanner() {
-    final color = _getStatusColor(_currentStatus);
+  Widget _buildPipelineStepper() {
+    final norm = _currentStatus.toLowerCase();
+    int activeStep = 0;
+    if (norm == 'scheduled') {
+      activeStep = 1;
+    } else if (norm == 'interviewed') {
+      activeStep = 2;
+    } else if (norm == 'offered') {
+      activeStep = 3;
+    } else if (norm == 'accepted' || norm == 'offer_declined') {
+      activeStep = 4;
+    } else if (norm == 'rejected') {
+      activeStep = _hasBeenScheduled ? 2 : 0;
+    }
+
+    const labels = [
+      'Review',
+      'Schedule',
+      'Interview',
+      'Offer',
+      'Decision',
+    ];
+
+    final isTerminalNegative =
+        norm == 'rejected' || norm == 'offer_declined';
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: color.withOpacity(0.4)),
+        color: const Color(0xFFF7F9FC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Row(
         children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.14),
-              borderRadius: BorderRadius.circular(14),
+          for (int i = 0; i < labels.length; i++) ...[
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 24,
+                    height: 24,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: i < activeStep
+                          ? const Color(0xFF2D8A5D)
+                          : (i == activeStep
+                              ? (isTerminalNegative
+                                  ? const Color(0xFFC24E4E)
+                                  : (norm == 'accepted'
+                                      ? const Color(0xFF2D8A5D)
+                                      : const Color(0xFF163B65)))
+                              : const Color(0xFFDCE4EE)),
+                    ),
+                    child: i < activeStep || (i == 4 && norm == 'accepted')
+                        ? const Icon(
+                            Icons.check_rounded,
+                            size: 14,
+                            color: Colors.white,
+                          )
+                        : (i == activeStep && isTerminalNegative)
+                            ? const Icon(
+                                Icons.close_rounded,
+                                size: 14,
+                                color: Colors.white,
+                              )
+                            : Text(
+                                '${i + 1}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  color: i <= activeStep
+                                      ? Colors.white
+                                      : const Color(0xFF687588),
+                                ),
+                              ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    labels[i],
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: i == activeStep
+                          ? FontWeight.w800
+                          : FontWeight.w600,
+                      color: i <= activeStep
+                          ? const Color(0xFF1B2433)
+                          : const Color(0xFF687588),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            child: Icon(
-              _getStatusIcon(_currentStatus),
-              color: color,
+            if (i < labels.length - 1)
+              Container(
+                width: 12,
+                height: 2,
+                color: i < activeStep
+                    ? const Color(0xFF2D8A5D)
+                    : const Color(0xFFDCE4EE),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOfferDetailsSummaryCard() {
+    final hasSalary =
+        _offerSalary != null && _offerSalary!.trim().isNotEmpty;
+    final hasStart = _offerStartDate != null;
+    final hasMsg =
+        _offerMessage != null && _offerMessage!.trim().isNotEmpty;
+    final hasPdf =
+        _offerLetterUrl != null && _offerLetterUrl!.trim().isNotEmpty;
+
+    if (!hasSalary && !hasStart && !hasMsg && !hasPdf) {
+      return const SizedBox.shrink();
+    }
+
+    final startStr = hasStart
+        ? _offerStartDate!.toIso8601String().split('T').first
+        : 'To be confirmed';
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F9FC),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFDCE4EE)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.description_outlined,
+                size: 18,
+                color: Color(0xFF163B65),
+              ),
+              SizedBox(width: 8),
+              Text(
+                'Offer Letter Details',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1B2433),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (hasSalary)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text(
+                'Offered Salary: ${_offerSalary!.trim()}',
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1B2433),
+                ),
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              'Proposed Start Date: $startStr',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF4F5C6C),
+              ),
             ),
           ),
-          const SizedBox(width: 12),
+          if (hasMsg) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE5ECF4)),
+              ),
+              child: Text(
+                _offerMessage!.trim(),
+                style: const TextStyle(
+                  fontSize: 13,
+                  height: 1.45,
+                  color: Color(0xFF4F5C6C),
+                ),
+              ),
+            ),
+          ],
+          if (hasPdf) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _isDownloadingFile
+                    ? null
+                    : () => _downloadAndOpenFile(
+                          _offerLetterUrl!,
+                          'offer_letter.pdf',
+                        ),
+                icon: const Icon(Icons.picture_as_pdf_rounded, size: 18),
+                label: const Text('Open Attached Offer Letter PDF'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF163B65),
+                  side: const BorderSide(color: Color(0xFF163B65)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCurrentStatusBanner() {
+    final color = _getStatusColor(_currentStatus);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildPipelineStepper(),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: color.withOpacity(0.4)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  _getStatusIcon(_currentStatus),
+                  color: color,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Current Status',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF687588),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _formatStatusDisplay(_currentStatus),
+                      style: TextStyle(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w800,
+                        color: color,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHiringProgressBanner(bool isQuotaFullForNewAccept) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: isQuotaFullForNewAccept
+            ? const Color(0xFFFEF3DC)
+            : const Color(0xFFE5F6ED),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isQuotaFullForNewAccept
+                ? Icons.info_outline_rounded
+                : Icons.groups_2_rounded,
+            size: 18,
+            color: isQuotaFullForNewAccept
+                ? const Color(0xFF9A640C)
+                : const Color(0xFF2D8A5D),
+          ),
+          const SizedBox(width: 8),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Current Status',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF687588),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _currentStatus.toUpperCase(),
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: color,
-                  ),
-                ),
-              ],
+            child: Text(
+              isQuotaFullForNewAccept
+                  ? 'Hiring quota full ($_currentAcceptedTotal/$_vacancies hired). Increase vacancies in Edit Job to hire more.'
+                  : 'Hiring Progress: $_currentAcceptedTotal of $_vacancies ${(_vacancies == 1) ? 'vacancy' : 'vacancies'} filled (counted after candidate accepts offer)',
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: isQuotaFullForNewAccept
+                    ? const Color(0xFF9A640C)
+                    : const Color(0xFF2D8A5D),
+              ),
             ),
           ),
         ],
@@ -1174,7 +2454,7 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
         icon: Icons.lock_outline_rounded,
         title: 'Candidate Rejected',
         description:
-        'This application was rejected before interview scheduling and can no longer be changed.',
+            'This application was rejected before interview scheduling and can no longer be changed.',
       );
     }
 
@@ -1238,51 +2518,53 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
       );
     }
 
-    final isPostInterviewStage =
-        normalizedStatus == 'interviewed' ||
-        normalizedStatus == 'accepted' ||
-        (normalizedStatus == 'rejected' && _hasBeenScheduled);
+    final isQuotaFullForNewAccept =
+        normalizedStatus != 'accepted' && _acceptedOtherCount >= _vacancies;
 
-    if (isPostInterviewStage) {
-      final isAccepted = normalizedStatus == 'accepted';
-      final isRejected = normalizedStatus == 'rejected';
-
+    if (normalizedStatus == 'interviewed') {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            isAccepted
-                ? 'Current decision is accepted. You can still change it or reschedule.'
-                : isRejected
-                ? 'Current decision is rejected. You can still change it or reschedule.'
-                : 'Choose the next decision for this interviewed candidate.',
-            style: const TextStyle(
+          _buildHiringProgressBanner(isQuotaFullForNewAccept),
+          const Text(
+            'Interview completed. Send an Offer Letter to invite the candidate to join, or reject the application.',
+            style: TextStyle(
               fontSize: 13,
               color: Color(0xFF687588),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => _showSendOfferLetterDialog(seeker),
+              icon: const Icon(Icons.workspace_premium_rounded),
+              label: const Text(
+                'Send Offer Letter',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF163B65),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => _updateStatus('accepted'),
-                  icon: const Icon(Icons.thumb_up_alt_rounded),
-                  label: const Text('Accept'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isAccepted
-                        ? const Color(0xFF2D8A5D)
-                        : Colors.white,
-                    foregroundColor: isAccepted
-                        ? Colors.white
-                        : const Color(0xFF2D8A5D),
-                    elevation: 0,
-                    side: BorderSide(
-                      color: const Color(0xFF2D8A5D).withOpacity(
-                        isAccepted ? 0 : 0.35,
-                      ),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                child: OutlinedButton.icon(
+                  onPressed: () => _updateStatus('rejected'),
+                  icon: const Icon(Icons.cancel_outlined),
+                  label: const Text('Reject'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFC24E4E),
+                    side: const BorderSide(color: Color(0xFFC24E4E)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
@@ -1291,24 +2573,14 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => _updateStatus('rejected'),
-                  icon: const Icon(Icons.thumb_down_alt_rounded),
-                  label: const Text('Reject'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isRejected
-                        ? const Color(0xFFC24E4E)
-                        : Colors.white,
-                    foregroundColor: isRejected
-                        ? Colors.white
-                        : const Color(0xFFC24E4E),
-                    elevation: 0,
-                    side: BorderSide(
-                      color: const Color(0xFFC24E4E).withOpacity(
-                        isRejected ? 0 : 0.35,
-                      ),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                child: TextButton.icon(
+                  onPressed: () => _showRescheduleConfirmation(seeker),
+                  icon: const Icon(Icons.calendar_today_rounded, size: 18),
+                  label: const Text('Reschedule'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF163B65),
+                    backgroundColor: const Color(0xFFDCEBFB),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
@@ -1317,22 +2589,182 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
               ),
             ],
           ),
+        ],
+      );
+    }
+
+    if (normalizedStatus == 'offered') {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildHiringProgressBanner(isQuotaFullForNewAccept),
+          _buildStateMessageCard(
+            color: const Color(0xFF4C6EF5),
+            icon: Icons.mark_email_unread_rounded,
+            title: 'Waiting for Candidate Offer Decision',
+            description:
+                'Offer letter has been sent. Once the candidate accepts the offer, they will be marked as Hired and counted toward the job vacancy quota.',
+          ),
+          _buildOfferDetailsSummaryCard(),
           const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: TextButton.icon(
-              onPressed: () => _showRescheduleConfirmation(seeker),
-              icon: const Icon(Icons.calendar_today_rounded),
-              label: const Text('Reschedule Interview'),
-              style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF163B65),
-                backgroundColor: const Color(0xFFDCEBFB),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _showSendOfferLetterDialog(seeker),
+                  icon: const Icon(Icons.edit_document, size: 18),
+                  label: const Text('Update Offer'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF163B65),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
                 ),
               ),
-            ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _updateStatus('rejected'),
+                  icon: const Icon(Icons.cancel_outlined, size: 18),
+                  label: const Text('Withdraw Offer'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFC24E4E),
+                    side: const BorderSide(color: Color(0xFFC24E4E)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    if (normalizedStatus == 'accepted') {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildHiringProgressBanner(false),
+          _buildStateMessageCard(
+            color: const Color(0xFF2D8A5D),
+            icon: Icons.verified_rounded,
+            title: 'Candidate Accepted Offer (Hired)',
+            description:
+                'The candidate has officially accepted your offer letter and is counted toward the filled vacancies.',
+          ),
+          _buildOfferDetailsSummaryCard(),
+        ],
+      );
+    }
+
+    if (normalizedStatus == 'offer_declined') {
+      final reason = (_offerDeclineReason ?? '').trim();
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildHiringProgressBanner(isQuotaFullForNewAccept),
+          _buildStateMessageCard(
+            color: const Color(0xFFC77700),
+            icon: Icons.unsubscribe_rounded,
+            title: 'Candidate Declined Offer Letter',
+            description: reason.isNotEmpty
+                ? 'Candidate reason: "$reason"\nYou can send a revised offer or close this application.'
+                : 'The candidate declined the offer letter. This vacancy slot remains open.',
+          ),
+          _buildOfferDetailsSummaryCard(),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _showSendOfferLetterDialog(seeker),
+                  icon: const Icon(Icons.send_rounded, size: 18),
+                  label: const Text('Send Revised Offer'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF163B65),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _updateStatus('rejected'),
+                  icon: const Icon(Icons.cancel_outlined, size: 18),
+                  label: const Text('Mark Rejected'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFC24E4E),
+                    side: const BorderSide(color: Color(0xFFC24E4E)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    if (normalizedStatus == 'rejected' && _hasBeenScheduled) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildHiringProgressBanner(isQuotaFullForNewAccept),
+          _buildStateMessageCard(
+            color: const Color(0xFFC24E4E),
+            icon: Icons.cancel_rounded,
+            title: 'Application Rejected',
+            description:
+                'This candidate was marked as rejected. You can still send an offer letter or reschedule if needed.',
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _showSendOfferLetterDialog(seeker),
+                  icon: const Icon(Icons.workspace_premium_rounded, size: 18),
+                  label: const Text('Send Offer Instead'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF163B65),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextButton.icon(
+                  onPressed: () => _showRescheduleConfirmation(seeker),
+                  icon: const Icon(Icons.calendar_today_rounded, size: 18),
+                  label: const Text('Reschedule'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF163B65),
+                    backgroundColor: const Color(0xFFDCEBFB),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       );
@@ -1375,94 +2807,402 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
       );
     }
 
-    return ListView.separated(
-      padding: EdgeInsets.zero,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: _answers.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 12),
-      itemBuilder: (context, index) {
-        final ans = _answers[index];
-        final question = ans['PreScreeningQuestion'] ?? {};
-        final qText = question['questionText'] ?? 'Unknown Question';
-        final isFile = question['questionType'] == 'File';
-        final answerFileUrl = ans['answerFileURL'];
+    final int totalQuestions = _answers.length;
+    final int maxTotalMarks = totalQuestions * 5;
+    int gradedCount = 0;
+    int earnedTotal = 0;
+    for (final ans in _answers) {
+      final int? s = (ans['score'] as num?)?.toInt();
+      if (s != null) {
+        gradedCount++;
+        earnedTotal += s;
+      }
+    }
 
-        return Container(
-          padding: const EdgeInsets.all(16),
+    Color summaryBadgeBg = const Color(0xFFEFF3F8);
+    Color summaryBadgeFg = const Color(0xFF687588);
+    if (gradedCount > 0 && maxTotalMarks > 0) {
+      final double pct = earnedTotal / maxTotalMarks;
+      if (pct >= 0.7) {
+        summaryBadgeBg = const Color(0xFFE5F6ED);
+        summaryBadgeFg = const Color(0xFF2D8A5D);
+      } else if (pct >= 0.4) {
+        summaryBadgeBg = const Color(0xFFFEF3DC);
+        summaryBadgeFg = const Color(0xFF9A640C);
+      } else {
+        summaryBadgeBg = const Color(0xFFFCE9E9);
+        summaryBadgeFg = const Color(0xFFC24E4E);
+      }
+    }
+
+    final String summaryMainText = gradedCount == 0
+        ? '? / $maxTotalMarks'
+        : '$earnedTotal / $maxTotalMarks';
+    final String summarySubText = gradedCount == 0
+        ? '0 of $totalQuestions reviewed • Tap 0–5 below to grade'
+        : '$gradedCount of $totalQuestions reviewed • Avg ${(earnedTotal / gradedCount).toStringAsFixed(1)}/5';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: const Color(0xFFF7F9FC),
-            borderRadius: BorderRadius.circular(20),
+            color: const Color(0xFFF1F5FA),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFDCE4EE)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    width: 36,
-                    height: 36,
+                    width: 40,
+                    height: 40,
                     decoration: BoxDecoration(
                       color: const Color(0xFFDCEBFB),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(13),
                     ),
                     child: const Icon(
-                      Icons.quiz_outlined,
-                      size: 18,
+                      Icons.fact_check_rounded,
+                      size: 20,
                       color: Color(0xFF163B65),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Total Pre-Screening Marks',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF1B2433),
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          summarySubText,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF687588),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: summaryBadgeBg,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
                     child: Text(
-                      qText,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF1B2433),
-                        height: 1.4,
+                      summaryMainText,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: summaryBadgeFg,
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
-              if (isFile && answerFileUrl != null)
-                OutlinedButton.icon(
-                  onPressed: _isDownloadingFile
-                      ? null
-                      : () => _downloadAndOpenFile(
-                            answerFileUrl,
-                            'applicant_answer_${index + 1}.pdf',
-                          ),
-                  icon: const Icon(Icons.download_rounded),
-                  label: const Text('Download Uploaded File'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF163B65),
-                    side: const BorderSide(color: Color(0xFF163B65)),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 14,
+              if (!_isJobDeleted) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _isAutoGradingAnswers ||
+                            _savingAnswerIds.isNotEmpty
+                        ? null
+                        : _autoGradeAnswersWithAI,
+                    icon: _isAutoGradingAnswers
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.auto_awesome_rounded, size: 17),
+                    label: Text(
+                      _isAutoGradingAnswers
+                          ? 'AI Auto-Grading Answers...'
+                          : (gradedCount == 0
+                              ? 'AI Auto-Grade Answers (0–5)'
+                              : 'Re-Run AI Auto-Grade (0–5)'),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF163B65),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 11,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
-                  ),
-                )
-              else
-                Text(
-                  ans['answerText'] ?? 'No answer provided.',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    height: 1.5,
-                    color: Color(0xFF4F5C6C),
                   ),
                 ),
+              ],
             ],
           ),
-        );
-      },
+        ),
+        const SizedBox(height: 14),
+        ListView.separated(
+          padding: EdgeInsets.zero,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _answers.length,
+          separatorBuilder: (context, index) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            final ans = _answers[index];
+            final question = ans['PreScreeningQuestion'] ?? {};
+            final qText = question['questionText'] ?? 'Unknown Question';
+            final isFile = question['questionType'] == 'File';
+            final answerFileUrl = ans['answerFileURL'];
+            final String answerId = (ans['answerID'] ?? '').toString().trim();
+            final int? score = (ans['score'] as num?)?.toInt();
+            final bool isSaving = _savingAnswerIds.contains(answerId);
+
+            Color scoreBadgeBg = const Color(0xFFEFF3F8);
+            Color scoreBadgeFg = const Color(0xFF687588);
+            if (score != null) {
+              if (score >= 4) {
+                scoreBadgeBg = const Color(0xFFE5F6ED);
+                scoreBadgeFg = const Color(0xFF2D8A5D);
+              } else if (score >= 2) {
+                scoreBadgeBg = const Color(0xFFFEF3DC);
+                scoreBadgeFg = const Color(0xFF9A640C);
+              } else {
+                scoreBadgeBg = const Color(0xFFFCE9E9);
+                scoreBadgeFg = const Color(0xFFC24E4E);
+              }
+            }
+
+            return Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7F9FC),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDCEBFB),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.quiz_outlined,
+                          size: 18,
+                          color: Color(0xFF163B65),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          qText,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1B2433),
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: scoreBadgeBg,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          score == null ? '?/5' : '$score/5',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                            color: scoreBadgeFg,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  if (isFile && answerFileUrl != null)
+                    OutlinedButton.icon(
+                      onPressed: _isDownloadingFile
+                          ? null
+                          : () => _downloadAndOpenFile(
+                                answerFileUrl,
+                                'applicant_answer_${index + 1}.pdf',
+                              ),
+                      icon: const Icon(Icons.download_rounded),
+                      label: const Text('Download Uploaded File'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF163B65),
+                        side: const BorderSide(color: Color(0xFF163B65)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 14,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    )
+                  else
+                    Text(
+                      ans['answerText'] ?? 'No answer provided.',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        height: 1.5,
+                        color: Color(0xFF4F5C6C),
+                      ),
+                    ),
+                  const SizedBox(height: 14),
+                  const Divider(height: 1, color: Color(0xFFE5ECF4)),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.grade_outlined,
+                            size: 16,
+                            color: Color(0xFF687588),
+                          ),
+                          SizedBox(width: 5),
+                          Text(
+                            'Marks:',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF687588),
+                            ),
+                          ),
+                        ],
+                      ),
+                      for (int mark = 0; mark <= 5; mark++)
+                        _buildMarkOptionPill(
+                          mark: mark,
+                          isSelected: score == mark,
+                          isDisabled: _isJobDeleted ||
+                              _isAutoGradingAnswers ||
+                              isSaving ||
+                              answerId.isEmpty,
+                          onTap: () => _setAnswerScore(index, mark),
+                        ),
+                      if (isSaving)
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      else if (score != null &&
+                          !_isJobDeleted &&
+                          !_isAutoGradingAnswers)
+                        InkWell(
+                          onTap: () => _setAnswerScore(index, null),
+                          borderRadius: BorderRadius.circular(999),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 4,
+                            ),
+                            child: Text(
+                              'Reset',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF687588),
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMarkOptionPill({
+    required int mark,
+    required bool isSelected,
+    required bool isDisabled,
+    required VoidCallback onTap,
+  }) {
+    final Color bgColor =
+        isSelected ? const Color(0xFF163B65) : Colors.white;
+    final Color borderColor = isSelected
+        ? const Color(0xFF163B65)
+        : const Color(0xFFDCE4EE);
+    final Color textColor =
+        isSelected ? Colors.white : const Color(0xFF1B2433);
+
+    return Opacity(
+      opacity: isDisabled && !isSelected ? 0.55 : 1.0,
+      child: Material(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(11),
+        child: InkWell(
+          onTap: isDisabled ? null : onTap,
+          borderRadius: BorderRadius.circular(11),
+          child: Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(color: borderColor),
+            ),
+            child: Text(
+              '$mark',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: textColor,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -1666,8 +3406,12 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
         return Icons.event_available_rounded;
       case 'interviewed':
         return Icons.record_voice_over_rounded;
+      case 'offered':
+        return Icons.mark_email_unread_rounded;
       case 'accepted':
         return Icons.verified_rounded;
+      case 'offer_declined':
+        return Icons.unsubscribe_rounded;
       case 'rejected':
         return Icons.cancel_rounded;
       default:

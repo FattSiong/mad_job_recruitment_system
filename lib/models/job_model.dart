@@ -17,6 +17,7 @@ class JobModel {
   final String workplaceType;
   final String? workingPeriod;
   final String qualification;
+  final int vacancies;
 
   JobModel({
     this.jobID,
@@ -37,6 +38,7 @@ class JobModel {
     this.workplaceType = 'On-site',
     this.workingPeriod,
     this.qualification = 'No Minimum',
+    this.vacancies = 1,
   });
 
   bool get isExpired =>
@@ -45,6 +47,8 @@ class JobModel {
   JobModel copyWith({
     String? status,
     DateTime? expiresAt,
+    int? vacancies,
+    String? companyName,
   }) {
     return JobModel(
       jobID: jobID,
@@ -60,11 +64,12 @@ class JobModel {
       jobType: jobType,
       minExperienceYears: minExperienceYears,
       locationName: locationName,
-      companyName: companyName,
+      companyName: companyName ?? this.companyName,
       expiresAt: expiresAt ?? this.expiresAt,
       workplaceType: workplaceType,
       workingPeriod: workingPeriod,
       qualification: qualification,
+      vacancies: vacancies ?? this.vacancies,
     );
   }
 
@@ -83,6 +88,10 @@ class JobModel {
     final rawWorkplaceType = json['workplaceType'] ?? json['workplacetype'];
     final rawWorkingPeriod = json['workingPeriod'] ?? json['workingperiod'];
     final rawQualification = json['qualification'];
+    final rawVacancies = json['vacancies'];
+    final parsedVacancies = rawVacancies is num
+        ? rawVacancies.toInt()
+        : int.tryParse(rawVacancies?.toString() ?? '') ?? 1;
 
     return JobModel(
       jobID: json['jobID'] as String?,
@@ -90,19 +99,26 @@ class JobModel {
       employerID: json['employerID'] as String,
       title: json['title'] as String,
       description: json['description'] as String? ?? '',
-      latitude: json['latitude'] != null ? (json['latitude'] as num).toDouble() : null,
-      longitude: json['longitude'] != null ? (json['longitude'] as num).toDouble() : null,
+      latitude:
+          json['latitude'] != null ? (json['latitude'] as num).toDouble() : null,
+      longitude: json['longitude'] != null
+          ? (json['longitude'] as num).toDouble()
+          : null,
       salaryRange: json['salaryRange'] as String,
       status: json['status'] as String,
-      createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt']) : null,
+      createdAt:
+          json['createdAt'] != null ? DateTime.parse(json['createdAt']) : null,
       jobType: json['jobType'] as String? ?? 'Full-time',
       minExperienceYears: json['minExperienceYears'] as int? ?? 0,
       locationName: json['locationName'] as String?,
       companyName: extractedCompanyName,
-      expiresAt: rawExpiresAt != null ? DateTime.tryParse(rawExpiresAt.toString()) : null,
+      expiresAt: rawExpiresAt != null
+          ? DateTime.tryParse(rawExpiresAt.toString())
+          : null,
       workplaceType: rawWorkplaceType as String? ?? 'On-site',
       workingPeriod: rawWorkingPeriod as String?,
       qualification: rawQualification as String? ?? 'No Minimum',
+      vacancies: parsedVacancies < 1 ? 1 : parsedVacancies,
     );
   }
 
@@ -124,6 +140,7 @@ class JobModel {
       'workplaceType': workplaceType,
       'workingPeriod': workingPeriod,
       'qualification': qualification,
+      'vacancies': vacancies < 1 ? 1 : vacancies,
     }; // Notice we don't send jobID or createdAt; Supabase handles those automatically!
   }
 }
