@@ -92,7 +92,7 @@ class JobMapController extends ChangeNotifier {
     return map;
   }
 
-  /// "12 jobs within 25 km"
+  /// "12 jobs within 10 km"
   String get summary {
     final n = _jobs.length;
     final km = _radiusKm.toInt();

@@ -13,6 +13,7 @@ import '../../community/screens/standard_call_screen.dart';
 import '../chat_formatters.dart';
 import '../controllers/chat_room_controller.dart';
 import '../controllers/voice_recorder_controller.dart';
+import '../../../shared_widgets/confirm_dialog.dart';
 import '../../../shared_widgets/user_avatar.dart';
 import '../widgets/chat_composer.dart';
 import '../widgets/message_bubble.dart';
@@ -209,8 +210,40 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     }
   }
 
+  Future<void> _toggleBlock() async {
+    final name = widget.otherUser.displayName;
+    if (_controller.blockState == ChatBlockState.blockedByMe) {
+      final error = await _controller.unblock();
+      if (!mounted) return;
+      if (error != null) {
+        _showError(error);
+      } else {
+        SnackBarHelper.showSuccess(context, '$name is unblocked.');
+      }
+      return;
+    }
+
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Block $name?',
+      message: 'Neither of you will be able to send messages or call in this chat. '
+          'Old messages stay. You can unblock $name at any time.',
+      confirmLabel: 'Block',
+    );
+    if (!confirmed || !mounted) return;
+    if (_recorder.isRecording) await _recorder.cancel();
+    final error = await _controller.block();
+    if (!mounted) return;
+    if (error != null) {
+      _showError(error);
+    } else {
+      FocusScope.of(context).unfocus();
+      SnackBarHelper.showSuccess(context, '$name is blocked.');
+    }
+  }
+
   Future<void> _startCall() async {
-    if (_isStartingCall) return;
+    if (_isStartingCall || _controller.isBlocked) return;
     setState(() => _isStartingCall = true);
     try {
       final call = await _controller.startCall();
@@ -235,7 +268,12 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       }
     } catch (e) {
       debugPrint('Start call failed: $e');
-      _showError('Unable to start the call. Please try again.');
+      if (e.toString().contains('user_blocked')) {
+        await _controller.refreshBlockState(); // blocked meanwhile
+        _showError(ChatRoomController.blockedMessage);
+      } else {
+        _showError('Unable to start the call. Please try again.');
+      }
     } finally {
       if (mounted) setState(() => _isStartingCall = false);
     }
@@ -282,16 +320,22 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           ],
         ),
         actions: [
-          IconButton(
-            tooltip: 'Voice call',
-            onPressed: _isStartingCall ? null : _startCall,
-            icon: _isStartingCall
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.call_rounded, color: AppColors.teal),
+          ListenableBuilder(
+            listenable: _controller,
+            builder: (context, _) => IconButton(
+              tooltip: _controller.isBlocked ? 'Calls are off in a blocked chat' : 'Voice call',
+              onPressed: _isStartingCall || _controller.isBlocked ? null : _startCall,
+              icon: _isStartingCall
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(
+                      Icons.call_rounded,
+                      color: _controller.isBlocked ? AppColors.textMuted : AppColors.teal,
+                    ),
+            ),
           ),
           IconButton(
             tooltip: 'Shared photos & files',
@@ -301,7 +345,37 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             ),
             icon: const Icon(Icons.perm_media_outlined, color: AppColors.primary),
           ),
-          const SizedBox(width: 4),
+          ListenableBuilder(
+            listenable: _controller,
+            builder: (context, _) {
+              final blockedByMe = _controller.blockState == ChatBlockState.blockedByMe;
+              return PopupMenuButton<String>(
+                tooltip: 'More',
+                enabled: !_controller.isChangingBlock,
+                icon: const Icon(Icons.more_vert_rounded, color: AppColors.textDark),
+                onSelected: (_) => _toggleBlock(),
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: 'block',
+                    child: Row(
+                      children: [
+                        Icon(
+                          blockedByMe ? Icons.lock_open_rounded : Icons.block_rounded,
+                          color: blockedByMe ? AppColors.primary : AppColors.errorRed,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          blockedByMe ? 'Unblock user' : 'Block user',
+                          style: TextStyle(color: blockedByMe ? AppColors.textDark : AppColors.errorRed),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
         ],
       ),
       body: Column(
@@ -314,17 +388,19 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           ),
           ListenableBuilder(
             listenable: Listenable.merge([_controller, _recorder]),
-            builder: (context, _) => ChatComposer(
-              textController: _textController,
-              isUploading: _controller.isUploading,
-              isRecording: _recorder.isRecording,
-              recordingElapsed: _recorder.elapsed,
-              onSend: _sendText,
-              onAttach: _showAttachOptions,
-              onRecordStart: _startRecording,
-              onRecordEnd: _stopRecording,
-              onRecordCancel: _recorder.cancel,
-            ),
+            builder: (context, _) => _controller.isBlocked
+                ? _buildBlockedBar()
+                : ChatComposer(
+                    textController: _textController,
+                    isUploading: _controller.isUploading,
+                    isRecording: _recorder.isRecording,
+                    recordingElapsed: _recorder.elapsed,
+                    onSend: _sendText,
+                    onAttach: _showAttachOptions,
+                    onRecordStart: _startRecording,
+                    onRecordEnd: _stopRecording,
+                    onRecordCancel: _recorder.cancel,
+                  ),
           ),
         ],
       ),
@@ -420,6 +496,59 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           ],
         );
       },
+    );
+  }
+
+  /// Replaces the message box while the chat is blocked.
+  Widget _buildBlockedBar() {
+    final blockedByMe = _controller.blockState == ChatBlockState.blockedByMe;
+    final name = widget.otherUser.displayName;
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.border)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.block_rounded, size: 18, color: AppColors.textMuted),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      blockedByMe
+                          ? 'You blocked $name. You can\'t message or call each other.'
+                          : 'You can\'t reply to this conversation.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: AppColors.textMuted, fontSize: 14, height: 1.35),
+                    ),
+                  ),
+                ],
+              ),
+              if (blockedByMe) ...[
+                const SizedBox(height: 6),
+                TextButton(
+                  onPressed: _controller.isChangingBlock ? null : _toggleBlock,
+                  child: _controller.isChangingBlock
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Unblock', style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 

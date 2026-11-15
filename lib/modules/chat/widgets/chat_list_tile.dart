@@ -11,11 +11,15 @@ class ChatListTile extends StatelessWidget {
   final String currentUserID;
   final VoidCallback onTap;
 
+  /// The current user has blocked this person (shows a "Blocked" tag).
+  final bool isBlocked;
+
   const ChatListTile({
     super.key,
     required this.room,
     required this.currentUserID,
     required this.onTap,
+    this.isBlocked = false,
   });
 
   @override
@@ -65,21 +69,14 @@ class ChatListTile extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceAlt,
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: Text(
-                        room.otherUser.roleLabel,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textMuted,
-                        ),
-                      ),
+                    Row(
+                      children: [
+                        _tag(room.otherUser.roleLabel, AppColors.textMuted),
+                        if (isBlocked) ...[
+                          const SizedBox(width: 6),
+                          _tag('Blocked', AppColors.errorRed),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -124,6 +121,21 @@ class ChatListTile extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _tag(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color == AppColors.textMuted ? AppColors.surfaceAlt : color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color == AppColors.textMuted ? AppColors.border : color.withValues(alpha: 0.3)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color),
       ),
     );
   }

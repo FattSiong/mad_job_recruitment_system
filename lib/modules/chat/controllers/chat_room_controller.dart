@@ -17,8 +17,19 @@ import '../../../services/call_service.dart';
 import '../../../services/push_service.dart';
 import '../../../services/user_directory.dart';
 
+/// Who has blocked whom in this chat.
+enum ChatBlockState {
+  none,
+
+  /// The current user blocked the other person.
+  blockedByMe,
+
+  /// The other person blocked the current user.
+  blockedMe,
+}
+
 /// Data for one conversation: live messages, sending text / files / voice,
-/// read receipts, deleting, shared attachments and starting a call.
+/// read receipts, deleting, shared attachments, blocking and starting a call.
 ///
 /// Push notifications are NOT sent from here: a database trigger calls the
 /// send-push Edge Function (FCM) when a Message row is inserted.
@@ -48,6 +59,8 @@ class ChatRoomController extends ChangeNotifier {
   bool _isLoading = true;
   String? _error;
   bool _isUploading = false;
+  ChatBlockState _blockState = ChatBlockState.none;
+  bool _isChangingBlock = false;
   StreamSubscription<List<MessageModel>>? _subscription;
   Timer? _readDebounce;
   bool _disposed = false;
@@ -55,6 +68,13 @@ class ChatRoomController extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get isUploading => _isUploading;
+
+  /// While either person has blocked the other, nobody can send or call.
+  ChatBlockState get blockState => _blockState;
+  bool get isBlocked => _blockState != ChatBlockState.none;
+  bool get isChangingBlock => _isChangingBlock;
+
+  static const String blockedMessage = 'You can\'t send messages in this chat.';
 
   /// More messages exist before the oldest one shown.
   bool get hasOlder => _hasOlder;
@@ -84,6 +104,7 @@ class ChatRoomController extends ChangeNotifier {
 
   void start() {
     PushService.activeChatRoomID = roomID; // no pop-ups for this chat while open
+    refreshBlockState();
     _subscription?.cancel();
     _isLoading = _messages.isEmpty;
     _error = null;
@@ -195,6 +216,7 @@ class ChatRoomController extends ChangeNotifier {
   Future<String?> sendText(String text) async {
     final content = text.trim();
     if (content.isEmpty) return null;
+    if (isBlocked) return blockedMessage;
     if (content.length > 4000) return 'Messages can be up to 4000 characters.';
 
     final message = _newMessage(content: content, mediaType: 'text');
@@ -208,12 +230,14 @@ class ChatRoomController extends ChangeNotifier {
       debugPrint('Error sending message: $e');
       _pending.removeWhere((m) => m.messageID == message.messageID);
       _notify();
+      if (await _blockedJustNow(e)) return blockedMessage;
       return 'Message not sent. Please check your connection and try again.';
     }
   }
 
   /// Image or document. Returns null on success, otherwise a message to show.
   Future<String?> sendAttachment(File file, String fileName) async {
+    if (isBlocked) return blockedMessage;
     final sizeError = await FilePickerHelper.checkSize(file, maxAttachmentMB);
     if (sizeError != null) return sizeError;
 
@@ -231,7 +255,8 @@ class ChatRoomController extends ChangeNotifier {
   }
 
   /// Voice note recorded by [VoiceRecorderController].
-  Future<String?> sendVoice(File file, int seconds) {
+  Future<String?> sendVoice(File file, int seconds) async {
+    if (isBlocked) return blockedMessage;
     return _withUpload(() async {
       final url = await _upload(file, 'voice_${DateTime.now().millisecondsSinceEpoch}.m4a');
       await _insertWithFile(_newMessage(
@@ -251,6 +276,7 @@ class ChatRoomController extends ChangeNotifier {
       return null;
     } catch (e) {
       debugPrint('Chat upload error: $e');
+      if (await _blockedJustNow(e)) return blockedMessage;
       return failure;
     } finally {
       _isUploading = false;
@@ -390,7 +416,92 @@ class ChatRoomController extends ChangeNotifier {
 
   /// Creates the call row; the server then rings the other phone (FCM)
   /// and the screen opens the call screen.
-  Future<CallModel> startCall() => CallService().initiateCall(currentUserID, otherUser.userID);
+  Future<CallModel> startCall() {
+    if (isBlocked) throw StateError(blockedMessage);
+    return CallService().initiateCall(currentUserID, otherUser.userID);
+  }
+
+  // ---------------------------------------------------------------------
+  // Blocking
+  // ---------------------------------------------------------------------
+
+  /// Asks the server who (if anyone) has blocked whom. On a network error
+  /// the last known state is kept.
+  Future<void> refreshBlockState() async {
+    try {
+      final status = await _supabase.rpc(
+        'chat_block_status',
+        params: {'p_other': otherUser.userID},
+      );
+      _blockState = switch (status?.toString()) {
+        'you_blocked' => ChatBlockState.blockedByMe,
+        'blocked_you' => ChatBlockState.blockedMe,
+        _ => ChatBlockState.none,
+      };
+      _notify();
+    } catch (e) {
+      debugPrint('Error checking block status: $e');
+    }
+  }
+
+  /// A send was refused by the database (42501 = row-level security): the
+  /// other person may have blocked us meanwhile. Re-checks and says so.
+  Future<bool> _blockedJustNow(Object error) async {
+    if (error is! PostgrestException || error.code != '42501') return false;
+    await refreshBlockState();
+    return isBlocked;
+  }
+
+  /// Blocks the other person. Returns null on success, otherwise a message.
+  Future<String?> block() async {
+    if (_isChangingBlock) return null;
+    _isChangingBlock = true;
+    _notify();
+    try {
+      await _supabase.from(TableConstants.userBlock).insert({
+        'blockerID': currentUserID,
+        'blockedID': otherUser.userID,
+      });
+      _blockState = ChatBlockState.blockedByMe;
+      return null;
+    } on PostgrestException catch (e) {
+      if (e.code == '23505') {
+        _blockState = ChatBlockState.blockedByMe; // already blocked
+        return null;
+      }
+      debugPrint('Error blocking user: ${e.code} ${e.message}');
+      return 'Unable to block ${otherUser.displayName}. Please try again.';
+    } catch (e) {
+      debugPrint('Error blocking user: $e');
+      return 'Unable to block ${otherUser.displayName}. Please try again.';
+    } finally {
+      _isChangingBlock = false;
+      _notify();
+    }
+  }
+
+  /// Removes the current user's block. Returns null on success, otherwise a message.
+  Future<String?> unblock() async {
+    if (_isChangingBlock) return null;
+    _isChangingBlock = true;
+    _notify();
+    try {
+      await _supabase
+          .from(TableConstants.userBlock)
+          .delete()
+          .eq('blockerID', currentUserID)
+          .eq('blockedID', otherUser.userID);
+      _blockState = ChatBlockState.none;
+      await refreshBlockState(); // the other person may also have blocked us
+      return null;
+    } catch (e) {
+      debugPrint('Error unblocking user: $e');
+      return 'Unable to unblock ${otherUser.displayName}. Please try again.';
+    } finally {
+      _isChangingBlock = false;
+      _notify();
+    }
+  }
 
   // ---------------------------------------------------------------------
   // Opening a chat from anywhere in the app
