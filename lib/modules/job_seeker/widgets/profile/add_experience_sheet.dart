@@ -247,9 +247,14 @@ Future<WorkExperienceModel?> showAddExperienceSheet(
                   ElevatedButton(
                     onPressed: () {
                       if (formKey.currentState!.validate()) {
+                        // Work already done: neither date can be after today
+                        final now = DateTime.now();
+                        final today = DateTime(now.year, now.month, now.day);
                         setModalState(() {
                           if (startDate == null) {
                             startDateErrorText = 'Required';
+                          } else if (startDate!.isAfter(today)) {
+                            startDateErrorText = 'Can\'t be in the future';
                           } else {
                             startDateErrorText = null;
                           }
@@ -261,6 +266,10 @@ Future<WorkExperienceModel?> showAddExperienceSheet(
                                 endDate != null &&
                                 endDate!.isBefore(startDate!)) {
                               endDateErrorText = 'Invalid end date';
+                            } else if (!isCurrentRole &&
+                                endDate != null &&
+                                endDate!.isAfter(today)) {
+                              endDateErrorText = 'Can\'t be in the future';
                             } else {
                               endDateErrorText = null;
                             }

@@ -54,6 +54,9 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
 
   /// Closes the screen with the keyword and the chosen location.
   void _selectLocation(String location) {
+    // Already closing (e.g. a city was tapped while "Use Current Location"
+    // was still working): popping again would close the screen below too.
+    if (!(ModalRoute.of(context)?.isCurrent ?? false)) return;
     Navigator.pop(context, {
       'keyword': _keywordController.text.trim(),
       'location': location,

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:mad_job_recruitment_system/modules/admin/screens/AdminCommunityScreen.dart';
+import 'package:mad_job_recruitment_system/modules/admin/screens/admin_community_screen.dart';
 import 'package:mad_job_recruitment_system/modules/admin/screens/AdminSubscriptionListScreen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 

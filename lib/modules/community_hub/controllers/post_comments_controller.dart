@@ -58,8 +58,9 @@ class PostCommentsController extends ChangeNotifier {
           .eq('postID', postID)
           .order('createdAt', ascending: true));
 
-      // Comments removed by an admin are hidden.
-      final visible = rows.where((r) => (r['status']?.toString() ?? 'active') != 'deleted').toList();
+      // Comments removed by an admin, or deleted by their author while
+      // reported ('author_deleted', kept for the admin), are hidden.
+      final visible = rows.where((r) => (r['status']?.toString() ?? 'active') == 'active').toList();
       final authors = await UserDirectory.fetch(visible.map((r) => r['userID']?.toString() ?? ''));
 
       final all = visible.map((r) {

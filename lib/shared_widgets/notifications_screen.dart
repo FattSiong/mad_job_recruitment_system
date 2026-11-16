@@ -468,6 +468,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           color: Color(0xFFD97706),
           stageLabel: 'PREMIUM PLAN',
         );
+      case 'community_post_removed':
+      case 'community_comment_removed':
+        return const _NotificationTypeStyle(
+          icon: Icons.gpp_maybe_rounded,
+          color: Color(0xFFB91C1C),
+          stageLabel: 'COMMUNITY GUIDELINES',
+        );
       default:
         return const _NotificationTypeStyle(
           icon: Icons.notifications_active_rounded,
