@@ -1,10 +1,12 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/constants/table_constants.dart';
+import 'login_lockout_service.dart';
 import 'password_recovery_service.dart';
 import 'push_service.dart';
 
 class AuthService {
   final SupabaseClient _supabase = Supabase.instance.client;
+  final LoginLockoutService _lockout = LoginLockoutService();
 
   // 1. Sign Up Function
   Future<void> signUpUser({
@@ -57,10 +59,16 @@ class AuthService {
   }
 
   // 2. Sign In & Fetch Role
+  // 5 wrong passwords in a row lock the email for 15 minutes (NF-SEC-02):
+  // throws LoginLockedException while locked, WrongPasswordException after a
+  // wrong password (with the attempts left).
   Future<String?> signInAndGetRole({
     required String email,
     required String password,
   }) async {
+    final lock = await _lockout.status(email);
+    if (lock.locked) throw LoginLockedException(lock.remaining);
+
     try {
       final AuthResponse response = await _supabase.auth.signInWithPassword(
         email: email,
@@ -70,6 +78,7 @@ class AuthService {
       final String? userId = response.user?.id;
 
       if (userId != null) {
+        await _lockout.clearFailures();
         final userData = await _supabase
             .from(TableConstants.user)
             .select('role')
@@ -80,6 +89,11 @@ class AuthService {
       }
       return null;
     } on AuthException catch (e) {
+      if (LoginLockoutService.isWrongPassword(e)) {
+        final after = await _lockout.recordFailure(email);
+        if (after.locked) throw LoginLockedException(after.remaining);
+        throw WrongPasswordException(after);
+      }
       throw Exception(e.message);
     } catch (e) {
       throw Exception('An unexpected error occurred: $e');
