@@ -62,6 +62,9 @@ class CareerAdvisorController extends ChangeNotifier {
 
   /// Shows a past conversation. Returns an error message, or null.
   Future<String?> openConversation(String conversationID, {String? title}) async {
+    // While a reply is on its way it belongs to the open conversation: switching
+    // now would put that reply (and the next question) in the wrong chat.
+    if (_isSending) return 'Please wait for the advisor to reply first.';
     final request = ++_historyRequest;
     _isLoadingHistory = true;
     _conversationID = conversationID;

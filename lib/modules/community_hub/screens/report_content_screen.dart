@@ -63,7 +63,13 @@ class _ReportContentScreenState extends State<ReportContentScreen> {
       );
       return;
     }
-    SnackBarHelper.showSuccess(context, 'Thanks. Our team will review this $_what.');
+    SnackBarHelper.showSuccess(
+      context,
+      widget.target == ReportTarget.post
+          ? 'Thanks. Our team will review this post. It is now hidden from you.'
+          : 'Thanks. Our team will review this comment.',
+      duration: const Duration(seconds: 3),
+    );
     Navigator.pop(context, true);
   }
 

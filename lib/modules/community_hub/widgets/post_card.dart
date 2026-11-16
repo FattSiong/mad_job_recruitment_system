@@ -9,9 +9,10 @@ import 'community_chips.dart';
 import 'post_media_view.dart';
 
 /// Menu actions on a post.
-enum PostAction { edit, delete, message, report }
+enum PostAction { edit, publish, delete, message, report }
 
 /// One post in a list: author, text, attachment, and like / comment / save.
+/// Drafts (My Posts only) show a "Draft" tag and a Publish button instead.
 class PostCard extends StatefulWidget {
   final FeedPostModel post;
   final String currentUserID;
@@ -100,7 +101,7 @@ class _PostCardState extends State<PostCard> {
             _buildRemovedNotice(),
           ],
           const SizedBox(height: 16),
-          _buildActions(),
+          if (post.isDraft) _buildDraftBar() else _buildActions(),
         ],
       ),
     );
@@ -128,14 +129,21 @@ class _PostCardState extends State<PostCard> {
               const SizedBox(height: 4),
               Row(
                 children: [
-                  _rolePill(post.author.role, post.author.roleLabel),
+                  if (post.isDraft)
+                    _pill('Draft', AppColors.warning)
+                  else
+                    _rolePill(post.author.role, post.author.roleLabel),
                   const SizedBox(width: 8),
-                  Text(
-                    CommunityFormatters.relative(post.createdAt),
-                    style: const TextStyle(
-                      color: AppColors.textMuted,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                  Flexible(
+                    child: Text(
+                      _timeLabel(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
@@ -148,8 +156,16 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
-  Widget _rolePill(String role, String label) {
-    final color = role == 'employer' ? AppColors.teal : AppColors.primary;
+  /// "2h", or "2h · Edited" once a published post was changed.
+  String _timeLabel() {
+    final time = CommunityFormatters.relative(post.createdAt);
+    return post.isEdited ? '$time · Edited' : time;
+  }
+
+  Widget _rolePill(String role, String label) =>
+      _pill(label, role == 'employer' ? AppColors.teal : AppColors.primary);
+
+  Widget _pill(String label, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
@@ -165,10 +181,13 @@ class _PostCardState extends State<PostCard> {
 
   Widget _buildMenu() {
     final items = <PopupMenuEntry<PostAction>>[
+      if (_isMine && post.isDraft)
+        _menuItem(PostAction.publish, Icons.send_rounded, 'Publish now'),
       if (_isMine && !post.isRemoved)
-        _menuItem(PostAction.edit, Icons.edit_outlined, 'Edit post'),
+        _menuItem(PostAction.edit, Icons.edit_outlined, post.isDraft ? 'Edit draft' : 'Edit post'),
       if (_isMine)
-        _menuItem(PostAction.delete, Icons.delete_outline_rounded, 'Delete post', danger: true),
+        _menuItem(PostAction.delete, Icons.delete_outline_rounded,
+            post.isDraft ? 'Delete draft' : 'Delete post', danger: true),
       if (!_isMine && !post.isRemoved)
         _menuItem(PostAction.message, Icons.chat_bubble_outline_rounded, 'Message author'),
       if (!_isMine && !post.isRemoved)
@@ -223,8 +242,34 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
+  /// Instead of like / comment / save on a draft.
+  Widget _buildDraftBar() {
+    return Row(
+      children: [
+        const Icon(Icons.lock_outline_rounded, size: 16, color: AppColors.textMuted),
+        const SizedBox(width: 6),
+        const Expanded(
+          child: Text(
+            'Only you can see this draft.',
+            style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ),
+        FilledButton.icon(
+          onPressed: () => widget.onAction(PostAction.publish),
+          icon: const Icon(Icons.send_rounded, size: 16),
+          label: const Text('Publish'),
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildActions() {
-    final enabled = !post.isRemoved;
+    final enabled = post.isInteractive;
     return Row(
       children: [
         _actionPill(

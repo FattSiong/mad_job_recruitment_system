@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/mock_interview_model.dart';
+import '../../../services/face_cue_analyzer.dart';
 import '../controllers/mock_interview_controller.dart';
 import '../controllers/mock_interview_session_controller.dart';
 import 'mock_interview_result_screen.dart';
@@ -52,7 +53,8 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
   bool get _isLastQuestion => _session.isLastQuestion;
   bool get _isBusy => _session.isBusy;
 
-  // Camera (preview only, never recorded)
+  // Camera: preview, plus eye contact / smile estimated on the phone while
+  // answering (never recorded or uploaded, nothing shown while answering)
   CameraController? _camera;
   bool _cameraOn = false;
   bool _cameraLoading = false;
@@ -96,7 +98,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
       _session.onAppPaused();
       final cam = _camera;
       _camera = null;
-      cam?.dispose();
+      _releaseCamera(cam);
       if (mounted) setState(() {});
     } else if (state == AppLifecycleState.resumed &&
         _cameraOn &&
@@ -117,7 +119,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
         _cameraOn = false;
         _camera = null;
       });
-      await cam?.dispose();
+      await _releaseCamera(cam);
     } else {
       setState(() => _cameraOn = true);
       await _initCamera();
@@ -134,13 +136,19 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
         orElse: () => cameras.first,
       );
       // enableAudio: false -> the microphone stays free for the answer recorder
-      final controller = CameraController(front, ResolutionPreset.medium, enableAudio: false);
+      final controller = CameraController(
+        front,
+        ResolutionPreset.medium,
+        enableAudio: false,
+        imageFormatGroup: FaceCueAnalyzer.imageFormatGroup, // frames ML Kit can read
+      );
       await controller.initialize();
       if (!mounted || !_cameraOn) {
         await controller.dispose();
         return;
       }
       setState(() => _camera = controller);
+      await _session.setCamera(controller);
     } on CameraException catch (e) {
       debugPrint('Camera error: ${e.code} ${e.description}');
       if (!mounted) return;
@@ -153,6 +161,13 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
     } finally {
       if (mounted) setState(() => _cameraLoading = false);
     }
+  }
+
+  /// Stops face checks on [cam] before closing it.
+  Future<void> _releaseCamera(CameraController? cam) async {
+    if (cam == null) return;
+    await _session.setCamera(null);
+    await cam.dispose();
   }
 
   // ---------------------------------------------------------------------
@@ -412,7 +427,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Text(
-                  'Preview only · not recorded',
+                  'Not recorded · analysed on your phone',
                   style: TextStyle(color: Colors.white, fontSize: 12),
                 ),
               ),
@@ -658,6 +673,8 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
                   '${answer.fillerWordCount ?? 0} filler words'),
               _statChip(Icons.pause_circle_outline_rounded,
                   '${answer.hesitationCount ?? 0} hesitations'),
+              if (answer.eyeContactPercent != null)
+                _statChip(Icons.visibility_outlined, '${answer.eyeContactPercent}% eye contact'),
             ],
           ),
           const SizedBox(height: 16),

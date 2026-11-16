@@ -58,11 +58,13 @@ const STOP_WORDS = new Set([
 ]);
 
 export function roleKeywords(role: string): string[] {
+  // Same rules as resume-review: keeps short skill names such as "c#", "c++",
+  // "ui" and "ux" (they were dropped before, so "C# Developer" only searched
+  // "developer"). Characters that break a PostgREST "or" filter (, . ( ) :) are removed.
   const words = role
     .toLowerCase()
-    .replace(/[^a-z0-9+#\s]/g, " ")
-    .split(/\s+/)
-    .map((w) => w.replace(/[^a-z0-9]/g, "")) // PostgREST filter-safe
-    .filter((w) => w.length >= 3 && !STOP_WORDS.has(w));
+    .replace(/[^a-z0-9+#/ ]/g, " ")
+    .split(/[\s/]+/)
+    .filter((w) => w.length >= 2 && !STOP_WORDS.has(w));
   return [...new Set(words)].slice(0, 4);
 }

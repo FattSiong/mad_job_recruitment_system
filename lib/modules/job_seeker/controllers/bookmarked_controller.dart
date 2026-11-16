@@ -80,7 +80,12 @@ class BookmarkedController {
           jobID: jobId,
         );
 
-        await _supabase.from(TableConstants.bookmarkedJob).insert(newBookmark.toJson());
+        try {
+          await _supabase.from(TableConstants.bookmarkedJob).insert(newBookmark.toJson());
+        } on PostgrestException catch (e) {
+          // 23505 = already saved (e.g. from another phone): that's what the user wanted
+          if (e.code != '23505') rethrow;
+        }
         _setBookmarked(jobId, true);
         bookmarkNotifier.value = !bookmarkNotifier.value;
         return true;

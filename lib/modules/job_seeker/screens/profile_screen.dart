@@ -78,10 +78,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _fillForm();
   }
 
-  /// Puts the saved profile into the form (also throws away edits).
+  /// Puts the saved profile into the form. Skipped while editing, so a reload
+  /// (after a resume upload, or back from Experience / Education) never
+  /// throws away what the user is typing.
   void _fillForm() {
     final profile = _myProfile.profile;
-    if (mounted && profile != null) _fields.fill(profile);
+    if (mounted && profile != null && !_myProfile.isEditing) _fields.fill(profile);
   }
 
   String get _firstName {
@@ -96,6 +98,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /// Work experience / education screens; the profile reloads afterwards.
   Future<void> _openRecords(Widget screen) async {
     await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+    if (mounted) _loadProfile();
+  }
+
+  /// Build Resume can set a new profile resume, so reload when it closes.
+  void _onResumeToolClosed() {
     if (mounted) _loadProfile();
   }
 
@@ -347,6 +354,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 resumeURL: profile.resumeURL,
                 isUploading: _myProfile.isUploadingResume,
                 onUpload: _pickAndUploadResume,
+                onReturn: _onResumeToolClosed,
               ),
 
               const ProfileSectionHeader('Career Tools'),

@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
+import '../services/login_lockout_service.dart';
 // Import your other screens here once they are built:
 import '../modules/job_seeker/screens/seeker_dashboard.dart';
 import 'forgot_password_screen.dart';
@@ -24,6 +27,7 @@ class _LoginScreenState extends State<LoginScreen> {
   static const Color _textSecondary = Color(0xFF687588);
   static const Color _inputFill = Color(0xFFF7F9FC);
   static const Color _errorText = Color(0xFFB42318);
+  static const Color _errorBg = Color(0xFFFEF3F2);
   static const Color _successBg = Color(0xFFEAF7EE);
   static const Color _successText = Color(0xFF157347);
 
@@ -36,6 +40,41 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _emailError;
   String? _passwordError;
   String? _successMessage;
+
+  // Login lockout (5 wrong passwords -> 15 minutes)
+  DateTime? _lockedUntil;
+  Timer? _lockTimer;
+
+  bool get _isLocked => _lockedUntil != null && _lockedUntil!.isAfter(DateTime.now());
+
+  Duration get _lockLeft =>
+      _isLocked ? _lockedUntil!.difference(DateTime.now()) : Duration.zero;
+
+  void _startLock(Duration remaining) {
+    _lockTimer?.cancel();
+    setState(() {
+      _lockedUntil = DateTime.now().add(remaining);
+      _passwordError = null;
+    });
+    // Ticks the countdown; ends the lock on screen when the time is up
+    _lockTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (!_isLocked) {
+        timer.cancel();
+        _lockedUntil = null;
+      }
+      setState(() {});
+    });
+  }
+
+  void _clearLock() {
+    if (_lockedUntil == null) return;
+    _lockTimer?.cancel();
+    setState(() => _lockedUntil = null);
+  }
 
   void _clearSuccessMessage() {
     if (_successMessage == null) return;
@@ -56,6 +95,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleLogin() async {
+    if (_isLocked) return;
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
@@ -105,6 +145,10 @@ class _LoginScreenState extends State<LoginScreen> {
           passwordError: 'Unknown user role found in database.',
         );
       }
+    } on LoginLockedException catch (e) {
+      if (mounted) _startLock(e.remaining);
+    } on WrongPasswordException catch (e) {
+      _setValidationErrors(passwordError: e.toString());
     } catch (e) {
       _setValidationErrors(
         passwordError: e.toString().replaceAll('Exception: ', ''),
@@ -127,6 +171,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+    _lockTimer?.cancel();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -192,6 +237,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         keyboardType: TextInputType.emailAddress,
                         errorText: _emailError,
                         onChanged: () {
+                          // The lock is for one email: the server checks again on Login
+                          _clearLock();
                           if (_emailError != null || _successMessage != null) {
                             setState(() {
                               _emailError = null;
@@ -247,6 +294,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
+                      if (_isLocked) ...[
+                        _buildLockBanner(),
+                        const SizedBox(height: 16),
+                      ],
                       SizedBox(
                         height: 56,
                         child: DecoratedBox(
@@ -264,7 +315,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ],
                           ),
                           child: ElevatedButton(
-                            onPressed: _isLoading ? null : _handleLogin,
+                            onPressed: _isLoading || _isLocked ? null : _handleLogin,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.transparent,
                               shadowColor: Colors.transparent,
@@ -284,9 +335,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                       ),
                                     ),
                                   )
-                                : const Text(
-                                    'Login',
-                                    style: TextStyle(
+                                : Text(
+                                    _isLocked
+                                        ? 'Try again in ${LoginLockStatus.countdown(_lockLeft)}'
+                                        : 'Login',
+                                    style: const TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
                                       color: Colors.white,
@@ -395,6 +448,39 @@ class _LoginScreenState extends State<LoginScreen> {
           fontSize: 12,
           fontWeight: FontWeight.w600,
         ),
+      ),
+    );
+  }
+
+  /// Shown while the email is locked after too many wrong passwords.
+  Widget _buildLockBanner() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _errorBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _errorText.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.lock_clock_outlined, color: _errorText, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Too many failed attempts. For your security, login for this '
+              'account is locked for ${LoginLockoutService.lockMinutes} minutes '
+              '(${LoginLockStatus.countdown(_lockLeft)} left). '
+              'Forgot your password? You can reset it above.',
+              style: const TextStyle(
+                color: _errorText,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

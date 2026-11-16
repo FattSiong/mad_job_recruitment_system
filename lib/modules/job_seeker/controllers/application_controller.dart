@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/table_constants.dart';
 import '../../../core/utils/data_load_exception.dart';
+import '../../../core/utils/file_picker_helper.dart';
 import '../../../models/pre_screening_question_model.dart';
 import 'applied_jobs_controller.dart';
 import '../../../core/utils/session_helper.dart';
@@ -210,7 +211,8 @@ class ApplicationController extends ChangeNotifier {
     final originalName = file.uri.pathSegments.isNotEmpty
         ? file.uri.pathSegments.last
         : 'file';
-    final path = '$_currentSeekerID/${DateTime.now().millisecondsSinceEpoch}_$originalName';
+    final safeName = FilePickerHelper.storageSafeName(originalName); // Storage rejects some characters
+    final path = '$_currentSeekerID/${DateTime.now().millisecondsSinceEpoch}_$safeName';
 
     await _supabase.storage.from(bucket).upload(path, file);
     // Stored in the same format as before. The bucket is private, so the app opens it

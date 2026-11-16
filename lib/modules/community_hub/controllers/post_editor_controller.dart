@@ -5,10 +5,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/table_constants.dart';
 import '../../../core/utils/file_picker_helper.dart';
+import '../../../core/utils/storage_url_helper.dart';
 import '../../../models/feed_post_model.dart';
 import '../../../models/post_topic.dart';
 
 /// Create a new post, or edit an existing one (topic, text and one PDF/image).
+/// A new post can be saved as a draft (only its author sees it) and published
+/// later; a published post can't go back to being a draft.
 class PostEditorController extends ChangeNotifier {
   final String currentUserID;
 
@@ -26,7 +29,7 @@ class PostEditorController extends ChangeNotifier {
   static const int maxLength = 2000;
   static const int maxAttachmentMB = 10;
   static const List<String> attachmentExtensions = ['pdf', 'jpg', 'jpeg', 'png'];
-  static const String _bucket = 'post_media';
+  static const String bucket = 'post_media';
 
   String _content = '';
   PostTopic _topic = PostTopic.general;
@@ -35,6 +38,12 @@ class PostEditorController extends ChangeNotifier {
   bool _isSaving = false;
 
   bool get isEditing => original != null;
+
+  /// Editing one of the user's drafts.
+  bool get isEditingDraft => original?.isDraft ?? false;
+
+  /// "Save draft" is offered for new posts and drafts.
+  bool get canBeDraft => !isEditing || isEditingDraft;
   bool get isSaving => _isSaving;
   String get content => _content;
   PostTopic get topic => _topic;
@@ -63,11 +72,17 @@ class PostEditorController extends ChangeNotifier {
       _newFile != null ||
       _existingMediaURL != original!.mediaURL;
 
-  bool get canSave =>
-      !_isSaving &&
-      _content.trim().length <= maxLength &&
-      (_content.trim().isNotEmpty || hasAttachment) &&
-      _changed;
+  bool get _valid =>
+      _content.trim().length <= maxLength && (_content.trim().isNotEmpty || hasAttachment);
+
+  /// Post / Save button. A draft can be published even without changes.
+  bool get canSave => !_isSaving && _valid && (_changed || isEditingDraft);
+
+  /// Save draft button.
+  bool get canSaveDraft => !_isSaving && canBeDraft && _valid && _changed;
+
+  /// Something typed that leaving the screen would throw away.
+  bool get hasUnsavedChanges => _valid && _changed;
 
   void setContent(String value) {
     _content = value;
@@ -98,9 +113,11 @@ class PostEditorController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Publishes (or, with [asDraft], saves a draft).
   /// Returns an error message, or null when saved.
-  Future<String?> save() async {
-    if (!canSave) {
+  Future<String?> save({bool asDraft = false}) async {
+    if (asDraft && !canBeDraft) return null;
+    if (asDraft ? !canSaveDraft : !canSave) {
       if (_content.trim().isEmpty && !hasAttachment) return 'Please add some text or an attachment.';
       if (_content.trim().length > maxLength) return 'Posts can be up to $maxLength characters.';
       return null;
@@ -108,20 +125,28 @@ class PostEditorController extends ChangeNotifier {
 
     _isSaving = true;
     notifyListeners();
+    String? uploadedURL;
     try {
       var mediaURL = _existingMediaURL;
-      if (_newFile != null) mediaURL = await _upload(_newFile!);
+      if (_newFile != null) mediaURL = uploadedURL = await _upload(_newFile!);
 
       if (isEditing) {
-        await _supabase
+        final changed = await _supabase
             .from(TableConstants.communityPost)
             .update({
               'content': _content.trim(),
               'mediaURL': mediaURL,
               'category': _topic.value,
+              if (isEditingDraft) 'isDraft': asDraft, // false = publish it now
             })
             .eq('postID', original!.postID)
-            .eq('authorID', currentUserID);
+            .eq('authorID', currentUserID)
+            .select('postID');
+        if (changed.isEmpty) {
+          // Deleted or removed meanwhile: keep its old file, drop the new upload
+          await StorageUrlHelper.removeOwnFile(uploadedURL, bucket: bucket, userId: currentUserID);
+          return 'This post can no longer be edited. It may have been deleted or removed.';
+        }
       } else {
         await _supabase.from(TableConstants.communityPost).insert({
           'authorID': currentUserID,
@@ -129,12 +154,21 @@ class PostEditorController extends ChangeNotifier {
           'mediaURL': mediaURL,
           'category': _topic.value,
           'status': 'active',
+          'isDraft': asDraft,
         });
+      }
+      // The attachment was replaced or removed: its old file is no longer used
+      final oldURL = original?.mediaURL;
+      if (isEditing && oldURL != null && oldURL.isNotEmpty && oldURL != mediaURL) {
+        await StorageUrlHelper.removeOwnFile(oldURL, bucket: bucket, userId: currentUserID);
       }
       return null;
     } catch (e) {
       debugPrint('Save post failed: $e');
-      return isEditing
+      // Not saved: don't leave the file that was just uploaded behind
+      await StorageUrlHelper.removeOwnFile(uploadedURL, bucket: bucket, userId: currentUserID);
+      if (asDraft) return 'Unable to save your draft. Please try again.';
+      return isEditing && !isEditingDraft
           ? 'Unable to save your changes. Please try again.'
           : 'Unable to publish your post. Please try again.';
     } finally {
@@ -146,7 +180,7 @@ class PostEditorController extends ChangeNotifier {
   Future<String> _upload(File file) async {
     final name = file.path.split(Platform.pathSeparator).last.replaceAll(RegExp(r'[^\w.\-]'), '_');
     final path = '$currentUserID/${DateTime.now().millisecondsSinceEpoch}_$name';
-    await _supabase.storage.from(_bucket).upload(path, file);
-    return _supabase.storage.from(_bucket).getPublicUrl(path);
+    await _supabase.storage.from(bucket).upload(path, file);
+    return _supabase.storage.from(bucket).getPublicUrl(path);
   }
 }

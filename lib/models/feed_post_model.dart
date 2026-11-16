@@ -13,6 +13,13 @@ class FeedPostModel {
   final String status; // 'active' or 'deleted' (removed by admin)
   final PostTopic topic;
   final DateTime createdAt;
+
+  /// When a published post's text, attachment or topic last changed
+  /// (null = never edited). Set by the database.
+  final DateTime? editedAt;
+
+  /// Only the author sees a draft (in My Posts) until it is published.
+  final bool isDraft;
   final ChatParticipant author;
 
   final int likeCount;
@@ -29,6 +36,8 @@ class FeedPostModel {
     required this.status,
     this.topic = PostTopic.general,
     required this.createdAt,
+    this.editedAt,
+    this.isDraft = false,
     required this.author,
     required this.likeCount,
     required this.commentCount,
@@ -41,6 +50,11 @@ class FeedPostModel {
 
   /// Removed by an admin: read-only, but the author can still delete it.
   bool get isRemoved => status.trim().toLowerCase() == 'deleted';
+
+  bool get isEdited => editedAt != null && !isDraft;
+
+  /// Can be liked, commented on and saved (published and not removed).
+  bool get isInteractive => !isRemoved && !isDraft;
 
   bool get hasMedia => mediaURL != null && mediaURL!.trim().isNotEmpty;
 
@@ -83,6 +97,8 @@ class FeedPostModel {
       status: status,
       topic: topic,
       createdAt: createdAt,
+      editedAt: editedAt,
+      isDraft: isDraft,
       author: author,
       likeCount: likeCount ?? this.likeCount,
       commentCount: commentCount ?? this.commentCount,
@@ -119,6 +135,8 @@ class FeedPostModel {
       status: json['status']?.toString() ?? 'active',
       topic: PostTopic.fromValue(json['category']?.toString()),
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '')?.toLocal() ?? DateTime.now(),
+      editedAt: DateTime.tryParse(json['editedAt']?.toString() ?? '')?.toLocal(),
+      isDraft: json['isDraft'] == true,
       author: author,
       likeCount: likes.length,
       commentCount: comments.length,

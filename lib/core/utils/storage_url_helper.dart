@@ -29,6 +29,29 @@ class StorageUrlHelper {
     return (bucket: match.group(1)!, path: Uri.decodeComponent(match.group(2)!));
   }
 
+  /// Path of the file [url] points to when it is in [bucket] and inside
+  /// [userId]'s own folder ("<userId>/..."), otherwise null. Used before
+  /// deleting a file, so only the user's own files are ever removed.
+  static String? ownedPath(String? url, {required String bucket, required String userId}) {
+    if (url == null || url.trim().isEmpty || userId.isEmpty) return null;
+    final file = parse(url);
+    if (file == null || file.bucket != bucket) return null;
+    if (!file.path.startsWith('$userId/') || file.path.contains('..')) return null;
+    return file.path;
+  }
+
+  /// Deletes the file [url] points to if it is in the user's own folder of
+  /// [bucket]. Best effort: a leftover file is harmless, so errors are logged.
+  static Future<void> removeOwnFile(String? url, {required String bucket, required String userId}) async {
+    final path = ownedPath(url, bucket: bucket, userId: userId);
+    if (path == null) return;
+    try {
+      await Supabase.instance.client.storage.from(bucket).remove([path]);
+    } catch (e) {
+      debugPrint('Could not delete $bucket/$path: $e');
+    }
+  }
+
   static bool isPrivate(String url) {
     final parsed = parse(url);
     return parsed != null && privateBuckets.contains(parsed.bucket);

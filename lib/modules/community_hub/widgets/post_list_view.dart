@@ -85,11 +85,22 @@ class PostListView extends StatelessWidget {
           await controller.load();
           onPostsChanged?.call();
         }
+      case PostAction.publish:
+        final error = await controller.publishDraft(post);
+        if (!context.mounted) return;
+        if (error != null) {
+          _showError(context, error);
+        } else {
+          SnackBarHelper.showSuccess(context, 'Post published.');
+          onPostsChanged?.call();
+        }
       case PostAction.delete:
         final ok = await showConfirmDialog(
           context,
-          title: 'Delete post?',
-          message: 'The post, its comments and likes will be permanently deleted.',
+          title: post.isDraft ? 'Delete draft?' : 'Delete post?',
+          message: post.isDraft
+              ? 'This draft will be permanently deleted.'
+              : 'The post, its comments and likes will be permanently deleted.',
         );
         if (!ok) return;
         final error = await controller.deletePost(post);
@@ -103,7 +114,7 @@ class PostListView extends StatelessWidget {
       case PostAction.message:
         await openChatWith(context, post.authorID);
       case PostAction.report:
-        await Navigator.push(
+        final reported = await Navigator.push<bool>(
           context,
           MaterialPageRoute(
             builder: (_) => ReportContentScreen(
@@ -114,6 +125,8 @@ class PostListView extends StatelessWidget {
             ),
           ),
         );
+        // Reported posts are hidden from the reporter
+        if (reported == true) controller.hidePost(post.postID);
     }
   }
 

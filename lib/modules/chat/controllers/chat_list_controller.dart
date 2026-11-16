@@ -22,6 +22,7 @@ class ChatListController extends ChangeNotifier {
   bool _isLoading = true;
   String? _error;
   String _searchQuery = '';
+  Set<String> _blockedIds = {}; // people the current user has blocked
 
   RealtimeChannel? _channel;
   List<String> _subscribedRoomIds = [];
@@ -35,6 +36,9 @@ class ChatListController extends ChangeNotifier {
   String? get error => _error;
   String get searchQuery => _searchQuery;
   bool get hasRooms => _rooms.isNotEmpty;
+
+  /// The current user has blocked [userID] (the list shows a "Blocked" tag).
+  bool isBlocked(String userID) => _blockedIds.contains(userID);
 
   /// Rooms matching the search box (name or last message).
   List<ChatRoomModel> get visibleRooms {
@@ -105,9 +109,11 @@ class ChatListController extends ChangeNotifier {
     final results = await Future.wait([
       UserDirectory.fetch(otherIds),
       _fetchUnreadCounts(roomIds),
+      _fetchBlockedIds(),
     ]);
     final participants = results[0] as Map<String, ChatParticipant>;
     final unread = results[1] as Map<String, int>;
+    _blockedIds = results[2] as Set<String>;
 
     final rooms = <ChatRoomModel>[];
     for (var i = 0; i < rows.length; i++) {
@@ -134,6 +140,21 @@ class ChatListController extends ChangeNotifier {
       return bTime.compareTo(aTime);
     });
     return rooms;
+  }
+
+  /// Only the user's own blocks are visible (row-level security). On an
+  /// error the last known list is kept.
+  Future<Set<String>> _fetchBlockedIds() async {
+    try {
+      final rows = await _supabase
+          .from(TableConstants.userBlock)
+          .select('blockedID')
+          .eq('blockerID', currentUserID);
+      return rows.map((r) => r['blockedID'].toString()).toSet();
+    } catch (e) {
+      debugPrint('Error loading blocked users: $e');
+      return _blockedIds;
+    }
   }
 
   Future<Map<String, int>> _fetchUnreadCounts(List<String> roomIds) async {

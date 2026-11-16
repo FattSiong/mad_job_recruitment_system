@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/table_constants.dart';
 import '../../../core/utils/data_load_exception.dart';
+import '../../../core/utils/file_picker_helper.dart';
+import '../../../core/utils/storage_url_helper.dart';
 import '../../../models/education_model.dart';
 import '../../../models/job_seeker_model.dart';
 import '../../../models/work_experience_model.dart';
@@ -21,6 +23,7 @@ import '../../../services/auth_service.dart';
 class ProfileController {
   final _supabase = Supabase.instance.client;
   static const String _profilePicturesBucket = 'profile_pictures';
+  static const String _resumesBucket = 'resumes';
 
   /// The logged-in seeker's profile with work experience and education.
   Future<JobSeekerModel> fetchProfile() async {
@@ -119,17 +122,23 @@ class ProfileController {
 
   /// Uploads a resume file and saves its link on the profile.
   /// Returns the link, or null if it failed.
+  ///
+  /// The previous resume file is deleted afterwards, but only if none of the
+  /// user's applications still uses it (employers open those links).
   Future<String?> uploadResume(File file) async {
     try {
       final userId = SessionHelper.requireUserId();
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.path.split('/').last}';
+      final oldResumeUrl = await _currentResumeUrl(userId);
+      final original = file.uri.pathSegments.isNotEmpty ? file.uri.pathSegments.last : 'resume.pdf';
+      final fileName =
+          '${DateTime.now().millisecondsSinceEpoch}_${FilePickerHelper.storageSafeName(original)}';
       final filePath = '$userId/$fileName';
 
       // 1. Upload to Supabase Storage (Ensure you have a bucket named 'resumes')
-      await _supabase.storage.from('resumes').upload(filePath, file);
+      await _supabase.storage.from(_resumesBucket).upload(filePath, file);
 
       // 2. Get the public URL
-      final newResumeUrl = _supabase.storage.from('resumes').getPublicUrl(filePath);
+      final newResumeUrl = _supabase.storage.from(_resumesBucket).getPublicUrl(filePath);
 
       // 3. Update the JobSeeker table with the new URL
       await _supabase
@@ -137,10 +146,50 @@ class ProfileController {
           .update({'resumeURL': newResumeUrl})
           .eq('seekerID', userId);
 
+      // 4. Tidy up the replaced file (never blocks the upload)
+      if (oldResumeUrl != null && oldResumeUrl != newResumeUrl) {
+        await _deleteResumeIfUnused(userId, oldResumeUrl);
+      }
+
       return newResumeUrl;
     } catch (e) {
       debugPrint('Error uploading resume: $e');
       return null;
+    }
+  }
+
+  /// The resume link saved on the profile now, or null (none / can't tell).
+  Future<String?> _currentResumeUrl(String userId) async {
+    try {
+      final row = await _supabase
+          .from(TableConstants.jobSeeker)
+          .select('resumeURL')
+          .eq('seekerID', userId)
+          .maybeSingle();
+      final url = (row?['resumeURL'] as String?)?.trim();
+      return url == null || url.isEmpty ? null : url;
+    } catch (e) {
+      debugPrint('Could not read the current resume link: $e');
+      return null; // then nothing is deleted
+    }
+  }
+
+  /// Deletes an old resume file from storage unless an application still links
+  /// to it. Best effort: if anything fails, the file is simply kept.
+  Future<void> _deleteResumeIfUnused(String userId, String oldUrl) async {
+    final path = StorageUrlHelper.ownedPath(oldUrl, bucket: _resumesBucket, userId: userId);
+    if (path == null) return; // not a file in the user's own resume folder
+    try {
+      final used = await _supabase
+          .from(TableConstants.jobApplicant)
+          .select('applicantID')
+          .eq('seekerID', userId)
+          .eq('submittedResumeURL', oldUrl)
+          .limit(1);
+      if ((used as List).isNotEmpty) return; // sent with an application: keep it
+      await _supabase.storage.from(_resumesBucket).remove([path]);
+    } catch (e) {
+      debugPrint('Could not delete the old resume file: $e');
     }
   }
 
@@ -182,11 +231,18 @@ class ProfileController {
   // The screen decides what message to show (MVC: no UI code in controllers).
   // ---------------------------------------------------------------------
 
+  /// Saves the fields of the profile form. The resume link and email are not
+  /// in the form, so they are left out: a profile loaded before a new resume
+  /// was set (e.g. from Build Resume) must not put the old link back.
   Future<bool> updateProfileBasics(JobSeekerModel updatedModel) async {
     try {
+      final data = updatedModel.toJson()
+        ..remove('seekerID')
+        ..remove('resumeURL')
+        ..remove('email');
       await _supabase
           .from(TableConstants.jobSeeker)
-          .update(updatedModel.toJson())
+          .update(data)
           .eq('seekerID', updatedModel.seekerID);
       return true;
     } catch (e) {

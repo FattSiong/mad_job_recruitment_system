@@ -167,6 +167,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
               key: ValueKey(room.roomID),
               room: room,
               currentUserID: _controller.currentUserID,
+              isBlocked: _controller.isBlocked(room.otherUser.userID),
               onTap: () => _openRoom(room),
             );
           },

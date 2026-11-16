@@ -438,8 +438,10 @@ class _MockInterviewSetupScreenState extends State<MockInterviewSetupScreen> {
             'The text, your questions and speech statistics are sent to Google Gemini to generate feedback.'),
         _consentPoint(Icons.delete_outline_rounded,
             'Audio recordings are not stored. Only transcripts, scores and feedback are saved to your account.'),
-        _consentPoint(Icons.videocam_off_outlined,
-            'The camera is optional and only shows a preview to you. Video is never recorded or uploaded.'),
+        _consentPoint(Icons.videocam_outlined,
+            'The camera is optional. When it is on, your phone estimates eye contact and smiling while you '
+            'answer (Google ML Kit, on the device). Video is never recorded or uploaded: only these '
+            'percentages are saved, as feedback that does not change your score.'),
         const SizedBox(height: 6),
         InkWell(
           borderRadius: BorderRadius.circular(16),

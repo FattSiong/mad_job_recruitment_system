@@ -8,9 +8,11 @@
 //    -> { sessionId, questions: [ {index:0, question, type:"introduction"} ] }
 //
 // 2) action "evaluate-answer"   (call once per answer; calling again re-records)
-//    { sessionId, questionIndex, audioBase64, mimeType: "audio/mp4" }
+//    { sessionId, questionIndex, audioBase64, mimeType: "audio/mp4", amplitude?, face? }
 //    Deepgram transcript + word timestamps -> pace / fillers / hesitations
 //    -> Gemini feedback -> saved to MockInterviewAnswer
+//    face (camera on): eye contact / smile measured on the phone -> saved as
+//    body language feedback only, never sent to the scoring prompt (see face.ts)
 //    -> { answer, questions? }   (questions are generated after the introduction)
 //
 // 3) action "finish"
@@ -29,6 +31,7 @@
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { AmplitudeTrack, calculateSpeechMetrics, DeepgramWord, SpeechMetrics } from "./metrics.ts";
+import { bodyLanguageFeedback, bodyLanguageForPrompt, parseFaceMetrics, summarizeBodyLanguage } from "./face.ts";
 
 const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.5-flash-lite";
 const DEEPGRAM_MODEL = Deno.env.get("DEEPGRAM_MODEL") ?? "nova-3";
@@ -360,6 +363,10 @@ type AnswerRow = {
   fillerWordCount: number | null;
   hesitationCount: number | null;
   longPauseCount: number | null;
+  eyeContactPercent: number | null;
+  smilePercent: number | null;
+  facePresentPercent: number | null;
+  lookAwayCount: number | null;
   feedback: AnswerFeedback | null;
 };
 
@@ -426,6 +433,10 @@ async function evaluateAnswer(supabase: SupabaseClient, seekerID: string, body: 
   // 2. Delivery metrics from word timestamps (+ microphone levels for untranscribed "erm/aaa")
   const metrics = calculateSpeechMetrics(stt.words, stt.duration, parseAmplitude(body.amplitude));
 
+  // Camera cues (null when the camera was off). Feedback only: not given to Gemini's scoring.
+  const face = parseFaceMetrics(body.face);
+  const bodyLanguage = bodyLanguageFeedback(face);
+
   // 3. Gemini feedback (and, after the introduction, the interview questions in parallel)
   const isIntro = questionIndex === 0;
   let regenerateQuestions = false;
@@ -465,7 +476,12 @@ async function evaluateAnswer(supabase: SupabaseClient, seekerID: string, body: 
       confidence: stt.confidence,
       contentScore: feedback.contentScore,
       deliveryScore: feedback.deliveryScore,
-      feedback: { ...feedback, metrics },
+      // Explicit nulls so re-recording without the camera clears the old values
+      eyeContactPercent: face?.eyeContactPercent ?? null,
+      smilePercent: face?.smilePercent ?? null,
+      facePresentPercent: face?.facePresentPercent ?? null,
+      lookAwayCount: face?.lookAwayCount ?? null,
+      feedback: { ...feedback, metrics, ...(bodyLanguage ? { bodyLanguageFeedback: bodyLanguage } : {}) },
       createdAt: new Date().toISOString(),
     }, { onConflict: "sessionID,questionIndex" })
     .select("*")
@@ -519,6 +535,9 @@ async function finishSession(supabase: SupabaseClient, seekerID: string, body: R
     totalLongPauses: answers.reduce((s, a) => s + (a.longPauseCount ?? 0), 0),
   };
 
+  // Camera cues: averages of the answers with the camera on (not part of the scores above)
+  const bodyLanguage = summarizeBodyLanguage(answers);
+
   const transcriptText = answers
     .map((a) => `Q${a.questionIndex}: ${a.questionText}\nA: ${a.transcriptText ?? ""}`)
     .join("\n\n");
@@ -541,6 +560,7 @@ Target role: ${session.targetJobRole}
 Experience level: ${session.experienceLevel ?? "not specified"}
 Overall score: ${overallScore}/100 (content ${contentScore}, delivery ${deliveryScore})
 Speech summary: ${JSON.stringify(speechSummary)}
+${bodyLanguageForPrompt(bodyLanguage, answers.length)}
 
 Per-question results:
 ${perQuestion}
@@ -551,6 +571,8 @@ ${transcriptText}
 """
 
 Give 2-4 strengths, 2-4 improvements and 3 practical tips for the next interview.
+If camera cues are given, at most one item may mention eye contact or smiling, using only those numbers;
+never guess emotions, confidence or personality from them.
 `.trim(),
     SUMMARY_SCHEMA,
   );
@@ -562,6 +584,7 @@ Give 2-4 strengths, 2-4 improvements and 3 practical tips for the next interview
     improvements: (summary.improvements ?? []).slice(0, 4),
     tips: (summary.tips ?? []).slice(0, 4),
     speech: speechSummary,
+    ...(bodyLanguage ? { bodyLanguage } : {}),
   };
 
   const { data: record, error: updErr } = await supabase
@@ -572,6 +595,8 @@ Give 2-4 strengths, 2-4 improvements and 3 practical tips for the next interview
       overallScore,
       contentScore,
       deliveryScore,
+      eyeContactPercent: bodyLanguage?.eyeContactPercent ?? null,
+      smilePercent: bodyLanguage?.smilePercent ?? null,
       aiEvaluationReport,
       completedAt: new Date().toISOString(),
     })

@@ -9,7 +9,7 @@ class JobFilterOptions {
   static const String anyDate = 'All time';
   static const String anyJobType = 'All';
   static const String anySalary = 'Any';
-  static const double defaultRadiusKm = 25.0;
+  static const double defaultRadiusKm = 10.0;
 
   static const List<String> datePostedOptions = [
     anyDate,

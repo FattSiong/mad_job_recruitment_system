@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
 import '../../../models/mock_interview_model.dart';
+import '../../../services/face_cue_analyzer.dart';
 import 'mock_interview_controller.dart';
 
 /// Where the session is for the question on screen.
@@ -14,8 +16,10 @@ enum InterviewStage { ready, recording, evaluating, reviewed, finishing }
 /// State of a running mock interview (Use Case 4.59, steps 2-6): the
 /// questions, the answers so far, and recording / evaluating each answer.
 ///
-/// The camera preview stays in the screen (it is display only and is never
-/// recorded or sent anywhere).
+/// The camera preview stays in the screen. While an answer is recorded with
+/// the camera on, [FaceCueAnalyzer] estimates eye contact and smiling on the
+/// phone; only those numbers are sent with the answer (video never leaves the
+/// phone, and the numbers are feedback only, not part of the score).
 class MockInterviewSessionController extends ChangeNotifier {
   final String sessionID;
 
@@ -31,13 +35,16 @@ class MockInterviewSessionController extends ChangeNotifier {
 
   final MockInterviewController _api;
   final AudioRecorder _recorder = AudioRecorder();
+  final FaceCueAnalyzer _faceCues;
 
   MockInterviewSessionController({
     required this.sessionID,
     required this.requestedQuestionCount,
     required List<InterviewQuestion> initialQuestions,
     MockInterviewController? api,
+    FaceCueAnalyzer? faceCues,
   })  : _api = api ?? MockInterviewController(),
+        _faceCues = faceCues ?? FaceCueAnalyzer(),
         _questions = List.of(initialQuestions);
 
   static const Duration maxAnswerLength = Duration(minutes: 3);
@@ -57,6 +64,7 @@ class MockInterviewSessionController extends ChangeNotifier {
   double _level = 0; // 0..1 microphone level
   final List<double> _amplitudeTrack = []; // dBFS, one sample per _amplitudeIntervalMs
   final Stopwatch _recordClock = Stopwatch();
+  bool _starting = false; // the microphone is being started
   bool _disposed = false;
 
   // ---------------------------------------------------------------------
@@ -80,31 +88,52 @@ class MockInterviewSessionController extends ChangeNotifier {
   MockInterviewAnswerModel? get currentAnswer => _answers[current.index];
 
   // ---------------------------------------------------------------------
+  // Camera (body language cues)
+  // ---------------------------------------------------------------------
+
+  /// The screen passes its preview camera here when it is ready, and null
+  /// before turning it off. Frames are only checked while recording.
+  Future<void> setCamera(CameraController? camera) => _faceCues.setCamera(camera);
+
+  // ---------------------------------------------------------------------
   // Recording (mono AAC, 16 kHz)
   // ---------------------------------------------------------------------
 
   Future<void> startRecording() async {
-    if (_stage != InterviewStage.ready && _stage != InterviewStage.reviewed) return;
+    // A second tap while the microphone is still starting is ignored
+    // (it would start a second recorder and timer).
+    if (_starting || (_stage != InterviewStage.ready && _stage != InterviewStage.reviewed)) return;
+    _starting = true;
+    String? path;
+    try {
+      if (!await _recorder.hasPermission()) {
+        onError?.call('Microphone access is required to answer. Please allow it in Settings.');
+        return;
+      }
+      if (_disposed) return;
 
-    if (!await _recorder.hasPermission()) {
-      onError?.call('Microphone access is required to answer. Please allow it in Settings.');
+      final dir = await getTemporaryDirectory();
+      final file = '${dir.path}/mock_${sessionID}_${current.index}_'
+          '${DateTime.now().millisecondsSinceEpoch}.m4a';
+
+      await _recorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          numChannels: 1, // mono
+          sampleRate: 16000,
+          bitRate: 32000,
+        ),
+        path: file,
+      );
+      path = file;
+    } catch (e) {
+      // e.g. the microphone is in use by another app
+      debugPrint('Mock interview: could not start recording: $e');
+      onError?.call('Unable to start recording. Please try again.');
       return;
+    } finally {
+      _starting = false;
     }
-    if (_disposed) return;
-
-    final dir = await getTemporaryDirectory();
-    final path = '${dir.path}/mock_${sessionID}_${current.index}_'
-        '${DateTime.now().millisecondsSinceEpoch}.m4a';
-
-    await _recorder.start(
-      const RecordConfig(
-        encoder: AudioEncoder.aacLc,
-        numChannels: 1, // mono
-        sampleRate: 16000,
-        bitRate: 32000,
-      ),
-      path: path,
-    );
     if (_disposed) return;
 
     _recordingPath = path;
@@ -136,6 +165,8 @@ class MockInterviewSessionController extends ChangeNotifier {
       _notify();
       if (_elapsed >= maxAnswerLength) stopAndEvaluate(); // auto stop
     });
+
+    await _faceCues.beginAnswer(); // does nothing if the camera is off
   }
 
   Future<void> _stopRecorderOnly() async {
@@ -150,6 +181,7 @@ class MockInterviewSessionController extends ChangeNotifier {
   /// Throws away the answer being recorded.
   Future<void> cancelRecording() async {
     await _stopRecorderOnly();
+    await _faceCues.cancelAnswer();
     await _recorder.cancel(); // also deletes the file
     _recordingPath = null;
     _stage = currentAnswered ? InterviewStage.reviewed : InterviewStage.ready;
@@ -161,8 +193,18 @@ class MockInterviewSessionController extends ChangeNotifier {
   /// [onSessionGone]. Never throws (it also runs from the auto-stop timer).
   Future<void> stopAndEvaluate() async {
     if (_stage != InterviewStage.recording) return;
+    // Leave "recording" straight away: the stop button and the 3-minute
+    // auto-stop can both fire, and the answer must be sent only once.
+    _stage = InterviewStage.evaluating;
+    _notify();
     await _stopRecorderOnly();
-    final path = await _recorder.stop() ?? _recordingPath;
+    var path = _recordingPath;
+    try {
+      path = await _recorder.stop() ?? path;
+    } catch (e) {
+      debugPrint('Mock interview: could not stop the recorder: $e');
+    }
+    final faceMetrics = await _faceCues.endAnswer(); // null if the camera was off
 
     if (_disposed) {
       await _deleteRecordingFile();
@@ -177,8 +219,6 @@ class MockInterviewSessionController extends ChangeNotifier {
       return;
     }
 
-    _stage = InterviewStage.evaluating;
-    _notify();
     final questionIndex = current.index;
 
     try {
@@ -188,6 +228,7 @@ class MockInterviewSessionController extends ChangeNotifier {
         audioFile: File(path),
         amplitudeDb: List.of(_amplitudeTrack),
         amplitudeIntervalMs: _amplitudeIntervalMs,
+        faceMetrics: faceMetrics,
       );
       _answers[questionIndex] = result.answer;
       if (result.questions != null && result.questions!.isNotEmpty) {
@@ -198,6 +239,11 @@ class MockInterviewSessionController extends ChangeNotifier {
       _stage = _answers.containsKey(questionIndex) ? InterviewStage.reviewed : InterviewStage.ready;
       onError?.call(e.message);
       if (e.code == 'session_not_found') onSessionGone?.call();
+    } catch (e) {
+      // Anything else: never leave the screen stuck on "evaluating"
+      debugPrint('Mock interview: evaluating the answer failed: $e');
+      _stage = _answers.containsKey(questionIndex) ? InterviewStage.reviewed : InterviewStage.ready;
+      onError?.call(MockInterviewController.unavailableMessage);
     } finally {
       await _deleteRecordingFile();
       _notify();
@@ -236,6 +282,12 @@ class MockInterviewSessionController extends ChangeNotifier {
       _stage = InterviewStage.reviewed;
       _notify();
       rethrow;
+    } catch (e) {
+      // Never leave the screen stuck on "finishing" (Exit is blocked then)
+      debugPrint('Mock interview: finishing failed: $e');
+      _stage = InterviewStage.reviewed;
+      _notify();
+      throw MockInterviewException('ai_unavailable', MockInterviewController.unavailableMessage);
     }
   }
 
@@ -260,6 +312,7 @@ class MockInterviewSessionController extends ChangeNotifier {
     _ticker?.cancel();
     _amplitudeSub?.cancel();
     _recorder.dispose();
+    _faceCues.dispose();
     _deleteRecordingFile();
     super.dispose();
   }

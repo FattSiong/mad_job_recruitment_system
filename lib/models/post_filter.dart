@@ -61,7 +61,7 @@ enum PostMediaFilter {
 }
 
 /// Filter for the My Posts tab (done on the phone: all own posts are loaded).
-enum MyPostsStatus { all, visible, removed }
+enum MyPostsStatus { all, visible, drafts, removed }
 
 /// Everything that narrows down the community feed.
 class PostFilter {

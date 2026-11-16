@@ -26,7 +26,7 @@ class MessageModel {
       messageID: json['messageID'],
       roomID: json['roomID'],
       senderID: json['senderID'],
-      content: json['content'],
+      content: json['content']?.toString() ?? '',
       isRead: json['isRead'] ?? false,
       sentAt: DateTime.parse(json['sentAt']),
       mediaURL: json['mediaURL'],

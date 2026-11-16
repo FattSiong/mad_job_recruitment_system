@@ -753,7 +753,7 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
               normStatus == 'offer_declined';
 
           final appliedDate =
-              application.appliedAt?.toIso8601String().substring(0, 10) ??
+              application.appliedAt?.toLocal().toIso8601String().substring(0, 10) ??
                   'Unknown date';
 
           final showUnavailableNotice =
