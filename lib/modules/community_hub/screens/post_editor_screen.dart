@@ -46,27 +46,35 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
     }
   }
 
-  Future<void> _save() async {
+  Future<void> _save({bool asDraft = false}) async {
     FocusScope.of(context).unfocus();
-    final error = await _controller.save();
+    final error = await _controller.save(asDraft: asDraft);
     if (!mounted) return;
     if (error != null) {
       _snack(error);
       return;
     }
-    _snack(_controller.isEditing ? 'Post updated.' : 'Post published.', error: false);
+    final String done;
+    if (asDraft) {
+      done = 'Draft saved. Find it under My Posts.';
+    } else if (_controller.isEditing && !_controller.isEditingDraft) {
+      done = 'Post updated.';
+    } else {
+      done = 'Post published.';
+    }
+    _snack(done, error: false);
     Navigator.pop(context, true);
   }
 
   /// Ask before throwing away unsaved text.
   Future<bool> _confirmLeave() async {
-    if (!_controller.canSave) return true;
+    if (!_controller.hasUnsavedChanges) return true;
     final leave = await showConfirmDialog(
       context,
       title: 'Discard changes?',
-      message: _controller.isEditing
+      message: _controller.isEditing && !_controller.isEditingDraft
           ? 'Your changes to this post will be lost.'
-          : 'Your post hasn\'t been published yet.',
+          : 'Your post hasn\'t been published yet. Tap Save draft to keep it for later.',
       confirmLabel: 'Discard',
       cancelLabel: 'Keep editing',
     );
@@ -78,7 +86,7 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
     return ListenableBuilder(
       listenable: _controller,
       builder: (context, _) => PopScope(
-        canPop: !_controller.canSave && !_controller.isSaving,
+        canPop: !_controller.hasUnsavedChanges && !_controller.isSaving,
         onPopInvokedWithResult: (didPop, _) async {
           if (didPop || _controller.isSaving) return;
           final navigator = Navigator.of(context);
@@ -95,14 +103,24 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
               onPressed: () => Navigator.maybePop(context),
             ),
             title: Text(
-              _controller.isEditing ? 'Edit Post' : 'Create Post',
+              _controller.isEditingDraft
+                  ? 'Edit Draft'
+                  : (_controller.isEditing ? 'Edit Post' : 'Create Post'),
               style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textDark),
             ),
             actions: [
+              if (_controller.canBeDraft)
+                TextButton(
+                  onPressed: _controller.canSaveDraft ? () => _save(asDraft: true) : null,
+                  child: const Text(
+                    'Save draft',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
               Padding(
                 padding: const EdgeInsets.only(right: 12),
                 child: FilledButton(
-                  onPressed: _controller.canSave ? _save : null,
+                  onPressed: _controller.canSave ? () => _save() : null,
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     disabledBackgroundColor: AppColors.borderActive,
@@ -115,7 +133,7 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
                           height: 18,
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
-                      : Text(_controller.isEditing ? 'Save' : 'Post'),
+                      : Text(_controller.isEditing && !_controller.isEditingDraft ? 'Save' : 'Post'),
                 ),
               ),
             ],

@@ -10,6 +10,8 @@ import '../../../models/feed_post_model.dart';
 import '../../../models/post_topic.dart';
 
 /// Create a new post, or edit an existing one (topic, text and one PDF/image).
+/// A new post can be saved as a draft (only its author sees it) and published
+/// later; a published post can't go back to being a draft.
 class PostEditorController extends ChangeNotifier {
   final String currentUserID;
 
@@ -36,6 +38,12 @@ class PostEditorController extends ChangeNotifier {
   bool _isSaving = false;
 
   bool get isEditing => original != null;
+
+  /// Editing one of the user's drafts.
+  bool get isEditingDraft => original?.isDraft ?? false;
+
+  /// "Save draft" is offered for new posts and drafts.
+  bool get canBeDraft => !isEditing || isEditingDraft;
   bool get isSaving => _isSaving;
   String get content => _content;
   PostTopic get topic => _topic;
@@ -64,11 +72,17 @@ class PostEditorController extends ChangeNotifier {
       _newFile != null ||
       _existingMediaURL != original!.mediaURL;
 
-  bool get canSave =>
-      !_isSaving &&
-      _content.trim().length <= maxLength &&
-      (_content.trim().isNotEmpty || hasAttachment) &&
-      _changed;
+  bool get _valid =>
+      _content.trim().length <= maxLength && (_content.trim().isNotEmpty || hasAttachment);
+
+  /// Post / Save button. A draft can be published even without changes.
+  bool get canSave => !_isSaving && _valid && (_changed || isEditingDraft);
+
+  /// Save draft button.
+  bool get canSaveDraft => !_isSaving && canBeDraft && _valid && _changed;
+
+  /// Something typed that leaving the screen would throw away.
+  bool get hasUnsavedChanges => _valid && _changed;
 
   void setContent(String value) {
     _content = value;
@@ -99,9 +113,11 @@ class PostEditorController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Publishes (or, with [asDraft], saves a draft).
   /// Returns an error message, or null when saved.
-  Future<String?> save() async {
-    if (!canSave) {
+  Future<String?> save({bool asDraft = false}) async {
+    if (asDraft && !canBeDraft) return null;
+    if (asDraft ? !canSaveDraft : !canSave) {
       if (_content.trim().isEmpty && !hasAttachment) return 'Please add some text or an attachment.';
       if (_content.trim().length > maxLength) return 'Posts can be up to $maxLength characters.';
       return null;
@@ -121,6 +137,7 @@ class PostEditorController extends ChangeNotifier {
               'content': _content.trim(),
               'mediaURL': mediaURL,
               'category': _topic.value,
+              if (isEditingDraft) 'isDraft': asDraft, // false = publish it now
             })
             .eq('postID', original!.postID)
             .eq('authorID', currentUserID)
@@ -137,6 +154,7 @@ class PostEditorController extends ChangeNotifier {
           'mediaURL': mediaURL,
           'category': _topic.value,
           'status': 'active',
+          'isDraft': asDraft,
         });
       }
       // The attachment was replaced or removed: its old file is no longer used
@@ -149,7 +167,8 @@ class PostEditorController extends ChangeNotifier {
       debugPrint('Save post failed: $e');
       // Not saved: don't leave the file that was just uploaded behind
       await StorageUrlHelper.removeOwnFile(uploadedURL, bucket: bucket, userId: currentUserID);
-      return isEditing
+      if (asDraft) return 'Unable to save your draft. Please try again.';
+      return isEditing && !isEditingDraft
           ? 'Unable to save your changes. Please try again.'
           : 'Unable to publish your post. Please try again.';
     } finally {

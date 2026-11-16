@@ -4,7 +4,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../models/post_filter.dart';
 import '../controllers/post_list_controller.dart';
 
-/// "Total / Visible / Removed" counts at the top of My Posts.
+/// "Total / Visible / Drafts / Removed" counts at the top of My Posts.
 /// Tapping one shows only those posts.
 class MyPostsSummary extends StatelessWidget {
   final PostListController controller;
@@ -21,10 +21,13 @@ class MyPostsSummary extends StatelessWidget {
           children: [
             _tile(MyPostsStatus.all, '${controller.totalCount}', 'Total',
                 Icons.article_outlined, AppColors.primary),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             _tile(MyPostsStatus.visible, '${controller.visibleCount}', 'Visible',
                 Icons.visibility_outlined, AppColors.teal),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
+            _tile(MyPostsStatus.drafts, '${controller.draftCount}', 'Drafts',
+                Icons.edit_note_rounded, AppColors.warning),
+            const SizedBox(width: 8),
             _tile(MyPostsStatus.removed, '${controller.removedCount}', 'Removed',
                 Icons.block_rounded, AppColors.danger),
           ],
@@ -43,7 +46,7 @@ class MyPostsSummary extends StatelessWidget {
           onTap: () => controller.setStatusFilter(status),
           borderRadius: BorderRadius.circular(20),
           child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: selected ? color : Colors.transparent, width: 1.5),
@@ -60,7 +63,12 @@ class MyPostsSummary extends StatelessWidget {
                     color: AppColors.textDark,
                   ),
                 ),
-                Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                ),
               ],
             ),
           ),

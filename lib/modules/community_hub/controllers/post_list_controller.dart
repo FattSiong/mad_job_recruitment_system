@@ -13,7 +13,7 @@ enum PostListMode {
   /// Everyone's active posts, a page at a time, narrowed by a [PostFilter].
   feed,
 
-  /// The current user's posts, including ones removed by an admin.
+  /// The current user's posts, including drafts and ones removed by an admin.
   mine,
 
   /// Posts the current user bookmarked.
@@ -32,7 +32,7 @@ class PostListController extends ChangeNotifier {
 
   static const int pageSize = 15;
   static const String _columns =
-      'postID, authorID, content, mediaURL, status, category, createdAt, '
+      'postID, authorID, content, mediaURL, status, category, createdAt, editedAt, isDraft, '
       'PostLike(userID), PostSaved(userID), PostComment(commentID, status)';
 
   List<FeedPostModel> _posts = [];
@@ -52,7 +52,9 @@ class PostListController extends ChangeNotifier {
       case MyPostsStatus.all:
         return List.unmodifiable(_posts);
       case MyPostsStatus.visible:
-        return _posts.where((p) => !p.isRemoved).toList();
+        return _posts.where((p) => p.isInteractive).toList();
+      case MyPostsStatus.drafts:
+        return _posts.where((p) => p.isDraft).toList();
       case MyPostsStatus.removed:
         return _posts.where((p) => p.isRemoved).toList();
     }
@@ -75,7 +77,8 @@ class PostListController extends ChangeNotifier {
   // My Posts summary (all own posts, whatever the status filter)
   int get totalCount => _posts.length;
   int get removedCount => _posts.where((p) => p.isRemoved).length;
-  int get visibleCount => totalCount - removedCount;
+  int get draftCount => _posts.where((p) => p.isDraft).length;
+  int get visibleCount => _posts.where((p) => p.isInteractive).length;
 
   // ---------------------------------------------------------------------
   // Filters
@@ -92,7 +95,7 @@ class PostListController extends ChangeNotifier {
 
   void clearFilter() => setFilter(PostFilter.none);
 
-  /// My Posts: show all, visible or removed posts.
+  /// My Posts: show all, visible, draft or removed posts.
   void setStatusFilter(MyPostsStatus status) {
     if (status == _status) return;
     _status = status;
@@ -198,14 +201,32 @@ class PostListController extends ChangeNotifier {
             .map((r) => r['postID'].toString())
             .toSet()
             .toList();
+        // Posts the user reported are hidden from them
+        final reported = await _reportedPostIds();
+        ids.removeWhere(reported.contains);
         if (ids.isEmpty) return (rows: <Map<String, dynamic>>[], count: 0, full: false);
         final rows = await _supabase
             .from(TableConstants.communityPost)
             .select(_columns)
             .inFilter('postID', ids)
             .eq('status', 'active')
+            .eq('isDraft', false)
             .order('createdAt', ascending: false);
         return (rows: List<Map<String, dynamic>>.from(rows), count: rows.length, full: false);
+    }
+  }
+
+  /// IDs of posts the current user reported (the feed function already
+  /// leaves them out; Saved Posts uses this).
+  Future<Set<String>> _reportedPostIds() async {
+    try {
+      final rows = await _supabase.rpc('my_reported_post_ids');
+      return List<Map<String, dynamic>>.from(rows as List)
+          .map((r) => r['post_id'].toString())
+          .toSet();
+    } catch (e) {
+      debugPrint('Could not load reported posts: $e');
+      return {};
     }
   }
 
@@ -233,7 +254,7 @@ class PostListController extends ChangeNotifier {
   final Set<String> _saveBusy = {};
 
   Future<String?> toggleLike(FeedPostModel post) async {
-    if (post.isRemoved || !_likeBusy.add(post.postID)) return null;
+    if (!post.isInteractive || !_likeBusy.add(post.postID)) return null;
     final liked = !post.isLiked;
     _replace(post.copyWith(isLiked: liked, likeCount: post.likeCount + (liked ? 1 : -1)));
     try {
@@ -257,7 +278,7 @@ class PostListController extends ChangeNotifier {
 
   /// Returns an error message, or null when it worked.
   Future<String?> toggleSave(FeedPostModel post) async {
-    if (post.isRemoved || !_saveBusy.add(post.postID)) return null;
+    if (!post.isInteractive || !_saveBusy.add(post.postID)) return null;
     final saved = !post.isSaved;
     final index = _posts.indexWhere((p) => p.postID == post.postID);
 
@@ -290,6 +311,37 @@ class PostListController extends ChangeNotifier {
     } finally {
       _saveBusy.remove(post.postID);
     }
+  }
+
+  /// Publishes one of the user's drafts (it becomes a new post in the feed).
+  /// Returns an error message, or null when it worked.
+  Future<String?> publishDraft(FeedPostModel post) async {
+    if (!post.isDraft || !post.isOwnedBy(currentUserID)) return null;
+    try {
+      final rows = await _supabase
+          .from(TableConstants.communityPost)
+          .update({'isDraft': false})
+          .eq('postID', post.postID)
+          .eq('authorID', currentUserID)
+          .select('postID');
+      if (rows.isEmpty) return 'This draft no longer exists.';
+      await load(); // it now has a new time and can be liked / commented on
+      return null;
+    } catch (e) {
+      debugPrint('publishDraft failed: $e');
+      return 'Unable to publish your draft. Please try again.';
+    }
+  }
+
+  /// Takes a post off this list straight away (e.g. after the user reported
+  /// it; the server leaves it out from then on).
+  void hidePost(String postID) {
+    final before = _posts.length;
+    _posts = _posts.where((p) => p.postID != postID).toList();
+    if (_posts.length == before) return;
+    // The feed's next page starts one earlier: the server no longer counts it
+    if (mode == PostListMode.feed && _nextOffset > 0) _nextOffset--;
+    _notify();
   }
 
   /// Adds the user's like / save. One that already exists (e.g. made on
