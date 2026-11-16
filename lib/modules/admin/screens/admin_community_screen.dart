@@ -19,16 +19,24 @@ class AdminCommunityScreen extends StatefulWidget {
 class _AdminCommunityScreenState extends State<AdminCommunityScreen> {
   final AdminCommunityController _controller = AdminCommunityController();
   final ScrollController _scroll = ScrollController();
+  final GlobalKey<RefreshIndicatorState> _refresh = GlobalKey<RefreshIndicatorState>();
+  final TextEditingController _searchText = TextEditingController();
+
+  /// Reloads when the admin comes back to the app (new reports may be in).
+  late final AppLifecycleListener _lifecycle;
 
   @override
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
+    _lifecycle = AppLifecycleListener(onResume: _controller.load);
     _controller.load();
   }
 
   @override
   void dispose() {
+    _lifecycle.dispose();
+    _searchText.dispose();
     _scroll.removeListener(_onScroll);
     _scroll.dispose();
     _controller.dispose();
@@ -45,7 +53,7 @@ class _AdminCommunityScreenState extends State<AdminCommunityScreen> {
   // ---------------------------------------------------------------------
 
   Future<void> _dismiss(ModerationItem item) async {
-    final note = await showDialog<String>(
+    final decision = await showDialog<ModerationDecision>(
       context: context,
       builder: (_) => ModerationNoteDialog(
         title: 'Dismiss reports?',
@@ -56,8 +64,8 @@ class _AdminCommunityScreenState extends State<AdminCommunityScreen> {
         confirmColor: AdminColors.heroEnd,
       ),
     );
-    if (note == null || !mounted) return;
-    final error = await _controller.dismiss(item, note: note);
+    if (decision == null || !mounted) return;
+    final error = await _controller.dismiss(item, note: decision.note);
     if (!mounted) return;
     if (error != null) {
       SnackBarHelper.showError(context, error, duration: const Duration(seconds: 3));
@@ -68,26 +76,36 @@ class _AdminCommunityScreenState extends State<AdminCommunityScreen> {
 
   Future<void> _remove(ModerationItem item) async {
     final what = item.isPost ? 'post' : 'comment';
-    final note = await showDialog<String>(
+    // Only content that is still visible: its author hasn't seen anything yet
+    final canNotify = !item.isRemoved && !item.deletedByAuthor;
+    final decision = await showDialog<ModerationDecision>(
       context: context,
       builder: (_) => ModerationNoteDialog(
-        title: item.deletedByAuthor ? 'Confirm removal?' : 'Remove this $what?',
-        message: item.deletedByAuthor
+        title: item.isRemoved
+            ? 'Close these reports?'
+            : item.deletedByAuthor
+                ? 'Confirm removal?'
+                : 'Remove this $what?',
+        message: item.isRemoved
+            ? 'This $what was already removed. Its remaining reports are closed as handled.'
+            : item.deletedByAuthor
             ? 'Its author already deleted it. This closes the reports and records that it broke the rules.'
             : item.isPost
                 ? 'The post is hidden from everyone, with its comments. Its author sees it as removed.'
                 : 'The comment and all replies under it are hidden from everyone.',
-        confirmLabel: 'Remove',
+        confirmLabel: item.isRemoved ? 'Close reports' : 'Remove',
         confirmColor: AdminColors.alertRed,
+        offerNotify: canNotify,
       ),
     );
-    if (note == null || !mounted) return;
-    final error = await _controller.remove(item, note: note);
+    if (decision == null || !mounted) return;
+    final error = await _controller.remove(item, note: decision.note, notifyAuthor: decision.notifyAuthor);
     if (!mounted) return;
     if (error != null) {
       SnackBarHelper.showError(context, error, duration: const Duration(seconds: 3));
     } else {
-      SnackBarHelper.showSuccess(context, item.isPost ? 'Post removed' : 'Comment removed');
+      final done = item.isRemoved ? 'Reports closed' : (item.isPost ? 'Post removed' : 'Comment removed');
+      SnackBarHelper.showSuccess(context, decision.notifyAuthor ? '$done · author told' : done);
     }
   }
 
@@ -102,6 +120,7 @@ class _AdminCommunityScreenState extends State<AdminCommunityScreen> {
       body: ListenableBuilder(
         listenable: _controller,
         builder: (context, _) => RefreshIndicator(
+          key: _refresh,
           color: AdminColors.heroEnd,
           onRefresh: _controller.load,
           child: CustomScrollView(
@@ -150,7 +169,7 @@ class _AdminCommunityScreenState extends State<AdminCommunityScreen> {
               const Spacer(),
               IconButton(
                 tooltip: 'Refresh',
-                onPressed: _controller.isLoading ? null : _controller.load,
+                onPressed: _controller.isLoading ? null : () => _refresh.currentState?.show(),
                 icon: const Icon(Icons.refresh_rounded, color: Colors.white),
               ),
             ],
@@ -200,7 +219,91 @@ class _AdminCommunityScreenState extends State<AdminCommunityScreen> {
             selected: {_controller.view},
             onSelectionChanged: (s) => _controller.setView(s.first),
           ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: _searchBox()),
+              const SizedBox(width: 10),
+              _sortMenu(),
+            ],
+          ),
+          if (_controller.isRefreshing)
+            const Padding(
+              padding: EdgeInsets.only(top: 10),
+              child: LinearProgressIndicator(minHeight: 2, color: AdminColors.heroEnd),
+            ),
         ],
+      ),
+    );
+  }
+
+  Widget _searchBox() {
+    final reported = _controller.view == ModerationView.reported;
+    return TextField(
+      controller: _searchText,
+      onChanged: _controller.setSearch,
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        isDense: true,
+        filled: true,
+        fillColor: Colors.white,
+        hintText: reported ? 'Search text, author, reason…' : 'Search text or author',
+        prefixIcon: const Icon(Icons.search_rounded, color: AdminColors.textSecondary),
+        suffixIcon: _controller.isSearching
+            ? IconButton(
+                tooltip: 'Clear',
+                icon: const Icon(Icons.close_rounded, size: 18),
+                onPressed: _clearSearch,
+              )
+            : null,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+      ),
+    );
+  }
+
+  void _clearSearch() {
+    _searchText.clear();
+    _controller.setSearch('');
+    FocusScope.of(context).unfocus();
+  }
+
+  Widget _sortMenu() {
+    return PopupMenuButton<ModerationSort>(
+      tooltip: 'Sort',
+      initialValue: _controller.sort,
+      onSelected: _controller.setSort,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      itemBuilder: (_) => [
+        for (final s in _controller.sortOptions)
+          PopupMenuItem(
+            value: s,
+            child: Row(
+              children: [
+                Icon(
+                  s == _controller.sort ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
+                  size: 18,
+                  color: AdminColors.heroEnd,
+                ),
+                const SizedBox(width: 10),
+                Text(s == ModerationSort.oldest && _controller.view == ModerationView.reported
+                    ? 'Waiting longest'
+                    : s.label),
+              ],
+            ),
+          ),
+      ],
+      child: Container(
+        height: 48,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.sort_rounded, color: AdminColors.heroStart, size: 20),
+            SizedBox(width: 6),
+            Text('Sort', style: TextStyle(fontWeight: FontWeight.w700, color: AdminColors.heroStart)),
+          ],
+        ),
       ),
     );
   }
@@ -239,6 +342,7 @@ class _AdminCommunityScreenState extends State<AdminCommunityScreen> {
 
   List<Widget> _body() {
     final c = _controller;
+    final items = c.items; // searched and sorted once per build
     if (c.isLoading) {
       return const [
         SliverToBoxAdapter(
@@ -249,7 +353,7 @@ class _AdminCommunityScreenState extends State<AdminCommunityScreen> {
         ),
       ];
     }
-    if (c.error != null && c.items.isEmpty) {
+    if (c.error != null && items.isEmpty) {
       return [
         SliverToBoxAdapter(
           child: _stateCard(
@@ -265,11 +369,24 @@ class _AdminCommunityScreenState extends State<AdminCommunityScreen> {
         ),
       ];
     }
-    if (c.items.isEmpty) {
+    if (items.isEmpty) {
       final what = c.kind == ModerationKind.post ? 'posts' : 'comments';
       return [
         SliverToBoxAdapter(
-          child: c.view == ModerationView.reported
+          child: c.isSearching
+              ? _stateCard(
+                  icon: Icons.search_off_rounded,
+                  title: 'No results for "${c.search.trim()}"',
+                  message: c.view == ModerationView.reported
+                      ? 'No reported $what match. Try another word, or search in All.'
+                      : 'No $what match. Try another word or a name.',
+                  action: TextButton.icon(
+                    onPressed: _clearSearch,
+                    icon: const Icon(Icons.close_rounded),
+                    label: const Text('Clear search'),
+                  ),
+                )
+              : c.view == ModerationView.reported
               ? _stateCard(
                   icon: Icons.verified_user_outlined,
                   title: 'No reported $what',
@@ -284,6 +401,29 @@ class _AdminCommunityScreenState extends State<AdminCommunityScreen> {
       ];
     }
     return [
+      if (c.error != null)
+        SliverToBoxAdapter(
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: AdminColors.alertRed.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.cloud_off_rounded, size: 18, color: AdminColors.alertRed),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Couldn\'t refresh. Showing the list from before; pull down to try again.',
+                    style: TextStyle(fontSize: 12.5, color: AdminColors.textPrimary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       if (c.reportsCapped)
         SliverToBoxAdapter(
           child: Padding(
@@ -299,16 +439,17 @@ class _AdminCommunityScreenState extends State<AdminCommunityScreen> {
         sliver: SliverList(
           delegate: SliverChildBuilderDelegate(
             (context, i) {
-              final item = c.items[i];
+              final item = items[i];
               return ModerationCard(
                 key: ValueKey('${item.kind.name}-${item.id}'),
                 item: item,
                 busy: c.isBusy(item),
                 onRemove: () => _remove(item),
-                onDismiss: item.isReported ? () => _dismiss(item) : null,
+                // Already removed: only "Close reports" (Remove) is offered
+                onDismiss: item.isReported && !item.isRemoved ? () => _dismiss(item) : null,
               );
             },
-            childCount: c.items.length,
+            childCount: items.length,
           ),
         ),
       ),
@@ -319,7 +460,11 @@ class _AdminCommunityScreenState extends State<AdminCommunityScreen> {
             child: Center(
               child: c.isLoadingMore
                   ? const CircularProgressIndicator(color: AdminColors.heroEnd)
-                  : TextButton(onPressed: c.loadMore, child: const Text('Load more')),
+                  : TextButton.icon(
+                      onPressed: () => c.loadMore(retry: true),
+                      icon: Icon(c.loadMoreFailed ? Icons.refresh_rounded : Icons.expand_more_rounded),
+                      label: Text(c.loadMoreFailed ? 'Couldn\'t load more. Try again' : 'Load more'),
+                    ),
             ),
           ),
         ),

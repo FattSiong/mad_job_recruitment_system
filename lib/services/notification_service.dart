@@ -8,6 +8,7 @@ import '../modules/employer/screens/applicant_detail_screen.dart';
 import '../modules/employer/screens/subscription_screen.dart';
 import '../modules/job_seeker/controllers/applied_jobs_controller.dart';
 import '../modules/job_seeker/screens/my_jobs_screen.dart';
+import '../shared_widgets/notifications_screen.dart';
 import 'employer_service.dart';
 import 'push_service.dart';
 
@@ -242,6 +243,10 @@ class NotificationService {
       return;
     }
 
+    // Post / comment removed by an admin: the whole message is already in
+    // the list, and there is nothing to open.
+    if (item.isCommunityNotice) return;
+
     if (item.isEmployerEvent) {
       final applicantId = item.applicantID?.trim() ?? '';
       if (applicantId.isEmpty) return;
@@ -312,6 +317,15 @@ class NotificationService {
       isRead: true,
       createdAt: DateTime.now(),
     );
+
+    // Community notice from a push banner: show the bell list, where the
+    // full message can be read.
+    if (model.isCommunityNotice) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+      );
+      return;
+    }
 
     await openRecruitmentNotification(context, model);
   }

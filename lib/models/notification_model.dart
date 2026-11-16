@@ -65,6 +65,9 @@ class NotificationModel {
     );
   }
 
+  /// An admin removed the user's community post or comment.
+  bool get isCommunityNotice => type == 'community_post_removed' || type == 'community_comment_removed';
+
   /// True when the notification targets an Employer (e.g. new application, interview response, offer response).
   bool get isEmployerEvent {
     switch (type) {

@@ -133,6 +133,8 @@ class _ModerationCardState extends State<ModerationCard> {
           ),
         if (_item.deletedByAuthor)
           _badge(Icons.delete_sweep_outlined, 'Deleted by author (hidden)', AdminColors.textSecondary),
+        if (_item.isRemoved)
+          _badge(Icons.block_rounded, 'Already removed', AdminColors.textSecondary),
         if (_item.isPost) _badge(_item.topic.icon, _item.topic.label, AdminColors.heroEnd),
       ];
 
@@ -309,8 +311,12 @@ class _ModerationCardState extends State<ModerationCard> {
     }
     final remove = ElevatedButton.icon(
       onPressed: widget.onRemove,
-      icon: const Icon(Icons.delete_outline_rounded, size: 18),
-      label: Text(_item.deletedByAuthor ? 'Confirm removal' : 'Remove'),
+      icon: Icon(_item.isRemoved ? Icons.done_all_rounded : Icons.delete_outline_rounded, size: 18),
+      label: Text(_item.isRemoved
+          ? 'Close reports'
+          : _item.deletedByAuthor
+              ? 'Confirm removal'
+              : 'Remove'),
       style: ElevatedButton.styleFrom(
         backgroundColor: AdminColors.alertRed,
         foregroundColor: Colors.white,

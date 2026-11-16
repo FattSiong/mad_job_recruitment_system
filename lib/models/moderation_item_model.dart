@@ -5,6 +5,21 @@ import 'post_topic.dart';
 /// A community post or a comment, as the admin reviews it.
 enum ModerationKind { post, comment }
 
+/// Order of the admin's list.
+enum ModerationSort {
+  /// Reported: newest report first. All: newest post / comment first.
+  newest('Newest first'),
+
+  /// Reported: waiting longest first. All: oldest first.
+  oldest('Oldest first'),
+
+  /// Reported only: reported by the most people first.
+  mostReported('Most reported');
+
+  const ModerationSort(this.label);
+  final String label;
+}
+
 /// One user's report on a post or comment ("ReportedPost" / "ReportedComment").
 class ContentReport {
   final String reportID;
@@ -59,7 +74,8 @@ class ModerationItem {
   final String? mediaURL; // posts only
   final PostTopic topic; // posts only
 
-  /// 'active', or 'author_deleted' (the author deleted it while it was reported).
+  /// 'active', 'author_deleted' (the author deleted it while it was
+  /// reported) or 'deleted' (already removed by an admin).
   final String status;
   final DateTime createdAt;
 
@@ -90,6 +106,9 @@ class ModerationItem {
   bool get isReply => parentCommentID != null && parentCommentID!.isNotEmpty;
   bool get isReported => reports.isNotEmpty;
   bool get deletedByAuthor => status == 'author_deleted';
+
+  /// Already removed by an admin; only its leftover reports need closing.
+  bool get isRemoved => status == 'deleted';
   bool get hasMedia => mediaURL != null && mediaURL!.trim().isNotEmpty;
 
   /// How many different people reported it.
@@ -105,6 +124,46 @@ class ModerationItem {
   }
 
   DateTime? get latestReportAt => reports.isEmpty ? null : reports.first.reportedAt;
+
+  /// When the oldest open report came in (how long it has been waiting).
+  DateTime? get firstReportAt => reports.isEmpty ? null : reports.last.reportedAt;
+
+  /// True if [query] (lower case) is in the text, the author's name, the
+  /// post a comment is on, or a report's reason, details or reporter.
+  bool matches(String query) {
+    bool has(String? text) => text != null && text.toLowerCase().contains(query);
+    return has(content) ||
+        has(author.displayName) ||
+        has(postContent) ||
+        reports.any((r) => has(r.category) || has(r.details) || has(r.reporter?.displayName));
+  }
+
+  /// The Reported list: items matching [search], in the [sort] order.
+  static List<ModerationItem> searchAndSortReported(
+    Iterable<ModerationItem> items,
+    String search,
+    ModerationSort sort,
+  ) {
+    final q = search.trim().toLowerCase();
+    final list = q.isEmpty ? items.toList() : items.where((i) => i.matches(q)).toList();
+    final never = DateTime.fromMillisecondsSinceEpoch(0);
+    int newestFirst(ModerationItem a, ModerationItem b) =>
+        (b.latestReportAt ?? never).compareTo(a.latestReportAt ?? never);
+    switch (sort) {
+      case ModerationSort.newest:
+        list.sort(newestFirst);
+      case ModerationSort.oldest:
+        list.sort((a, b) => (a.firstReportAt ?? never).compareTo(b.firstReportAt ?? never));
+      case ModerationSort.mostReported:
+        list.sort((a, b) {
+          final people = b.reporterCount.compareTo(a.reporterCount);
+          if (people != 0) return people;
+          final reports = b.reports.length.compareTo(a.reports.length);
+          return reports != 0 ? reports : newestFirst(a, b);
+        });
+    }
+    return list;
+  }
 
   /// Same item without its reports (after they were dismissed).
   ModerationItem withoutReports() => ModerationItem(

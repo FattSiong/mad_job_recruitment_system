@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -15,6 +17,7 @@ enum ModerationView {
   all,
 }
 
+
 /// Admin > Community: reported and all posts / comments, and the admin's
 /// actions on them (dismiss the reports, or remove the content).
 ///
@@ -31,10 +34,17 @@ class AdminCommunityController extends ChangeNotifier {
 
   ModerationKind _kind = ModerationKind.post;
   ModerationView _view = ModerationView.reported;
+  ModerationSort _sort = ModerationSort.newest;
+  String _search = '';
+  Timer? _searchDebounce;
+  final Map<String, List<String>> _authorMatches = {}; // search text -> user IDs
   List<ModerationItem> _items = [];
   bool _isLoading = true;
   bool _isLoadingMore = false;
+  bool _isRefreshing = false;
   bool _hasMore = false;
+  bool _loadMoreFailed = false;
+  DateTime? _cursor; // All list: the next page starts after this time
   bool _reportsCapped = false;
   String? _error;
   int _reportedPosts = 0;
@@ -45,11 +55,31 @@ class AdminCommunityController extends ChangeNotifier {
 
   ModerationKind get kind => _kind;
   ModerationView get view => _view;
-  List<ModerationItem> get items => List.unmodifiable(_items);
+  ModerationSort get sort => _sort;
+  String get search => _search;
+  bool get isSearching => _search.trim().isNotEmpty;
+
+  /// Sorts offered for the current view ("Most reported" only for Reported).
+  List<ModerationSort> get sortOptions => _view == ModerationView.reported
+      ? ModerationSort.values
+      : const [ModerationSort.newest, ModerationSort.oldest];
+
+  /// The list to show. Reported: all open reports are loaded, so search and
+  /// sort happen here. All: the database already searched and sorted.
+  List<ModerationItem> get items {
+    if (_view == ModerationView.all) return List.unmodifiable(_items);
+    return List.unmodifiable(ModerationItem.searchAndSortReported(_items, _search, _sort));
+  }
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
+
+  /// Loading again while the old list is still shown (thin progress bar).
+  bool get isRefreshing => _isRefreshing;
   bool get hasMore => _hasMore;
   String? get error => _error;
+
+  /// The last "load more" failed (it is not retried while scrolling).
+  bool get loadMoreFailed => _loadMoreFailed;
 
   /// True when there were more open reports than [maxReports].
   bool get reportsCapped => _reportsCapped;
@@ -88,8 +118,34 @@ class AdminCommunityController extends ChangeNotifier {
   void setView(ModerationView view) {
     if (view == _view) return;
     _view = view;
+    if (!sortOptions.contains(_sort)) _sort = ModerationSort.newest;
     _items = [];
     load();
+  }
+
+  /// Search text. Reported: filters at once. All: searches the database
+  /// after the admin stops typing.
+  void setSearch(String text) {
+    if (text == _search) return;
+    _search = text;
+    _searchDebounce?.cancel();
+    if (_view == ModerationView.reported) {
+      _notify();
+    } else {
+      _searchDebounce = Timer(const Duration(milliseconds: 400), load);
+    }
+  }
+
+  /// Changes the order (All: loads again from the start).
+  void setSort(ModerationSort sort) {
+    if (sort == _sort || !sortOptions.contains(sort)) return;
+    _sort = sort;
+    if (_view == ModerationView.reported) {
+      _notify();
+    } else {
+      _items = [];
+      load();
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -98,16 +154,21 @@ class AdminCommunityController extends ChangeNotifier {
 
   /// Loads the list again from the start (and the tab badges).
   Future<void> load() async {
+    _searchDebounce?.cancel();
     final token = ++_loadToken;
     final kind = _kind;
     _isLoading = _items.isEmpty;
+    _isRefreshing = !_isLoading;
+    _isLoadingMore = false; // a "load more" still running is now out of date
+    _loadMoreFailed = false;
     _error = null;
     _notify();
     try {
-      final page = _view == ModerationView.reported ? await _loadReported(kind) : await _loadPage(kind, 0);
+      final page = _view == ModerationView.reported ? await _loadReported(kind) : await _loadPage(kind);
       if (token != _loadToken) return; // a newer load (or another tab) started
       _items = page.items;
       _hasMore = page.hasMore;
+      _cursor = page.cursor;
       _reportsCapped = page.capped;
     } catch (e) {
       if (token != _loadToken) return;
@@ -116,26 +177,32 @@ class AdminCommunityController extends ChangeNotifier {
     } finally {
       if (token == _loadToken) {
         _isLoading = false;
+        _isRefreshing = false;
         _notify();
       }
     }
     _loadCounts();
   }
 
-  /// Next page of the All list.
-  Future<void> loadMore() async {
+  /// Next page of the All list. After a failure it only runs again when
+  /// [retry] is true (the button), not on every scroll.
+  Future<void> loadMore({bool retry = false}) async {
     if (_view != ModerationView.all || !_hasMore || _isLoadingMore || _isLoading) return;
+    if (_loadMoreFailed && !retry) return;
     final token = _loadToken;
     _isLoadingMore = true;
+    _loadMoreFailed = false;
     _notify();
     try {
-      final page = await _loadPage(_kind, _items.length);
+      final page = await _loadPage(_kind, before: _cursor);
       if (token != _loadToken) return;
       final known = _items.map((i) => i.id).toSet();
       _items = [..._items, ...page.items.where((i) => !known.contains(i.id))];
       _hasMore = page.hasMore;
+      _cursor = page.cursor ?? _cursor;
     } catch (e) {
-      debugPrint('Admin community load more failed: $e'); // the button stays: try again
+      debugPrint('Admin community load more failed: $e');
+      if (token == _loadToken) _loadMoreFailed = true;
     } finally {
       if (token == _loadToken) {
         _isLoadingMore = false;
@@ -177,36 +244,51 @@ class AdminCommunityController extends ChangeNotifier {
       final id = r[target].toString();
       if (seen.add(id)) ids.add(id);
     }
-    if (ids.isEmpty) return _Page(const [], hasMore: false, capped: capped);
+    if (ids.isEmpty) return _Page(const [], hasMore: false, capped: capped, cursor: null);
 
     final rows = await _fetchTargets(kind, ids);
     final byId = {for (final r in rows) r[target].toString(): r};
     final items = await _build(kind, [for (final id in ids) if (byId[id] != null) byId[id]!], reportRows);
-    return _Page(items, hasMore: false, capped: capped);
+    return _Page(items, hasMore: false, capped: capped, cursor: null);
   }
 
-  /// One page of visible posts / comments, newest first.
-  Future<_Page> _loadPage(ModerationKind kind, int offset) async {
-    final List<Map<String, dynamic>> rows;
+  /// One page of visible posts / comments, newest first, older than
+  /// [before] (by time, not by position: removing items or new posts
+  /// arriving can't make the next page skip or repeat any).
+  Future<_Page> _loadPage(ModerationKind kind, {DateTime? before}) async {
+    final oldestFirst = _sort == ModerationSort.oldest;
+    final search = _cleanSearch(_search);
+    PostgrestFilterBuilder<PostgrestList> query;
     if (kind == ModerationKind.post) {
-      rows = List<Map<String, dynamic>>.from(await _supabase
+      query = _supabase
           .from(TableConstants.communityPost)
           .select(_postColumns)
           .eq('status', 'active')
-          .eq('isDraft', false)
-          .order('createdAt', ascending: false)
-          .range(offset, offset + pageSize - 1));
+          .eq('isDraft', false);
     } else {
       // Only comments on posts that are still visible
-      rows = List<Map<String, dynamic>>.from(await _supabase
+      query = _supabase
           .from(TableConstants.postComment)
           .select('$_commentColumns, CommunityPost!inner(content, status)')
           .eq('status', 'active')
-          .eq('CommunityPost.status', 'active')
-          .order('createdAt', ascending: false)
-          .range(offset, offset + pageSize - 1));
+          .eq('CommunityPost.status', 'active');
     }
-    if (rows.isEmpty) return const _Page([], hasMore: false, capped: false);
+    if (search.isNotEmpty) {
+      // The text, or written by someone whose name matches
+      final authorColumn = kind == ModerationKind.post ? 'authorID' : 'userID';
+      final authors = await _usersMatching(search);
+      query = authors.isEmpty
+          ? query.ilike('content', '%$search%')
+          : query.or('content.ilike.*$search*,$authorColumn.in.(${authors.join(',')})');
+    }
+    if (before != null) {
+      final at = before.toUtc().toIso8601String();
+      query = oldestFirst ? query.gt('createdAt', at) : query.lt('createdAt', at);
+    }
+    final rows = List<Map<String, dynamic>>.from(
+        await query.order('createdAt', ascending: oldestFirst).limit(pageSize));
+    if (rows.isEmpty) return const _Page([], hasMore: false, capped: false, cursor: null);
+    final cursor = DateTime.tryParse(rows.last['createdAt']?.toString() ?? '');
 
     final target = _targetColumn(kind);
     final ids = rows.map((r) => r[target].toString()).toList();
@@ -219,11 +301,18 @@ class AdminCommunityController extends ChangeNotifier {
           .inFilter(target, chunk)
           .order('reportedAt', ascending: false)));
     }
-    return _Page(await _build(kind, rows, reportRows), hasMore: rows.length == pageSize, capped: false);
+    return _Page(
+      await _build(kind, rows, reportRows),
+      hasMore: rows.length == pageSize && cursor != null,
+      capped: false,
+      cursor: cursor,
+    );
   }
 
-  /// The posts / comments with these IDs (any status but removed, so the
-  /// admin also sees reported content its author deleted).
+  /// The posts / comments with these IDs, whatever their status: the admin
+  /// also sees reported content its author deleted, and content already
+  /// removed that still has open reports (sent just before it was removed,
+  /// or left by the old admin screen), so those reports can be closed.
   Future<List<Map<String, dynamic>>> _fetchTargets(ModerationKind kind, List<String> ids) async {
     final rows = <Map<String, dynamic>>[];
     for (final chunk in _chunks(ids)) {
@@ -235,7 +324,7 @@ class AdminCommunityController extends ChangeNotifier {
               .inFilter('commentID', chunk);
       rows.addAll(List<Map<String, dynamic>>.from(result));
     }
-    return rows.where((r) => r['status']?.toString() != 'deleted').toList();
+    return rows;
   }
 
   /// Turns rows into items, with names and the reports on each one.
@@ -273,6 +362,42 @@ class AdminCommunityController extends ChangeNotifier {
     }).toList();
   }
 
+  /// IDs of users whose username or full name contains [search] (at most
+  /// 150; remembered while the screen is open).
+  Future<List<String>> _usersMatching(String search) async {
+    final key = search.toLowerCase();
+    final known = _authorMatches[key];
+    if (known != null) return known;
+
+    Future<List<String>> ids(String table, String idColumn, String nameColumn) async {
+      try {
+        final rows = await _supabase
+            .from(table)
+            .select(idColumn)
+            .ilike(nameColumn, '%$search%')
+            .limit(50);
+        return List<Map<String, dynamic>>.from(rows).map((r) => r[idColumn].toString()).toList();
+      } catch (e) {
+        debugPrint('Admin community name search ($table) failed: $e');
+        return const [];
+      }
+    }
+
+    final found = await Future.wait([
+      ids(TableConstants.user, 'userID', 'username'),
+      ids(TableConstants.jobSeeker, 'seekerID', 'fullName'),
+      ids(TableConstants.employer, 'employerID', 'fullName'),
+    ]);
+    final result = found.expand((list) => list).toSet().toList();
+    _authorMatches[key] = result;
+    return result;
+  }
+
+  /// Search text that is safe inside the database filter (characters that
+  /// mean something there are turned into spaces).
+  static String _cleanSearch(String text) =>
+      text.replaceAll(RegExp(r'[,()*%\\"\x27:]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+
   /// Splits IDs into groups so the request address stays short.
   static Iterable<List<String>> _chunks(List<String> ids, [int size = 100]) sync* {
     for (var i = 0; i < ids.length; i += size) {
@@ -309,14 +434,20 @@ class AdminCommunityController extends ChangeNotifier {
   }
 
   /// Hides [item] from everyone (a comment together with its replies) and
-  /// closes its reports. Returns an error message, or null when it worked.
-  Future<String?> remove(ModerationItem item, {String? note}) async {
+  /// closes its reports. With [notifyAuthor] the author gets a notification
+  /// naming the report reasons (not the note).
+  /// Returns an error message, or null when it worked.
+  Future<String?> remove(ModerationItem item, {String? note, bool notifyAuthor = true}) async {
     if (!_busy.add(item.id)) return null;
     _notify();
     try {
       await _supabase.rpc(
         item.isPost ? 'admin_remove_post' : 'admin_remove_comment',
-        params: {(item.isPost ? 'p_post_id' : 'p_comment_id'): item.id, 'p_note': _cleanNote(note)},
+        params: {
+          (item.isPost ? 'p_post_id' : 'p_comment_id'): item.id,
+          'p_note': _cleanNote(note),
+          'p_notify': notifyAuthor,
+        },
       );
       _afterReportsClosed(item, removed: true);
       return null;
@@ -369,7 +500,7 @@ class AdminCommunityController extends ChangeNotifier {
         return 'This ${item.isPost ? 'post' : 'comment'} no longer exists.';
       }
       if (e.code == 'PGRST202' || e.code == '42883') {
-        return 'The database needs an update first (migration 20261117000000).';
+        return 'The database needs an update first (migrations 20261117000000 and 20261117010000).';
       }
     }
     return 'Unable to finish this action. Please check your connection and try again.';
@@ -383,6 +514,7 @@ class AdminCommunityController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _searchDebounce?.cancel();
     super.dispose();
   }
 }
@@ -393,5 +525,8 @@ class _Page {
   final bool hasMore;
   final bool capped;
 
-  const _Page(this.items, {required this.hasMore, required this.capped});
+  /// Time of the last row (All list), where the next page starts.
+  final DateTime? cursor;
+
+  const _Page(this.items, {required this.hasMore, required this.capped, required this.cursor});
 }
