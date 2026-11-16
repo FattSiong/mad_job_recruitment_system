@@ -475,24 +475,69 @@ class ChatRoomController extends ChangeNotifier {
       return false;
     }
     await _deleteAttachmentFile(message.mediaURL);
-    // Older messages are not in the live stream, so update the copy shown.
-    final i = _older.indexWhere((m) => m.messageID == message.messageID);
-    if (i != -1) {
-      final m = _older[i];
-      _older[i] = MessageModel(
-        messageID: m.messageID,
-        roomID: m.roomID,
-        senderID: m.senderID,
-        content: 'This message was deleted',
-        isRead: m.isRead,
-        sentAt: m.sentAt,
-        mediaType: m.mediaType,
-        mediaURL: null,
-        isDeleted: true,
-      );
-      _notify();
-    }
+    _replaceShown(message.messageID,
+        (m) => m.copyWith(content: 'This message was deleted', isDeleted: true, clearMedia: true));
     return true;
+  }
+
+  /// True if the user may still edit [message]: their own text message,
+  /// sent and confirmed less than 2 minutes ago, in a chat that isn't blocked.
+  bool canEdit(MessageModel message) =>
+      !isBlocked &&
+      !_outbox.contains(message.messageID) &&
+      message.canBeEditedBy(currentUserID);
+
+  /// Changes the text of one of the user's messages (within 2 minutes of
+  /// sending). Returns null when saved, otherwise a message to show.
+  Future<String?> editMessage(MessageModel message, String text) async {
+    final content = text.trim();
+    if (content == message.content.trim()) return null; // nothing changed
+    if (content.isEmpty) return 'A message can\'t be empty.';
+    if (content.length > 4000) return 'Messages can be up to 4000 characters.';
+    if (!canEdit(message)) return isBlocked ? blockedMessage : editClosedMessage;
+    try {
+      final rows = await _supabase
+          .from(TableConstants.message)
+          .update({'content': content})
+          .eq('messageID', message.messageID)
+          .eq('senderID', currentUserID)
+          .select('editedAt');
+      if (rows.isEmpty) return editClosedMessage;
+      final editedAt = DateTime.tryParse(rows.first['editedAt']?.toString() ?? '') ?? DateTime.now();
+      // The live stream also brings the change; show it straight away.
+      _replaceShown(message.messageID, (m) => m.copyWith(content: content, editedAt: editedAt));
+      return null;
+    } on PostgrestException catch (e) {
+      debugPrint('Edit message failed: ${e.code} ${e.message}');
+      if (e.message.contains('edit_window_closed')) return editClosedMessage;
+      if (e.message.contains('chat_blocked')) {
+        await refreshBlockState();
+        return blockedMessage;
+      }
+      return 'Unable to edit the message. Please try again.';
+    } catch (e) {
+      debugPrint('Edit message failed: $e');
+      return 'Unable to edit the message. Please check your connection and try again.';
+    }
+  }
+
+  static const String editClosedMessage = 'Messages can only be edited within 2 minutes of sending.';
+
+  /// Updates the copy of a message on screen (older messages are not in the
+  /// live stream, so they would otherwise keep the old version).
+  void _replaceShown(String messageID, MessageModel Function(MessageModel) change) {
+    var changed = false;
+    final i = _messages.indexWhere((m) => m.messageID == messageID);
+    if (i != -1) {
+      _messages = [..._messages]..[i] = change(_messages[i]);
+      changed = true;
+    }
+    final j = _older.indexWhere((m) => m.messageID == messageID);
+    if (j != -1) {
+      _older[j] = change(_older[j]);
+      changed = true;
+    }
+    if (changed) _notify();
   }
 
   /// Removes a chat file from storage. Failure is only logged: the message is

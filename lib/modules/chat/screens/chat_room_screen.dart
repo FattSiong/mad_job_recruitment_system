@@ -251,11 +251,56 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
     if (leave && mounted) Navigator.pop(context);
   }
 
-  /// Long-press menu on a message: copy (text) and delete (own messages).
+  /// Edit dialog for one of the user's messages (within 2 minutes of sending).
+  Future<void> _editMessage(MessageModel message) async {
+    final editController = TextEditingController(text: message.content);
+    final newText = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text('Edit message'),
+        content: TextField(
+          controller: editController,
+          autofocus: true,
+          minLines: 1,
+          maxLines: 6,
+          maxLength: 4000,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: InputDecoration(
+            counterText: '',
+            filled: true,
+            fillColor: AppColors.surfaceAlt,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: AppColors.border),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, editController.text),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    // Not disposed here: the dialog's TextField is still on screen while it closes.
+    if (newText == null || !mounted) return;
+    final error = await _controller.editMessage(message, newText);
+    if (error != null) _showError(error);
+  }
+
+  /// Long-press menu on a message: copy (text), edit (own text message,
+  /// first 2 minutes) and delete (own messages).
   Future<void> _showMessageActions(MessageModel message) async {
     if (message.isDeleted) return;
     if (_controller.isFailed(message)) return _showUnsentActions(message);
     final isText = (message.mediaType ?? 'text') == 'text';
+    final canEdit = _controller.canEdit(message);
     final canDelete = _controller.isMine(message) && !_controller.isPending(message);
     if (!isText && !canDelete) return;
 
@@ -276,6 +321,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
                 title: const Text('Copy text'),
                 onTap: () => Navigator.pop(sheetContext, 'copy'),
               ),
+            if (canEdit)
+              ListTile(
+                leading: const Icon(Icons.edit_outlined, color: AppColors.primary),
+                title: const Text('Edit'),
+                subtitle: const Text('Possible for 2 minutes after sending'),
+                onTap: () => Navigator.pop(sheetContext, 'edit'),
+              ),
             if (canDelete)
               ListTile(
                 leading: const Icon(Icons.delete_outline_rounded, color: AppColors.errorRed),
@@ -293,6 +345,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied')));
       }
+    } else if (choice == 'edit') {
+      await _editMessage(message);
     } else if (choice == 'delete') {
       final ok = await _controller.deleteMessage(message);
       if (!ok) _showError('Failed to delete the message. Please try again.');

@@ -112,7 +112,7 @@ class MessageBubble extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  ChatFormatters.bubbleTime(message.sentAt),
+                  '${message.isEdited ? 'Edited · ' : ''}${ChatFormatters.bubbleTime(message.sentAt)}',
                   style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
                 ),
                 if (isMine && !message.isDeleted) ...[

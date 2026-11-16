@@ -54,7 +54,7 @@ class PostCommentsController extends ChangeNotifier {
     try {
       final rows = List<Map<String, dynamic>>.from(await _supabase
           .from(TableConstants.postComment)
-          .select('commentID, postID, parentCommentID, userID, content, createdAt, status')
+          .select('commentID, postID, parentCommentID, userID, content, createdAt, updateAt, status')
           .eq('postID', postID)
           .order('createdAt', ascending: true));
 
@@ -73,16 +73,7 @@ class PostCommentsController extends ChangeNotifier {
       // A reply whose top-level comment is gone is shown as a normal comment.
       final ids = all.map((c) => c.commentID).toSet();
       _comments = all
-          .map((c) => c.isReply && !ids.contains(c.parentCommentID)
-              ? PostCommentModel(
-                  commentID: c.commentID,
-                  postID: c.postID,
-                  userID: c.userID,
-                  content: c.content,
-                  createdAt: c.createdAt,
-                  author: c.author,
-                )
-              : c)
+          .map((c) => c.isReply && !ids.contains(c.parentCommentID) ? c.copyWith(asTopLevel: true) : c)
           .toList();
     } catch (e) {
       debugPrint('PostCommentsController load failed: $e');
@@ -167,6 +158,7 @@ class PostCommentsController extends ChangeNotifier {
     if (!comment.isOwnedBy(currentUserID)) return 'You can only edit your own comments.';
     if (content.isEmpty) return 'Comment cannot be empty.';
     if (content.length > maxLength) return 'Comments can be up to $maxLength characters.';
+    if (content == comment.content) return null; // nothing changed: not "Edited"
     try {
       await _supabase
           .from(TableConstants.postComment)
@@ -174,7 +166,8 @@ class PostCommentsController extends ChangeNotifier {
           .eq('commentID', comment.commentID)
           .eq('userID', currentUserID);
       final i = _comments.indexWhere((c) => c.commentID == comment.commentID);
-      if (i != -1) _comments[i] = _comments[i].copyWith(content: content);
+      // the database sets "updateAt" too; show "Edited" straight away
+      if (i != -1) _comments[i] = _comments[i].copyWith(content: content, updateAt: DateTime.now());
       _notify();
       return null;
     } catch (e) {

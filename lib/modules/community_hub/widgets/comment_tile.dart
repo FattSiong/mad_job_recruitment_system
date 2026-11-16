@@ -57,7 +57,8 @@ class CommentTile extends StatelessWidget {
                             ),
                             TextSpan(
                               text: '  ·  ${comment.author.roleLabel}  ·  '
-                                  '${CommunityFormatters.relative(comment.createdAt)}',
+                                  '${CommunityFormatters.relative(comment.createdAt)}'
+                                  '${comment.isEdited ? '  ·  Edited' : ''}',
                               style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
                             ),
                           ],
