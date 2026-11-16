@@ -44,7 +44,7 @@ class RecruitmentApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'MAD Job Recruitment System',
+      title: 'JobBoleh',
       debugShowCheckedModeBanner: false,
       navigatorKey: NotificationService.navigatorKey,
       theme: ThemeData(
