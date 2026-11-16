@@ -77,7 +77,15 @@ type ResumeInput =
 
 function resumeStoragePath(url: string): string | null {
   const m = url.match(/\/storage\/v1\/object\/(?:public|sign|authenticated)\/resumes\/([^?]+)/);
-  return m ? decodeURIComponent(m[1]) : null;
+  if (!m) return null;
+  let path: string;
+  try {
+    path = decodeURIComponent(m[1]);
+  } catch {
+    return null; // broken %-encoding
+  }
+  // "<me>/../<someone else>/cv.pdf" must not get past the own-folder check
+  return path.split("/").some((part) => part === ".." || part === ".") ? null : path;
 }
 
 function toBase64(bytes: Uint8Array): string {

@@ -417,7 +417,16 @@ async function evaluateAnswer(supabase: SupabaseClient, seekerID: string, body: 
   if (typeof body.audioBase64 !== "string" || body.audioBase64.length === 0) {
     throw new HttpError(400, "bad_request", "No recording was received.");
   }
-  const audio = decodeBase64(body.audioBase64);
+  // Size check before decoding (base64 is 4 characters per 3 bytes)
+  if (body.audioBase64.length > Math.ceil(MAX_AUDIO_BYTES / 3) * 4) {
+    throw new HttpError(400, "audio_too_large", "Your answer is too long. Please keep it under 3 minutes.");
+  }
+  let audio: Uint8Array;
+  try {
+    audio = decodeBase64(body.audioBase64);
+  } catch {
+    throw new HttpError(400, "bad_request", "We couldn't read your recording. Please record your answer again.");
+  }
   if (audio.byteLength > MAX_AUDIO_BYTES) {
     throw new HttpError(400, "audio_too_large", "Your answer is too long. Please keep it under 3 minutes.");
   }

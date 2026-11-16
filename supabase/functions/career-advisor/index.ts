@@ -29,6 +29,7 @@ const GEMINI_TIMEOUT_MS = 25_000;
 const MAX_MESSAGE_CHARS = 2000;
 const HISTORY_LIMIT = 10;          // previous messages sent to Gemini as context
 const RATE_LIMIT_PER_MINUTE = 15;  // user messages per minute
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -44,6 +45,11 @@ function json(body: unknown, status = 200): Response {
 
 function fail(status: number, error: string, message: string): Response {
   return json({ error, message }, status);
+}
+
+/** The conversation doesn't exist (any more); the app then starts a new one. */
+function conversationGone(): Response {
+  return fail(404, "conversation_not_found", "This conversation no longer exists.");
 }
 
 // ---------------------------------------------------------------------
@@ -270,6 +276,8 @@ Deno.serve(async (req) => {
     // 5. Existing conversation: check ownership + load history ----------
     let history: GeminiContent[] = [];
     if (conversationIdIn) {
+      // Not an ID we could have made (a bad ID would fail in the database)
+      if (!UUID_RE.test(conversationIdIn)) return conversationGone();
       const { data: conv, error: convErr } = await supabase
         .from("AdvisorConversation")
         .select("conversationID")
@@ -277,7 +285,7 @@ Deno.serve(async (req) => {
         .eq("seekerID", seekerID)
         .maybeSingle();
       if (convErr) throw convErr;
-      if (!conv) return fail(404, "conversation_not_found", "This conversation no longer exists.");
+      if (!conv) return conversationGone();
 
       const { data: rows, error: histErr } = await supabase
         .from("AdvisorMessage")
@@ -326,6 +334,8 @@ Deno.serve(async (req) => {
         { conversationID, seekerID, role: "model", content: reply, createdAt: new Date(now + 1).toISOString() },
       ])
       .select("messageID, conversationID, role, content, createdAt");
+    // 23503: the conversation was deleted while Gemini was answering
+    if (saveErr?.code === "23503") return conversationGone();
     if (saveErr) throw saveErr;
 
     const { error: touchErr } = await supabase
