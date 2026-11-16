@@ -4,6 +4,8 @@ import '../../../models/job_model.dart';
 import '../../../core/theme/app_colors.dart';
 import '../controllers/bookmarked_controller.dart';
 
+/// A job in the Home list: title, company, location, salary and a bookmark
+/// button.
 class JobCard extends StatefulWidget {
   final JobModel job;
   final VoidCallback onTap;
@@ -113,7 +115,6 @@ class _JobCardState extends State<JobCard> {
                   Icon(Icons.location_on, size: 14, color: Colors.grey.shade600),
                   const SizedBox(width: 4),
                   Expanded(
-                    // Replaced FutureBuilder with instant text
                     child: Text(
                       widget.job.locationName ?? 'Location unavailable',
                       style: TextStyle(fontSize: 13, color: Colors.grey.shade600),

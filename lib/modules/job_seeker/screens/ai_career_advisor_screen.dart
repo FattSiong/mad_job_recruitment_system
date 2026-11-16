@@ -22,8 +22,6 @@ class AiCareerAdvisorScreen extends StatefulWidget {
 }
 
 class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
-  // Same palette as the other job seeker screens
-
   static const List<String> _suggestedQuestions = [
     'What career paths suit my skills?',
     'How can I improve my resume for my first job?',
@@ -506,9 +504,9 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
   }
 }
 
-// ------------------------------------------------------------------------
+// ---------------------------------------------------------------------
 // Message bubble
-// ------------------------------------------------------------------------
+// ---------------------------------------------------------------------
 class _AdvisorMessageBubble extends StatelessWidget {
   final AdvisorMessageModel message;
   final VoidCallback onLongPress;
@@ -592,9 +590,9 @@ class _AdvisorMessageBubble extends StatelessWidget {
   }
 }
 
-// ------------------------------------------------------------------------
+// ---------------------------------------------------------------------
 // "Advisor is typing" bubble
-// ------------------------------------------------------------------------
+// ---------------------------------------------------------------------
 class _TypingBubble extends StatelessWidget {
   const _TypingBubble();
 
@@ -638,9 +636,9 @@ class _TypingBubble extends StatelessWidget {
   }
 }
 
-// ------------------------------------------------------------------------
+// ---------------------------------------------------------------------
 // Past conversations bottom sheet
-// ------------------------------------------------------------------------
+// ---------------------------------------------------------------------
 class _ConversationHistorySheet extends StatefulWidget {
   final CareerAdvisorController controller;
   final String? currentConversationID;

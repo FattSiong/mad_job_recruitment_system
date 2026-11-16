@@ -240,7 +240,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
     );
   }
 
-  // ---- Resume choice ---------------------------------------------------
+  // ---- Resume choice --------------------------------------------------
 
   Widget _buildResumePickerCard() {
     final s = _sources;
@@ -407,7 +407,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
     );
   }
 
-  // ---- Target job ------------------------------------------------------
+  // ---- Target job -----------------------------------------------------
 
   Widget _buildRoleCard() {
     return SurfaceCard(
@@ -475,7 +475,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
     );
   }
 
-  // ---- What is checked -------------------------------------------------
+  // ---- What is checked ------------------------------------------------
 
   Widget _buildChecklistCard() {
     return SurfaceCard(
@@ -529,7 +529,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
     );
   }
 
-  // ---- History ---------------------------------------------------------
+  // ---- History --------------------------------------------------------
 
   Widget _buildHistoryCard() {
     return SurfaceCard(

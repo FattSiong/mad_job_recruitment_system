@@ -8,6 +8,8 @@ import 'report_job_screen.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared_widgets/hero_icon_button.dart';
 
+/// Full job details with Apply, Bookmark and Report.
+/// [disableApplyButton] hides applying (e.g. opened from My Jobs > Applied).
 class JobDetailsScreen extends StatefulWidget {
   final JobModel job;
   final bool disableApplyButton;
@@ -47,7 +49,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
 
   Future<void> _checkAppliedStatus() async {
     if (widget.disableApplyButton || widget.job.jobID == null) {
-      _isCheckingApplied = false; // runs synchronously inside initState, no setState needed
+      _isCheckingApplied = false; // still inside initState, so no setState needed
       return;
     }
     final status = await _applicationController.appliedStatus(widget.job.jobID!);

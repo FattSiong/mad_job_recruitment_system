@@ -31,6 +31,7 @@ Future<int> showPostComments(
   return count;
 }
 
+/// The comments sheet's content (opened by the function above).
 class PostCommentsSheet extends StatefulWidget {
   final PostCommentsController controller;
 

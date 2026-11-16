@@ -134,13 +134,15 @@ class ProfileController {
           '${DateTime.now().millisecondsSinceEpoch}_${FilePickerHelper.storageSafeName(original)}';
       final filePath = '$userId/$fileName';
 
-      // 1. Upload to Supabase Storage (Ensure you have a bucket named 'resumes')
+      // 1. Upload the file to the user's folder in the 'resumes' bucket
       await _supabase.storage.from(_resumesBucket).upload(filePath, file);
 
-      // 2. Get the public URL
+      // 2. Make the stored link. The bucket is private, so this link only
+      //    names the file: the app opens it through a signed URL
+      //    (StorageUrlHelper), and only people allowed to see it can.
       final newResumeUrl = _supabase.storage.from(_resumesBucket).getPublicUrl(filePath);
 
-      // 3. Update the JobSeeker table with the new URL
+      // 3. Save the link on the profile
       await _supabase
           .from(TableConstants.jobSeeker)
           .update({'resumeURL': newResumeUrl})

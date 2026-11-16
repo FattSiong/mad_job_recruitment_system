@@ -543,6 +543,8 @@ class ChatRoomController extends ChangeNotifier {
       UserDirectory.fetchOne(userID);
 
   // ---------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------
 
   void _notify() {
     if (!_disposed) notifyListeners();

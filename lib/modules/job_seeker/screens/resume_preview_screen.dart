@@ -161,6 +161,8 @@ class _ResumePreviewScreenState extends State<ResumePreviewScreen> {
   }
 
   // ---------------------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {

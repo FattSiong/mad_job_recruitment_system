@@ -249,7 +249,7 @@ class ApplicationController extends ChangeNotifier {
   }) async {
     final uploaded = <String, List<String>>{_resumeBucket: [], _answerBucket: []};
 
-    // ---- 1. Uploads -------------------------------------------------------
+    // ---- 1. Uploads -----------------------------------------------------
     String resumeUrl = existingResumeUrl ?? '';
     final answerRows = <Map<String, dynamic>>[];
 
@@ -279,7 +279,7 @@ class ApplicationController extends ChangeNotifier {
       );
     }
 
-    // ---- 2. Save everything in one transaction -----------------------------
+    // ---- 2. Save everything in one transaction --------------------------
     try {
       await _supabase.rpc('submit_job_application', params: {
         'p_job_id': jobId,

@@ -3,7 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
 
-/// Shared bits for the profile bottom sheets and record cards.
+// Shared bits for the profile bottom sheets and record cards.
 
 Future<DateTime?> pickProfileDate(BuildContext context, DateTime? initialDate) {
   return showDatePicker(

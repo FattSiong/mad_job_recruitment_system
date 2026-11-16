@@ -269,6 +269,8 @@ class ChatListController extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------
 
   void _notify() {
     if (!_disposed) notifyListeners();

@@ -254,7 +254,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
     );
   }
 
-  // ---- Use case A1: no reports yet --------------------------------------
+  // ---- Use case A1: no reports yet ------------------------------------
 
   Widget _buildEmptyState() {
     return SurfaceCard(
@@ -332,7 +332,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
     );
   }
 
-  // ---- Use case A2: database error ----------------------------------------
+  // ---- Use case A2: database error ------------------------------------
 
   Widget _buildErrorState() {
     return SurfaceCard(
@@ -354,7 +354,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
     );
   }
 
-  // ---- Summary ------------------------------------------------------------
+  // ---- Summary --------------------------------------------------------
 
   Widget _buildSummaryCard() {
     final interviewScores = _interviews.map((r) => r.score).whereType<int>().toList();
@@ -420,7 +420,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
     );
   }
 
-  // ---- Progress chart ---------------------------------------------------------
+  // ---- Progress chart -------------------------------------------------
 
   Widget _buildProgressCard() {
     return SurfaceCard(
@@ -504,7 +504,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
     );
   }
 
-  // ---- Filter + timeline ---------------------------------------------------------
+  // ---- Filter + timeline ----------------------------------------------
 
   Widget _buildFilterBar() {
     Widget chip(_Filter f, String label, int count) {

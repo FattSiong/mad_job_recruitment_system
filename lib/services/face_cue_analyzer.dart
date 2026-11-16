@@ -85,6 +85,8 @@ class FaceCueAnalyzer {
   }
 
   // ---------------------------------------------------------------------
+  // Camera frames -> ML Kit
+  // ---------------------------------------------------------------------
 
   Future<void> _startStream() async {
     final cam = _camera;

@@ -22,6 +22,7 @@ class SkillGapException implements Exception {
   String toString() => message;
 }
 
+/// Skill Gap Analysis: runs it (Edge Function) and loads past analyses.
 class SkillGapController {
   final _supabase = Supabase.instance.client;
   String get _currentSeekerID => SessionHelper.requireUserId();

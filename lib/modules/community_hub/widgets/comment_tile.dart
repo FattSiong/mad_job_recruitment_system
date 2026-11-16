@@ -5,6 +5,7 @@ import '../../../models/post_comment_model.dart';
 import '../../../shared_widgets/user_avatar.dart';
 import '../community_formatters.dart';
 
+/// Menu actions on a comment.
 enum CommentAction { edit, delete, report }
 
 /// One comment or reply in the comments sheet.

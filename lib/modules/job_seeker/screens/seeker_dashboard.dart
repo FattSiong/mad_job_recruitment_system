@@ -24,6 +24,8 @@ import 'my_jobs_screen.dart';
 import 'profile_screen.dart';
 import 'qr_scanner_screen.dart';
 
+/// The job seeker's main screen: Home (job search), My Jobs, Messages,
+/// Community and Profile tabs.
 class SeekerDashboard extends StatefulWidget {
   const SeekerDashboard({super.key});
 

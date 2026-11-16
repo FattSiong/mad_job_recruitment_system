@@ -1,3 +1,4 @@
+/// One AI Career Advisor conversation ("AdvisorConversation").
 class AdvisorConversationModel {
   final String conversationID;
   final String seekerID;

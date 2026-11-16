@@ -6,6 +6,8 @@ import '../../../models/job_model.dart';
 import '../../../core/constants/table_constants.dart';
 import '../../../core/utils/session_helper.dart';
 
+/// The job seeker's applications (My Jobs > Applied): loading, withdrawing
+/// and answering job offers.
 class AppliedJobsController {
   final _supabase = Supabase.instance.client;
   String get _currentSeekerID => SessionHelper.requireUserId();
@@ -16,7 +18,7 @@ class AppliedJobsController {
 
   static void notifyChanged() => refreshSignal.value++;
 
-  /// Fetches all jobs the user has applied for
+  /// The user's applications with their jobs, newest first.
   Future<List<Map<String, dynamic>>> fetchAppliedJobs() async {
     try {
       final response = await _supabase
@@ -88,8 +90,10 @@ class AppliedJobsController {
     }
   }
 
-  /// Accepts (`accept == true`) or declines (`accept == false`) an active job offer (`applicationStatus == 'offered'`).
-  /// Calls the `respond_to_job_offer` RPC in Supabase and notifies listeners on success.
+  /// Accepts ([accept] true) or declines an active job offer (status
+  /// 'offered') through the `respond_to_job_offer` database function.
+  /// Returns the new status and reloads the My Jobs tabs.
+  /// Throws [DataLoadException] with a message to show.
   Future<String> respondToJobOffer({
     required String applicantId,
     required bool accept,

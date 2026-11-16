@@ -6,15 +6,18 @@ import '../../../models/bookmarked_job_model.dart';
 import '../../../core/constants/table_constants.dart';
 import '../../../core/utils/session_helper.dart';
 
+/// The job seeker's bookmarked jobs (My Jobs > Bookmarked and the bookmark
+/// button on job cards and job details).
 class BookmarkedController {
   final _supabase = Supabase.instance.client;
   String get _currentSeekerID => SessionHelper.requireUserId();
+
   /// Flipped whenever a bookmark is added/removed (the Bookmarked tab reloads its list).
   static final ValueNotifier<bool> bookmarkNotifier = ValueNotifier(false);
 
-  /// IDs of the current user's bookmarked jobs, loaded ONCE and shared by every
-  /// JobCard and JobDetails screen (previously each card ran its own query, and
-  /// every toggle made every card query again).
+  /// IDs of the current user's bookmarked jobs. Loaded once and shared by
+  /// every JobCard and JobDetailsScreen, so a long job list doesn't send one
+  /// query per card.
   static final ValueNotifier<Set<String>> bookmarkedIds = ValueNotifier(<String>{});
   static String? _loadedForUser;
   static Future<void>? _loading;

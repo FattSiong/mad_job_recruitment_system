@@ -13,6 +13,8 @@ import '../widgets/load_error_view.dart';
 import '../../../shared_widgets/hero_icon_button.dart';
 import '../../../shared_widgets/surface_card.dart';
 
+/// Applying for a job: answer the employer's questions, choose a resume,
+/// then submit.
 class JobApplicationScreen extends StatefulWidget {
   final JobModel job;
 

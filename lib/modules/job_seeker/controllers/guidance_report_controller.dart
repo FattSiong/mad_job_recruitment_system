@@ -14,6 +14,8 @@ class GuidanceReportException extends DataLoadException {
   GuidanceReportException(super.message);
 }
 
+/// Guidance Reports: past mock interviews and skill gap analyses, and the
+/// data for the PDF export.
 class GuidanceReportController {
   final _supabase = Supabase.instance.client;
   String get _currentSeekerID => SessionHelper.requireUserId();

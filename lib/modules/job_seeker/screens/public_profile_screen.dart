@@ -18,6 +18,9 @@ import '../widgets/load_error_view.dart';
 import '../../../shared_widgets/hero_icon_button.dart';
 import '../../../shared_widgets/surface_card.dart';
 
+/// A job seeker's profile as others see it (read-only), e.g. after
+/// scanning their QR code. Contact details and resume are shown only to
+/// employers, admins and the owner.
 class PublicProfileScreen extends StatefulWidget {
   final String seekerId;
 
@@ -28,8 +31,6 @@ class PublicProfileScreen extends StatefulWidget {
 }
 
 class _PublicProfileScreenState extends State<PublicProfileScreen> {
-  // Theme Colors matching profile_screen.dart
-
   final ProfileController _controller = ProfileController();
   final SkillController _skillController = SkillController();
   JobSeekerModel? _profile;
@@ -98,7 +99,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     return _profile!.fullName.trim()[0].toUpperCase();
   }
 
-  /// URL that failed to load; we then show the initial instead of an empty circle.
+  /// URL that failed to load; the initial is shown instead of an empty circle.
   String? _failedImageUrl;
 
   void _onProfileImageError(Object error, StackTrace? stackTrace) {
@@ -233,7 +234,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   }
 
   Widget _buildField({required String label, required String? value, required Widget icon, bool isLink = false}) {
-    if (value == null || value.trim().isEmpty) return const SizedBox.shrink(); // Hide empty fields entirely
+    if (value == null || value.trim().isEmpty) return const SizedBox.shrink(); // empty fields are not shown
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
@@ -438,7 +439,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
               _buildHeroHeader(),
               const SizedBox(height: 24),
 
-              // Basic Information Card
+              // Basic information
               SurfaceCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -501,7 +502,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                 ),
               ),
 
-              // Resume Section
+              // Resume
               if (_profile!.resumeURL != null) ...[
                 _buildSectionHeader('Resume Document'),
                 SurfaceCard(
@@ -561,19 +562,19 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                 ),
               ],
 
-              // Skills Section
+              // Skills
               if (_skills.isNotEmpty) ...[
                 _buildSectionHeader('Skills'),
                 SurfaceCard(child: SkillChips(skills: _skills)),
               ],
 
-              // Work Experience Section
+              // Work experience
               if (_profile!.workExperience.isNotEmpty) ...[
                 _buildSectionHeader('Experience'),
                 ..._profile!.workExperience.map(_buildExperienceCard),
               ],
 
-              // Education Section
+              // Education
               if (_profile!.education.isNotEmpty) ...[
                 _buildSectionHeader('Education'),
                 ..._profile!.education.map(_buildEducationCard),

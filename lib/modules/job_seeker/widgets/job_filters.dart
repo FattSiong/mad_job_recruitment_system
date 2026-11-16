@@ -78,9 +78,9 @@ Future<double?> showRadiusFilterSheet(BuildContext context, {required double cur
   );
 }
 
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------
 // Sheet contents
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------
 
 Widget _sheetFrame(BuildContext context, {required String title, String? subtitle, required List<Widget> children}) {
   return Padding(

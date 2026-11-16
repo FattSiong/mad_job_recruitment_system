@@ -46,6 +46,8 @@ class ResumePdfBuilder {
   }
 
   // =====================================================================
+  // The PDF
+  // =====================================================================
 
   static Future<Uint8List> build(ResumeModel r) async {
     final theme = await _loadTheme();

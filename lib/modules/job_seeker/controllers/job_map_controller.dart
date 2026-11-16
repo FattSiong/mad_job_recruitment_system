@@ -27,7 +27,7 @@ class JobMapController extends ChangeNotifier {
   /// Kuala Lumpur city centre, used when the phone's location isn't available.
   static const LatLng fallbackCenter = LatLng(3.140853, 101.693207);
 
-  // ---- Filters ----------------------------------------------------------
+  // ---- Filters --------------------------------------------------------
   String _keyword = '';
   String _jobType = JobFilterOptions.anyJobType;
   String _datePosted = JobFilterOptions.anyDate;
@@ -53,7 +53,7 @@ class JobMapController extends ChangeNotifier {
         _ => _salary,
       };
 
-  // ---- Results ----------------------------------------------------------
+  // ---- Results --------------------------------------------------------
   List<NearbyJob> _jobs = [];
   bool _capped = false;
   bool _isLoading = false;
