@@ -51,6 +51,43 @@ class AppliedJobsController {
     }
   }
 
+  /// Only a pending application can be withdrawn (FN-JAM-06).
+  static bool canWithdraw(String status) => status.trim().toLowerCase() == 'pending';
+
+  /// Withdraws one of the user's pending applications. The record is kept
+  /// as 'withdrawn' (the employer no longer sees it, its notifications are
+  /// removed, and the job can't be applied for again).
+  /// Throws [DataLoadException] with a message to show.
+  Future<void> withdrawApplication(String applicantId) async {
+    try {
+      await _supabase.rpc(
+        'withdraw_job_application',
+        params: {'p_applicant_id': applicantId.trim()},
+      );
+      notifyChanged();
+    } on PostgrestException catch (e) {
+      final msg = e.message.toLowerCase();
+      if (msg.contains('not_pending')) {
+        notifyChanged(); // show its real status
+        throw DataLoadException(
+          'The employer has already started processing this application, so it can\'t be withdrawn.',
+        );
+      }
+      if (msg.contains('application_not_found')) {
+        notifyChanged();
+        throw DataLoadException('This application no longer exists.');
+      }
+      debugPrint('Withdraw application PostgrestException: ${e.message}');
+      throw DataLoadException('Unable to withdraw your application. Please try again.');
+    } catch (e) {
+      if (e is DataLoadException) rethrow;
+      debugPrint('Withdraw application error: $e');
+      throw DataLoadException(
+        'Unable to withdraw your application. Please check your connection and try again.',
+      );
+    }
+  }
+
   /// Accepts (`accept == true`) or declines (`accept == false`) an active job offer (`applicationStatus == 'offered'`).
   /// Calls the `respond_to_job_offer` RPC in Supabase and notifies listeners on success.
   Future<String> respondToJobOffer({

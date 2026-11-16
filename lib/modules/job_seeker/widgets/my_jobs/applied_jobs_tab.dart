@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,9 @@ import '../../../../core/utils/data_load_exception.dart';
 import '../../../../core/utils/storage_url_helper.dart';
 import '../../../../models/job_applicant_model.dart';
 import '../../../../models/job_model.dart';
+import '../../../../core/utils/snackbar_helper.dart';
+import '../../../../services/notification_service.dart';
+import '../../../../shared_widgets/confirm_dialog.dart';
 import '../../controllers/applied_jobs_controller.dart';
 import '../../screens/job_details_screen.dart';
 import '../../screens/unavailable_job_notice_screen.dart';
@@ -30,6 +34,7 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
   bool _isLoading = true;
   bool _isDownloadingPdf = false;
   String? _loadError;
+  String? _withdrawingId; // application being withdrawn
 
   @override
   void initState() {
@@ -70,6 +75,30 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
     _loadAppliedJobs();
   }
 
+  Future<void> _withdraw(JobApplicantModel application, String jobTitle) async {
+    final id = application.applicantID;
+    if (id == null || _withdrawingId != null) return;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Withdraw application?',
+      message: 'Your application for $jobTitle will be withdrawn. The employer will no '
+          'longer see it, and you won\'t be able to apply for this job again.',
+      confirmLabel: 'Withdraw',
+    );
+    if (!confirmed || !mounted) return;
+
+    setState(() => _withdrawingId = id);
+    try {
+      await _appliedController.withdrawApplication(id);
+      unawaited(NotificationService.refreshUnreadCount()); // its notifications are gone
+      if (mounted) SnackBarHelper.showSuccess(context, 'Application withdrawn.');
+    } on DataLoadException catch (e) {
+      if (mounted) SnackBarHelper.showError(context, e.message);
+    } finally {
+      if (mounted) setState(() => _withdrawingId = null);
+    }
+  }
+
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'pending':
@@ -90,6 +119,8 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
         return AppColors.statusInactive;
       case 'deleted':
         return AppColors.textMuted;
+      case 'withdrawn':
+        return AppColors.statusInactive;
       default:
         return AppColors.textMuted;
     }
@@ -927,6 +958,39 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
                         ],
                       ),
                     ),
+                    if (AppliedJobsController.canWithdraw(status) &&
+                        application.applicantID != null) ...[
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _withdrawingId == null
+                              ? () => _withdraw(application, displayTitle)
+                              : null,
+                          icon: _withdrawingId == application.applicantID
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.undo_rounded, size: 18),
+                          label: const Text(
+                            'Withdraw Application',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.errorRed,
+                            side: BorderSide(
+                              color: AppColors.errorRed.withValues(alpha: 0.35),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                     if (!isJobDeleted && hasOfferDetails) ...[
                       const SizedBox(height: 12),
                       SizedBox(
