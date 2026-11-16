@@ -121,9 +121,10 @@ class FeedPostModel {
 
     final likes = rows('PostLike');
     final saves = rows('PostSaved');
-    // Comments removed by an admin are not counted.
+    // Only visible comments count (not ones removed by an admin or
+    // deleted by their author while reported: 'deleted' / 'author_deleted').
     final comments = rows('PostComment')
-        .where((c) => (c['status']?.toString() ?? 'active') != 'deleted')
+        .where((c) => (c['status']?.toString() ?? 'active') == 'active')
         .toList();
 
     bool byMe(Map<String, dynamic> row) => row['userID']?.toString() == currentUserID;

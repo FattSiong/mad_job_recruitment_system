@@ -221,6 +221,8 @@ class PostListController extends ChangeNotifier {
             .from(TableConstants.communityPost)
             .select(_columns)
             .eq('authorID', currentUserID)
+            // deleted by the user while reported: kept only for the admin
+            .neq('status', 'author_deleted')
             .order('createdAt', ascending: false);
         return (rows: List<Map<String, dynamic>>.from(rows), count: rows.length, full: false);
 
