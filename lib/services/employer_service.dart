@@ -34,6 +34,36 @@ class EmployerService {
   /// Returns the newly created JobModel if successful.
   Future<JobModel?> createJobPosting(JobModel newJob) async {
     try {
+      // 0. Server-side verification check: ensure the company is verified before inserting
+      final companyRow = await _supabase
+          .from(TableConstants.company)
+          .select('isVerified, verificationStatus')
+          .eq('companyID', newJob.companyID)
+          .maybeSingle();
+
+      if (companyRow == null) {
+        debugPrint('Blocked job creation: company ${newJob.companyID} not found.');
+        return null;
+      }
+
+      final isVerified = companyRow['isVerified'] == true;
+      final verificationStatus =
+          (companyRow['verificationStatus'] ?? companyRow['verificationstatus'] ?? '')
+              .toString()
+              .trim()
+              .toLowerCase();
+      final isApproved = verificationStatus != 'rejected' &&
+          (isVerified ||
+              verificationStatus == 'verified' ||
+              verificationStatus == 'approved');
+
+      if (!isApproved) {
+        debugPrint(
+          'Blocked job creation: company ${newJob.companyID} is not verified (status: $verificationStatus).',
+        );
+        return null;
+      }
+
       // 1. Tell Supabase to go to the 'Job' table
       // 2. Insert the JSON version of our Dart model
       // 3. .select() asks Supabase to hand the newly created row back to us
