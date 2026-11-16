@@ -27,6 +27,13 @@ class CompanyModel {
     return !isSubscriptionExpired;
   }
 
+  /// True only when the company has been verified/approved and is not rejected.
+  bool get isApprovedForJobPosting {
+    final status = verificationStatus.trim().toLowerCase();
+    if (status == 'rejected') return false;
+    return isVerified || status == 'verified' || status == 'approved';
+  }
+
   CompanyModel({
     this.companyID,
     required this.name,

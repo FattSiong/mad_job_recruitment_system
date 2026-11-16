@@ -48,6 +48,9 @@ class _ManageJobsCompanyListScreenState
     return null;
   }
 
+  List<CompanyModel> get _verifiedCompanies =>
+      _companies.where((company) => company.isApprovedForJobPosting).toList();
+
   int get _activeFilterCount {
     int count = 0;
     if (_sortOption != _JobSortOption.newest) count++;
@@ -367,11 +370,40 @@ class _ManageJobsCompanyListScreenState
   Future<void> _openCreateJob() async {
     CompanyModel? company = _selectedCompany;
 
-    if (company == null && _companies.length == 1) {
-      company = _companies.first;
+    // If a specific company filter is active, ensure that company is verified.
+    if (company != null && !company.isApprovedForJobPosting) {
+      if (!mounted) return;
+      final statusLabel = company.verificationStatus.trim().isEmpty
+          ? 'unverified'
+          : company.verificationStatus.trim().toLowerCase();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '"${company.name}" is $statusLabel. Only verified companies can post jobs.',
+          ),
+          backgroundColor: Colors.orange.shade800,
+        ),
+      );
+      return;
     }
 
-    company ??= await _showCompanyPickerSheet();
+    final verifiedList = _verifiedCompanies;
+    if (verifiedList.isEmpty) {
+      // Opening CreateJobScreen with no verified companies shows the "No Verified Companies" empty state.
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const CreateJobScreen()),
+      );
+      if (!mounted) return;
+      await _loadWorkspace();
+      return;
+    }
+
+    if (company == null && verifiedList.length == 1) {
+      company = verifiedList.first;
+    }
+
+    company ??= await _showCompanyPickerSheet(verifiedList);
 
     if (company == null || !mounted) return;
 
@@ -386,7 +418,9 @@ class _ManageJobsCompanyListScreenState
     await _loadWorkspace();
   }
 
-  Future<CompanyModel?> _showCompanyPickerSheet() async {
+  Future<CompanyModel?> _showCompanyPickerSheet(
+    List<CompanyModel> verifiedCompanies,
+  ) async {
     return showModalBottomSheet<CompanyModel>(
       context: context,
       backgroundColor: Colors.white,
@@ -414,7 +448,7 @@ class _ManageJobsCompanyListScreenState
                   ),
                   const SizedBox(height: 18),
                   const Text(
-                    'Choose a Company',
+                    'Choose a Verified Company',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
@@ -423,7 +457,7 @@ class _ManageJobsCompanyListScreenState
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Pick the company you want to post a new job for.',
+                    'Pick the verified company you want to post a new job for.',
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.4,
@@ -431,7 +465,7 @@ class _ManageJobsCompanyListScreenState
                     ),
                   ),
                   const SizedBox(height: 18),
-                  ..._companies.map(
+                  ...verifiedCompanies.map(
                     (company) => Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: Material(
