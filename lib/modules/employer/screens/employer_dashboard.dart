@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../services/auth_service.dart';
 import '../../../shared_widgets/login_screen.dart';
+import '../../../shared_widgets/notification_bell_button.dart';
 import '../../chat/screens/chat_inbox_screen.dart';
 import '../../community_hub/screens/community_hub_screen.dart';
 import '../../job_seeker/screens/qr_scanner_screen.dart';
@@ -333,6 +334,10 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
                           ),
                         ),
                         const Spacer(),
+                        NotificationBellButton(
+                          onReturned: _loadDashboardStats,
+                        ),
+                        const SizedBox(width: 10),
                         _buildHeaderIconButton(
                           icon: Icons.qr_code_scanner,
                           tooltip: 'Scan QR',

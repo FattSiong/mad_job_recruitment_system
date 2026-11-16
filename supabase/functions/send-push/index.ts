@@ -22,8 +22,9 @@
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-const CHAT_CHANNEL_ID = "chat_messages"; // must match PushService in the app
-const CALL_RING_SECONDS = 45;            // a call push older than this is useless
+const CHAT_CHANNEL_ID = "chat_messages";             // must match PushService in the app
+const RECRUITMENT_CHANNEL_ID = "recruitment_updates"; // must match PushService in the app
+const CALL_RING_SECONDS = 45;                        // a call push older than this is useless
 const MAX_BODY_CHARS = 140;
 
 interface ServiceAccount {
@@ -318,6 +319,56 @@ async function handleCallCancel(
   return json(200, result);
 }
 
+interface RecruitmentPushPayload {
+  type?: string;
+  notificationID?: string;
+  userID?: string;
+  eventType?: string;
+  title?: string;
+  body?: string;
+  jobID?: string;
+  applicantID?: string;
+  scheduleID?: string;
+}
+
+/** Recruitment pipeline notification (Apply -> Schedule -> Interview -> Offer -> Decision). */
+async function handleRecruitmentEvent(
+  admin: SupabaseClient,
+  sa: ServiceAccount,
+  payload: RecruitmentPushPayload,
+): Promise<Response> {
+  const userId = (payload.userID ?? "").trim();
+  const title = (payload.title ?? "").trim() || "Recruitment Update";
+  const body = (payload.body ?? "").trim();
+  if (!userId || !body) return json(400, { error: "bad_request" });
+
+  const notificationId = (payload.notificationID ?? "").trim();
+  const eventType = (payload.eventType ?? "recruitment_update").trim();
+
+  const result = await sendToUser(admin, sa, userId, {
+    notification: { title, body },
+    data: {
+      type: "recruitment_event",
+      notificationID: notificationId,
+      eventType,
+      title,
+      body,
+      jobID: (payload.jobID ?? "").toString(),
+      applicantID: (payload.applicantID ?? "").toString(),
+      scheduleID: (payload.scheduleID ?? "").toString(),
+    },
+    android: {
+      priority: "high",
+      notification: {
+        channel_id: RECRUITMENT_CHANNEL_ID,
+        tag: notificationId ? `rec_${notificationId}` : `rec_${eventType}_${Date.now()}`,
+        sound: "default",
+      },
+    },
+  });
+  return json(200, result);
+}
+
 // ---------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------
@@ -338,7 +389,7 @@ Deno.serve(async (req) => {
     return json(500, { error: "not_configured" });
   }
 
-  let payload: { type?: string; messageID?: string; callID?: string };
+  let payload: RecruitmentPushPayload & { messageID?: string; callID?: string };
   try {
     payload = await req.json();
   } catch {
@@ -359,6 +410,8 @@ Deno.serve(async (req) => {
         return await handleCall(admin, sa, payload.callID);
       case "call_cancel":
         return await handleCallCancel(admin, sa, payload.callID);
+      case "recruitment_event":
+        return await handleRecruitmentEvent(admin, sa, payload);
       default:
         return json(400, { error: "unsupported_type" });
     }
