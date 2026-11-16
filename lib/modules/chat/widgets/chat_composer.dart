@@ -56,6 +56,7 @@ class _ChatComposerState extends State<ChatComposer> {
     super.dispose();
   }
 
+  /// Switches between the send and mic buttons as the text box fills or empties.
   void _onTextChanged() {
     final hasText = widget.textController.text.trim().isNotEmpty;
     if (hasText != _hasText) setState(() => _hasText = hasText);
@@ -137,6 +138,7 @@ class _ChatComposerState extends State<ChatComposer> {
     );
   }
 
+  /// The message text box.
   Widget _textField() {
     return TextField(
       controller: widget.textController,
@@ -163,6 +165,7 @@ class _ChatComposerState extends State<ChatComposer> {
     );
   }
 
+  /// Red "recording" bar with the timer, shown while the mic is held.
   Widget _recordingBar() {
     return Container(
       height: 48,
@@ -193,6 +196,7 @@ class _ChatComposerState extends State<ChatComposer> {
     );
   }
 
+  /// Rounded square button used for attach and send.
   Widget _squareButton({
     required Color color,
     required VoidCallback? onPressed,

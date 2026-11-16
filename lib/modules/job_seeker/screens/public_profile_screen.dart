@@ -45,6 +45,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     _loadPublicProfile();
   }
 
+  /// Loads the profile and skills (also used by Try Again).
   Future<void> _loadPublicProfile() async {
     if (!_isLoading) {
       // Try Again (the first load starts with _isLoading already true).
@@ -75,6 +76,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     }
   }
 
+  /// Opens a link from the profile, or says why it can't.
   Future<void> _launchURL(String urlString) async {
     final opened = await LinkHelper.openExternal(urlString);
     if (!opened && mounted) {
@@ -87,6 +89,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     }
   }
 
+  /// "Jan 2024 - Present" ("N/A" when there is no end date).
   String _formatDateRange(DateTime start, DateTime? end, bool isCurrent) {
     final DateFormat formatter = DateFormat('MMM yyyy');
     String startStr = formatter.format(start);
@@ -94,6 +97,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     return '$startStr - $endStr';
   }
 
+  /// First letter of the name for the avatar ('J' when there is no name).
   String _getProfileInitial() {
     if (_profile == null || _profile!.fullName.trim().isEmpty) return 'J';
     return _profile!.fullName.trim()[0].toUpperCase();
@@ -102,6 +106,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   /// URL that failed to load; the initial is shown instead of an empty circle.
   String? _failedImageUrl;
 
+  /// The photo failed to load: show the initial instead.
   void _onProfileImageError(Object error, StackTrace? stackTrace) {
     final url = _profile?.profilePictureURL;
     debugPrint('Profile photo failed to load ($url): $error');
@@ -109,6 +114,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     setState(() => _failedImageUrl = url);
   }
 
+  /// The profile photo, or null to show the initial.
   ImageProvider? _getProfileImageProvider() {
     final imageUrl = _profile?.profilePictureURL;
     if (imageUrl != null && imageUrl.isNotEmpty && imageUrl != _failedImageUrl) {
@@ -117,6 +123,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     return null;
   }
 
+  /// Big section title (Skills, Work Experience, ...).
   Widget _buildSectionHeader(String title) {
     return Padding(
       padding: const EdgeInsets.only(top: 26, bottom: 14),
@@ -131,6 +138,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     );
   }
 
+  /// Gradient header with the photo, name and location.
   Widget _buildHeroHeader() {
     return Container(
       width: double.infinity,
@@ -233,6 +241,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     );
   }
 
+  /// One labelled detail row; hidden when [value] is empty.
   Widget _buildField({required String label, required String? value, required Widget icon, bool isLink = false}) {
     if (value == null || value.trim().isEmpty) return const SizedBox.shrink(); // empty fields are not shown
 
@@ -286,6 +295,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     );
   }
 
+  /// One work experience entry.
   Widget _buildExperienceCard(WorkExperienceModel exp) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -352,6 +362,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     );
   }
 
+  /// One education entry.
   Widget _buildEducationCard(EducationModel edu) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),

@@ -54,6 +54,7 @@ class _JobMapScreenState extends State<JobMapScreen> {
   // Start-up: find the user, then search straight away
   // ---------------------------------------------------------------------
 
+  /// Finds where to start (the phone's location or Kuala Lumpur) and searches there.
   Future<void> _start() async {
     final start = await _controller.findStartLocation();
     if (!mounted) return;
@@ -62,6 +63,8 @@ class _JobMapScreenState extends State<JobMapScreen> {
     await _searchAt(start.position);
   }
 
+  /// Explains why the phone's location isn't used, with a button to fix it
+  /// (turn on location / open settings).
   void _showLocationIssue(LocationIssue? issue) {
     if (issue == null) return;
     String message;
@@ -93,6 +96,7 @@ class _JobMapScreenState extends State<JobMapScreen> {
     );
   }
 
+  /// "My location" button: searches around the phone's location again.
   Future<void> _goToMyLocation() async {
     final start = await _controller.findStartLocation();
     if (!mounted) return;
@@ -104,6 +108,7 @@ class _JobMapScreenState extends State<JobMapScreen> {
   // Searching
   // ---------------------------------------------------------------------
 
+  /// Searches around [center] and zooms the map to the search circle.
   Future<void> _searchAt(LatLng center) async {
     FocusScope.of(context).unfocus();
     _controller.setKeyword(_keywordController.text);
@@ -125,16 +130,19 @@ class _JobMapScreenState extends State<JobMapScreen> {
   /// Search again around the same point (after a filter or radius change).
   Future<void> _searchAgain() => _searchAt(_controller.searchCenter ?? _cameraTarget);
 
+  /// "Widen search": doubles the radius and searches again.
   Future<void> _widenRadius() async {
     if (_controller.widenRadius()) await _searchAgain();
   }
 
+  /// Clears the keyword and filters and searches again.
   Future<void> _clearFilters() async {
     _keywordController.clear();
     _controller.clearFilters();
     await _searchAgain();
   }
 
+  /// Opens one filter's sheet; searches again when the value changed.
   Future<void> _pickFilter(String filterType) async {
     final value = await showJobFilterSheet(
       context,
@@ -146,6 +154,7 @@ class _JobMapScreenState extends State<JobMapScreen> {
     await _searchAgain();
   }
 
+  /// Opens the radius sheet; searches again when the radius changed.
   Future<void> _pickRadius() async {
     final km = await showRadiusFilterSheet(context, currentKm: _controller.radiusKm);
     if (km == null || !mounted || km == _controller.radiusKm) return;
@@ -153,6 +162,7 @@ class _JobMapScreenState extends State<JobMapScreen> {
     await _searchAgain();
   }
 
+  /// Asks for a place name, then searches around it.
   Future<void> _searchPlace() async {
     final input = TextEditingController();
     final query = await showDialog<String>(
@@ -211,6 +221,7 @@ class _JobMapScreenState extends State<JobMapScreen> {
   // Camera
   // ---------------------------------------------------------------------
 
+  /// Moves the map camera; marks the move as the app's own, not the user's.
   Future<void> _animate(CameraUpdate update) async {
     final map = _map;
     if (map == null) return;
@@ -222,6 +233,7 @@ class _JobMapScreenState extends State<JobMapScreen> {
     }
   }
 
+  /// Zooms the map so the whole search circle around [center] is visible.
   void _fitToArea(LatLng center) {
     final box = LocationController.boundingBox(
       center.latitude,
@@ -237,6 +249,7 @@ class _JobMapScreenState extends State<JobMapScreen> {
     ));
   }
 
+  /// The map stopped moving: if the user moved it, offer "Search this area".
   void _onCameraIdle() {
     if (_programmaticMove) {
       _programmaticMove = false;
@@ -264,6 +277,7 @@ class _JobMapScreenState extends State<JobMapScreen> {
     }
   }
 
+  /// Opens the job's details.
   void _openJob(NearbyJob item) {
     Navigator.push(
       context,
@@ -275,6 +289,7 @@ class _JobMapScreenState extends State<JobMapScreen> {
   // Map layers
   // ---------------------------------------------------------------------
 
+  /// One pin per spot (the number of jobs there when more than one).
   Set<Marker> _markers() {
     final selectedKey = _controller.selectedJob?.spotKey;
     return _controller.spots.entries.map((entry) {
@@ -298,6 +313,7 @@ class _JobMapScreenState extends State<JobMapScreen> {
     }).toSet();
   }
 
+  /// The search circle drawn on the map.
   Set<Circle> _circles() {
     final center = _controller.searchCenter;
     if (center == null) return {};
@@ -421,6 +437,7 @@ class _JobMapScreenState extends State<JobMapScreen> {
     );
   }
 
+  /// Keyword box, place search and the filter chips.
   Widget _buildSearchPanel() {
     final c = _controller;
     return Column(
@@ -635,6 +652,7 @@ class _JobMapScreenState extends State<JobMapScreen> {
     );
   }
 
+  /// White rounded pill with a shadow (status at the top of the map).
   Widget _pill({required Widget child}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -649,6 +667,7 @@ class _JobMapScreenState extends State<JobMapScreen> {
     );
   }
 
+  /// Swipeable cards of the results at the bottom of the map.
   Widget _buildJobList() {
     final jobs = _controller.jobs;
     return PageView.builder(

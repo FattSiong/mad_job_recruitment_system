@@ -80,6 +80,8 @@ Future<ProfilePhotoResult?> pickProfilePhoto(BuildContext context, {required boo
   return file == null ? null : ProfilePhotoPicked(file);
 }
 
+/// Takes or picks a photo, then opens the Adjust Photo screen.
+/// Returns the cropped file, or null if cancelled.
 Future<File?> _pickAndCrop(BuildContext context, ImageSource source) async {
   final XFile? picked;
   try {

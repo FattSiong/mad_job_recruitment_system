@@ -39,12 +39,14 @@ class PostCommentsController extends ChangeNotifier {
   List<PostCommentModel> repliesOf(String commentID) =>
       _comments.where((c) => c.parentCommentID == commentID).toList();
 
+  /// True if the replies under [commentID] are shown.
   bool isExpanded(String commentID) => _expanded.contains(commentID);
 
   // ---------------------------------------------------------------------
   // Loading
   // ---------------------------------------------------------------------
 
+  /// Loads the post's comments and replies.
   Future<void> load() async {
     _isLoading = _comments.isEmpty;
     _error = null;
@@ -95,17 +97,20 @@ class PostCommentsController extends ChangeNotifier {
   // Replying
   // ---------------------------------------------------------------------
 
+  /// The next comment sent is a reply to [comment].
   void startReply(PostCommentModel comment) {
     _replyingTo = comment;
     _notify();
   }
 
+  /// Back to writing a normal comment.
   void cancelReply() {
     if (_replyingTo == null) return;
     _replyingTo = null;
     _notify();
   }
 
+  /// Shows or hides the replies under [commentID].
   void toggleThread(String commentID) {
     if (!_expanded.remove(commentID)) _expanded.add(commentID);
     _notify();
@@ -155,6 +160,7 @@ class PostCommentsController extends ChangeNotifier {
     }
   }
 
+  /// Changes the text of one of the user's comments.
   /// Returns an error message, or null when it worked.
   Future<String?> edit(PostCommentModel comment, String text) async {
     final content = text.trim();
@@ -198,6 +204,7 @@ class PostCommentsController extends ChangeNotifier {
     }
   }
 
+  /// notifyListeners, unless the controller was already disposed.
   void _notify() {
     if (!_disposed) notifyListeners();
   }

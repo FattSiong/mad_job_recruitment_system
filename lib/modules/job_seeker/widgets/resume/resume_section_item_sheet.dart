@@ -61,6 +61,7 @@ Future<ResumeSectionItem?> showResumeSectionItemSheet(
   );
 }
 
+/// Content of the add / edit item sheet.
 class _SectionItemSheet extends StatefulWidget {
   final ResumeSectionType type;
   final ResumeSectionItem? initial;
@@ -91,6 +92,7 @@ class _SectionItemSheetState extends State<_SectionItemSheet> {
     super.dispose();
   }
 
+  /// Validates the form and closes the sheet with the item.
   void _save() {
     if (!_formKey.currentState!.validate()) return;
     String? clean(TextEditingController c) => c.text.trim().isEmpty ? null : c.text.trim();

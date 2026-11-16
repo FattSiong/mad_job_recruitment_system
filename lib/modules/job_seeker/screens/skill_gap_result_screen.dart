@@ -14,6 +14,7 @@ class SkillGapResultScreen extends StatelessWidget {
 
   const SkillGapResultScreen({super.key, required this.analysis});
 
+  /// Red / amber / grey for high / medium / low priority.
   Color _priorityColor(String p) {
     switch (p) {
       case 'high':
@@ -25,6 +26,7 @@ class SkillGapResultScreen extends StatelessWidget {
     }
   }
 
+  /// The icon for a learning path type (course, certification, project, ...).
   IconData _pathIcon(String type) {
     switch (type) {
       case 'course':
@@ -44,6 +46,7 @@ class SkillGapResultScreen extends StatelessWidget {
     }
   }
 
+  /// [s] with its first letter in capitals.
   String _cap(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
 
   // ---------------------------------------------------------------------
@@ -138,6 +141,7 @@ class SkillGapResultScreen extends StatelessWidget {
     );
   }
 
+  /// Gradient header with the role, the date and a back button.
   Widget _buildHeader(BuildContext context) {
     return Container(
       width: double.infinity,
@@ -178,6 +182,7 @@ class SkillGapResultScreen extends StatelessWidget {
     );
   }
 
+  /// Match % ring, what it was based on, and skill counts.
   Widget _buildScoreCard() {
     final a = analysis;
     final color = AppColors.forScore(a.matchScore);
@@ -243,6 +248,7 @@ class SkillGapResultScreen extends StatelessWidget {
     );
   }
 
+  /// One "3 missing skills" style row.
   Widget _countRow(IconData icon, Color color, String label) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -256,6 +262,7 @@ class SkillGapResultScreen extends StatelessWidget {
     );
   }
 
+  /// Market demand, typical salary and the skills employers commonly ask for.
   Widget _buildMarketCard() {
     final m = analysis.marketInsights;
     final demandColor = m.demandLevel == 'High'
@@ -292,6 +299,7 @@ class SkillGapResultScreen extends StatelessWidget {
     );
   }
 
+  /// Coloured pill with an icon.
   Widget _pill(IconData icon, String label, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -312,6 +320,7 @@ class SkillGapResultScreen extends StatelessWidget {
     );
   }
 
+  /// One bullet point with an icon.
   Widget _bullet(String text, IconData icon, Color color) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -326,6 +335,7 @@ class SkillGapResultScreen extends StatelessWidget {
     );
   }
 
+  /// Missing, partial and matched skills.
   Widget _buildSkillsCard() {
     final a = analysis;
     return SurfaceCard(
@@ -350,6 +360,7 @@ class SkillGapResultScreen extends StatelessWidget {
     );
   }
 
+  /// Coloured title over a group of skills.
   Widget _groupTitle(String text, Color color) {
     return Padding(
       padding: const EdgeInsets.only(top: 4, bottom: 10),
@@ -357,6 +368,7 @@ class SkillGapResultScreen extends StatelessWidget {
     );
   }
 
+  /// One required skill with its priority, category and a short note.
   Widget _skillTile(RequiredSkillItem s, Color color, IconData icon, String detail) {
     final pColor = _priorityColor(s.importance);
     return Container(
@@ -409,6 +421,7 @@ class SkillGapResultScreen extends StatelessWidget {
     );
   }
 
+  /// Numbered learning steps, highest priority first.
   Widget _buildActionPathsCard() {
     final paths = analysis.actionPaths;
     return SurfaceCard(
@@ -419,6 +432,7 @@ class SkillGapResultScreen extends StatelessWidget {
     );
   }
 
+  /// One learning step: title, priority, type, timeframe and the skills it builds.
   Widget _actionPathTile(int number, ActionPath p) {
     final pColor = _priorityColor(p.priority);
     return Container(
@@ -533,6 +547,7 @@ class SkillGapResultScreen extends StatelessWidget {
     );
   }
 
+  /// Small coloured tag.
   Widget _smallTag(String label, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -544,6 +559,7 @@ class SkillGapResultScreen extends StatelessWidget {
     );
   }
 
+  /// Tips for showing the user's skills better on the resume.
   Widget _buildResumeTipsCard() {
     return SurfaceCard(
       children: [
@@ -557,6 +573,7 @@ class SkillGapResultScreen extends StatelessWidget {
     );
   }
 
+  /// Skills the AI found in the user's profile and resume.
   Widget _buildDetectedSkillsCard() {
     return SurfaceCard(
       children: [

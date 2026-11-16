@@ -99,6 +99,8 @@ class MockInterviewSessionController extends ChangeNotifier {
   // Recording (mono AAC, 16 kHz)
   // ---------------------------------------------------------------------
 
+  /// Starts recording the answer to the current question (asks for the
+  /// microphone first). Problems go to [onError].
   Future<void> startRecording() async {
     // A second tap while the microphone is still starting is ignored
     // (it would start a second recorder and timer).
@@ -169,6 +171,7 @@ class MockInterviewSessionController extends ChangeNotifier {
     await _faceCues.beginAnswer(); // does nothing if the camera is off
   }
 
+  /// Stops the recorder, timer and level meter without sending anything.
   Future<void> _stopRecorderOnly() async {
     _recordClock.stop();
     _ticker?.cancel();
@@ -250,6 +253,7 @@ class MockInterviewSessionController extends ChangeNotifier {
     }
   }
 
+  /// Deletes the recorded audio file, if any (errors are ignored).
   Future<void> _deleteRecordingFile() async {
     final path = _recordingPath;
     _recordingPath = null;
@@ -264,6 +268,7 @@ class MockInterviewSessionController extends ChangeNotifier {
   // Navigation
   // ---------------------------------------------------------------------
 
+  /// Moves to the next question (no-op on the last one).
   void nextQuestion() {
     if (_position + 1 >= _questions.length) return;
     _position++;
@@ -302,6 +307,7 @@ class MockInterviewSessionController extends ChangeNotifier {
     if (_stage == InterviewStage.recording) cancelRecording();
   }
 
+  /// notifyListeners, unless the controller was already disposed.
   void _notify() {
     if (!_disposed) notifyListeners();
   }

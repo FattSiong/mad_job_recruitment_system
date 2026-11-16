@@ -92,16 +92,20 @@ class ChatRoomController extends ChangeNotifier {
     return [...stillPending.reversed, ..._messages, ...older];
   }
 
+  /// True while [message] is shown but not yet confirmed by the server.
   bool isPending(MessageModel message) =>
       _pending.any((m) => m.messageID == message.messageID) &&
       !_messages.any((m) => m.messageID == message.messageID);
 
+  /// True if the current user sent [message].
   bool isMine(MessageModel message) => message.senderID == currentUserID;
 
   // ---------------------------------------------------------------------
   // Live messages
   // ---------------------------------------------------------------------
 
+  /// Opens the chat: checks blocking and starts the live message stream.
+  /// Call once when the screen opens.
   void start() {
     PushService.activeChatRoomID = roomID; // no pop-ups for this chat while open
     refreshBlockState();
@@ -195,6 +199,7 @@ class ChatRoomController extends ChangeNotifier {
     _readDebounce = Timer(const Duration(milliseconds: 500), markAsRead);
   }
 
+  /// Marks the other person's unread messages in this chat as read.
   Future<void> markAsRead() async {
     try {
       await _supabase
@@ -212,6 +217,7 @@ class ChatRoomController extends ChangeNotifier {
   // Sending
   // ---------------------------------------------------------------------
 
+  /// Sends a text message (shown straight away, before the server confirms it).
   /// Returns null on success, otherwise a message to show.
   Future<String?> sendText(String text) async {
     final content = text.trim();
@@ -268,6 +274,8 @@ class ChatRoomController extends ChangeNotifier {
     }, failure: 'Failed to send the voice message. Please try again.');
   }
 
+  /// Runs [action] with the upload spinner on. Returns null on success,
+  /// otherwise [failure] (or the "blocked" message).
   Future<String?> _withUpload(Future<void> Function() action, {required String failure}) async {
     _isUploading = true;
     _notify();
@@ -284,6 +292,7 @@ class ChatRoomController extends ChangeNotifier {
     }
   }
 
+  /// Uploads a chat file to "chats/<roomID>/..." and returns its stored link.
   Future<String> _upload(File file, String fileName) async {
     final safeName = fileName.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
     final path = 'chats/$roomID/${DateTime.now().millisecondsSinceEpoch}_$safeName';
@@ -293,6 +302,7 @@ class ChatRoomController extends ChangeNotifier {
     return _supabase.storage.from(attachmentsBucket).getPublicUrl(path);
   }
 
+  /// Saves [message] in the database.
   Future<void> _insert(MessageModel message) async {
     await _supabase.from(TableConstants.message).insert(message.toJson());
   }
@@ -308,6 +318,7 @@ class ChatRoomController extends ChangeNotifier {
     }
   }
 
+  /// A new message from the current user in this room, with a fresh ID.
   MessageModel _newMessage({
     required String content,
     required String mediaType,
@@ -539,6 +550,7 @@ class ChatRoomController extends ChangeNotifier {
     }
   }
 
+  /// Name, role and photo of [userID] (cached by UserDirectory).
   static Future<ChatParticipant> fetchParticipant(String userID) =>
       UserDirectory.fetchOne(userID);
 
@@ -546,6 +558,7 @@ class ChatRoomController extends ChangeNotifier {
   // Helpers
   // ---------------------------------------------------------------------
 
+  /// notifyListeners, unless the controller was already disposed.
   void _notify() {
     if (!_disposed) notifyListeners();
   }

@@ -107,6 +107,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     );
   }
 
+  /// Loads the first name for the greeting (the greeting works without it).
   Future<void> _loadName() async {
     final name = await ProfileController().fetchFullName();
     if (mounted && name != null) setState(() => _fullName = name);
@@ -122,12 +123,14 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     super.dispose();
   }
 
+  /// Switches tab; opening My Jobs reloads its tabs.
   void _onTabTapped(int index) {
     setState(() => _currentIndex = index);
     // My Jobs tab: reload Applied + Interviews so statuses are up to date
     if (index == 1) AppliedJobsController.notifyChanged();
   }
 
+  /// Loads the next page when the list is scrolled near the end.
   void _handleScroll() {
     if (!_scrollController.hasClients || _isLoading || _isFetchingMore || !_hasMoreJobs) return;
 
@@ -170,6 +173,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     }
   }
 
+  /// "Tap to retry" after loading more jobs failed.
   void _retryLoadMore() {
     setState(() => _loadMoreFailed = false);
     _loadMoreJobs();
@@ -206,8 +210,10 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     }
   }
 
+  /// All jobs, no filters (first page).
   Future<void> _loadJobs() => _startNewList(const JobSearchFilters());
 
+  /// Searches with the keyword, location and filters (first page).
   Future<void> _performSearch() async {
     FocusScope.of(context).unfocus();
     await _startNewList(JobSearchFilters(
@@ -219,6 +225,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     ));
   }
 
+  /// Pull to refresh: reloads with the current search.
   Future<void> _refreshJobs() async {
     if (_hasActiveFilters) {
       await _performSearch();
@@ -227,6 +234,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     }
   }
 
+  /// Clears the search and every filter, then reloads.
   Future<void> _resetFilters() async {
     setState(() {
       _selectedJobType = JobFilterOptions.anyJobType;
@@ -239,6 +247,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     await _loadJobs();
   }
 
+  /// Opens the location screen; searches with what it returns.
   Future<void> _openLocationSearch() async {
     final result = await Navigator.push(
       context,
@@ -260,6 +269,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     }
   }
 
+  /// The current value of one filter chip.
   String _currentFilterValue(String filterType) {
     switch (filterType) {
       case JobFilterOptions.datePosted:
@@ -271,6 +281,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     }
   }
 
+  /// Opens one filter's sheet and searches with the new value.
   Future<void> _showFilterOptions(String filterType) async {
     final value = await showJobFilterSheet(
       context,
@@ -292,6 +303,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     _performSearch();
   }
 
+  /// Home tab: header, search panel and the job list.
   Widget _buildHomeTab() {
     return SafeArea(
       child: RefreshIndicator(
@@ -456,6 +468,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     );
   }
 
+  /// Gradient header with the greeting and the Scan QR button.
   Widget _buildHeroHeader() {
     return Container(
       padding: const EdgeInsets.all(24),
@@ -536,6 +549,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     );
   }
 
+  /// "Recommended Jobs" title, the Nearby Jobs button and the result count.
   Widget _buildResultsHeader() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -625,6 +639,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     );
   }
 
+  /// Messages tab (the chat list).
   Widget _buildMessagesTab() {
     if (_currentUserId == null) {
       return const Center(child: Text('Not logged in'));
@@ -633,6 +648,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     return const ChatInboxScreen();
   }
 
+  /// See-through round button in the header.
   Widget _buildHeaderIconButton({
     required IconData icon,
     required String tooltip,
@@ -706,6 +722,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     );
   }
 
+  /// Community tab.
   Widget _buildCommunityTab() {
     if (_currentUserId == null) {
       return const Center(child: Text('Not logged in'));

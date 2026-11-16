@@ -209,6 +209,7 @@ class ProfileController {
     }
   }
 
+  /// Uploads a profile photo and returns its public link, or null if it failed.
   Future<String?> uploadProfilePicture(File file) async {
     try {
       final userId = SessionHelper.requireUserId();
@@ -295,6 +296,7 @@ class ProfileController {
     }
   }
 
+  /// Saves changes to one of the user's work experience entries.
   Future<bool> updateWorkExperience(WorkExperienceModel experience) async {
     if (experience.experienceID == null) return false;
     try {
@@ -311,6 +313,7 @@ class ProfileController {
     }
   }
 
+  /// Saves changes to one of the user's education entries.
   Future<bool> updateEducation(EducationModel education) async {
     if (education.educationID == null) return false;
     try {
@@ -327,6 +330,7 @@ class ProfileController {
     }
   }
 
+  /// Adds a work experience entry to the user's profile.
   Future<bool> addWorkExperience(WorkExperienceModel experience) async {
     try {
       final data = experience.toJson();
@@ -339,6 +343,7 @@ class ProfileController {
     }
   }
 
+  /// Deletes one of the user's work experience entries.
   Future<bool> deleteWorkExperience(String experienceId) async {
     try {
       await _supabase
@@ -353,6 +358,7 @@ class ProfileController {
     }
   }
 
+  /// Adds an education entry to the user's profile.
   Future<bool> addEducation(EducationModel education) async {
     try {
       final data = education.toJson();
@@ -365,6 +371,7 @@ class ProfileController {
     }
   }
 
+  /// Deletes one of the user's education entries.
   Future<bool> deleteEducation(String educationId) async {
     try {
       await _supabase

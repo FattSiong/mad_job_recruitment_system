@@ -24,6 +24,7 @@ Future<void> showSharedAttachmentsSheet(
   );
 }
 
+/// Content of the sheet: a grid of photos, then a list of files.
 class _SharedAttachmentsSheet extends StatefulWidget {
   final Future<List<MessageModel>> Function() load;
 

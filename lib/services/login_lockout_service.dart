@@ -42,6 +42,7 @@ class LoginLockoutService {
     return _deviceId = id;
   }
 
+  /// 32 random hex characters.
   static String _randomId() {
     final random = Random.secure();
     return List.generate(16, (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
@@ -80,6 +81,8 @@ class LoginLockoutService {
     }
   }
 
+  /// Calls a lockout database function. On any error the status is
+  /// "unknown", so the login is never blocked by a failed check.
   Future<LoginLockStatus> _call(String function, Map<String, dynamic> params) async {
     try {
       final data = await _supabase.rpc(function, params: params);

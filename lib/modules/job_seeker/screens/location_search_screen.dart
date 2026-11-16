@@ -52,6 +52,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
     super.dispose();
   }
 
+  /// Closes the screen with the keyword and the chosen location.
   void _selectLocation(String location) {
     Navigator.pop(context, {
       'keyword': _keywordController.text.trim(),
@@ -59,6 +60,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
     });
   }
 
+  /// Uses the phone's location: finds the city and chooses it.
   Future<void> _getCurrentLocation() async {
     setState(() => _isLocating = true);
     try {
@@ -126,6 +128,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
     }
   }
 
+  /// Style of the keyword and location boxes.
   InputDecoration _searchInputDecoration({
     required String hint,
     required IconData icon,

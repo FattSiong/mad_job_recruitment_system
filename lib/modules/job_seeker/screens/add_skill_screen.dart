@@ -65,6 +65,7 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
   // Actions
   // ---------------------------------------------------------------------
 
+  /// Loads the user's skills (shows an error card with Try Again on failure).
   Future<void> _loadSkills() async {
     setState(() {
       _isLoading = true;
@@ -86,6 +87,7 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
     }
   }
 
+  /// Adds the typed skill with the chosen level.
   Future<void> _addSkill() async {
     if (_isAdding) return;
     FocusScope.of(context).unfocus();
@@ -110,6 +112,7 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
     }
   }
 
+  /// Saves a new level for [skill] (its tile shows a spinner meanwhile).
   Future<void> _changeProficiency(SkillModel skill, String? proficiency) async {
     if (skill.skillID == null || proficiency == skill.proficiency) return;
     setState(() => _busySkillIds.add(skill.skillID!));
@@ -135,6 +138,7 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
     if (!ok) _showSnack('Failed to update ${skill.skillName}.', success: false);
   }
 
+  /// Removes [skill] after asking.
   Future<void> _deleteSkill(SkillModel skill) async {
     if (skill.skillID == null) return;
 
@@ -159,12 +163,14 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
     );
   }
 
+  /// Puts a suggested skill in the text box.
   void _useSuggestion(String name) {
     _nameController.text = name;
     _nameController.selection = TextSelection.collapsed(offset: name.length);
     _nameFocus.requestFocus();
   }
 
+  /// Green or red snackbar.
   void _showSnack(String message, {required bool success}) {
     if (success) {
       SnackBarHelper.showSuccess(context, message);
@@ -173,6 +179,7 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
     }
   }
 
+  /// True if the profile already has [name] (any letter case).
   bool _alreadyAdded(String name) {
     final key = name.trim().toLowerCase();
     return _skills.any((s) => s.skillName.toLowerCase() == key);
@@ -209,6 +216,7 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
     );
   }
 
+  /// Gradient header with the title and back button.
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
@@ -251,6 +259,7 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
     );
   }
 
+  /// Skill name box, level choice, suggestions and the Add button.
   Widget _buildAddCard() {
     final canAdd = _nameController.text.trim().isNotEmpty && !_isAdding;
     final suggestions = _suggestedSkills.where((s) => !_alreadyAdded(s)).toList();
@@ -369,6 +378,7 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
     );
   }
 
+  /// The user's skills, or a spinner / error / empty message.
   Widget _buildMySkillsCard() {
     final Widget body;
     if (_isLoading) {
@@ -411,6 +421,7 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
     );
   }
 
+  /// One skill with its level menu and a remove button.
   Widget _buildSkillTile(SkillModel skill) {
     final busy = _busySkillIds.contains(skill.skillID);
 

@@ -50,6 +50,7 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
     super.dispose();
   }
 
+  /// Loads the user's applications.
   Future<void> _loadAppliedJobs() async {
     try {
       final jobs = await _appliedController.fetchAppliedJobs();
@@ -70,11 +71,13 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
     }
   }
 
+  /// Try Again after loading failed.
   void _retry() {
     setState(() => _isLoading = true);
     _loadAppliedJobs();
   }
 
+  /// Withdraws a pending application after asking.
   Future<void> _withdraw(JobApplicantModel application, String jobTitle) async {
     final id = application.applicantID;
     if (id == null || _withdrawingId != null) return;
@@ -99,6 +102,7 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
     }
   }
 
+  /// The badge colour for an application status.
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'pending':
@@ -126,6 +130,7 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
     }
   }
 
+  /// The badge text for a status ("OFFER RECEIVED", "PENDING", ...).
   String _formatStatusBadgeLabel(String status) {
     switch (status.toLowerCase()) {
       case 'offered':
@@ -139,6 +144,7 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
     }
   }
 
+  /// Downloads the offer letter PDF and opens it.
   Future<void> _downloadAndOpenOfferPdf(String url) async {
     if (_isDownloadingPdf) return;
     setState(() => _isDownloadingPdf = true);
@@ -193,6 +199,7 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
     }
   }
 
+  /// Asks why the offer is declined. Returns the reason, or null if cancelled.
   Future<String?> _promptDeclineReasonDialog() async {
     final controller = TextEditingController();
     return showDialog<String>(
@@ -293,6 +300,7 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
     );
   }
 
+  /// Shows the job offer with Accept / Decline.
   Future<void> _showOfferLetterModal({
     required JobApplicantModel application,
     required Map<String, dynamic> rawData,

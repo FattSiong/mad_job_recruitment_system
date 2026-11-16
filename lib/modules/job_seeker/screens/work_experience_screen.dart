@@ -38,6 +38,7 @@ class _WorkExperienceScreenState extends State<WorkExperienceScreen> {
   // Actions
   // ---------------------------------------------------------------------
 
+  /// Loads the user's work experience.
   Future<void> _load() async {
     setState(() {
       _isLoading = true;
@@ -59,6 +60,7 @@ class _WorkExperienceScreenState extends State<WorkExperienceScreen> {
     }
   }
 
+  /// Opens the add sheet and saves the new entry.
   Future<void> _add() async {
     final experience = await showAddExperienceSheet(context);
     if (experience == null || !mounted) return;
@@ -72,6 +74,7 @@ class _WorkExperienceScreenState extends State<WorkExperienceScreen> {
     if (ok) _load();
   }
 
+  /// Opens the edit sheet for [item] and saves the changes.
   Future<void> _edit(WorkExperienceModel item) async {
     final updated = await showAddExperienceSheet(context, initial: item);
     if (updated == null || !mounted) return;
@@ -85,6 +88,7 @@ class _WorkExperienceScreenState extends State<WorkExperienceScreen> {
     if (ok) _load();
   }
 
+  /// Deletes [item] after asking.
   Future<void> _delete(WorkExperienceModel item) async {
     if (item.experienceID == null) return;
 
@@ -102,6 +106,7 @@ class _WorkExperienceScreenState extends State<WorkExperienceScreen> {
     _showSnack(ok ? 'Work experience removed.' : 'Failed to remove work experience.', success: ok);
   }
 
+  /// "Remove work experience?" dialog. True when confirmed.
   Future<bool> _confirmDelete(String label) {
     return showConfirmDialog(
       context,
@@ -111,6 +116,7 @@ class _WorkExperienceScreenState extends State<WorkExperienceScreen> {
     );
   }
 
+  /// Green or red snackbar.
   void _showSnack(String message, {required bool success}) {
     if (success) {
       SnackBarHelper.showSuccess(context, message);
@@ -167,6 +173,7 @@ class _WorkExperienceScreenState extends State<WorkExperienceScreen> {
     );
   }
 
+  /// Gradient header with the title and back button.
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
@@ -209,6 +216,7 @@ class _WorkExperienceScreenState extends State<WorkExperienceScreen> {
     );
   }
 
+  /// "Your Experience (2)" (no count while loading or after an error).
   Widget _buildListTitle() {
     final count = (_isLoading || _loadError != null) ? '' : ' (${_items.length})';
     return Text(
@@ -217,6 +225,7 @@ class _WorkExperienceScreenState extends State<WorkExperienceScreen> {
     );
   }
 
+  /// The entries, or a spinner / error / empty message.
   List<Widget> _buildBody() {
     if (_isLoading) {
       return const [

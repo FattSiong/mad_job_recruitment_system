@@ -13,6 +13,7 @@ class ResumeSectionsStep extends StatelessWidget {
 
   const ResumeSectionsStep({super.key, required this.controller});
 
+  /// Lets the user pick an optional section to add.
   Future<void> _addSection(BuildContext context) async {
     final types = controller.availableSectionTypes;
     if (types.isEmpty) return;
@@ -83,6 +84,7 @@ class ResumeSectionsStep extends StatelessWidget {
   }
 }
 
+/// The icon for each optional section.
 IconData _iconFor(ResumeSectionType type) {
   switch (type) {
     case ResumeSectionType.summary:
@@ -102,6 +104,7 @@ IconData _iconFor(ResumeSectionType type) {
   }
 }
 
+/// One optional section: its text or list of items, and a remove button.
 class _SectionCard extends StatefulWidget {
   final ResumeSection section;
   final ResumeBuilderController controller;
@@ -124,8 +127,10 @@ class _SectionCardState extends State<_SectionCard> {
   }
 
   // Saved into the resume straight away, so Next/Finish never miss text.
+  /// Saves the section text as it is typed.
   void _onTextChanged(String value) => widget.controller.setSectionText(_type, value);
 
+  /// Removes the section after asking.
   Future<void> _confirmRemove() async {
     final ok = await showConfirmDialog(
       context,

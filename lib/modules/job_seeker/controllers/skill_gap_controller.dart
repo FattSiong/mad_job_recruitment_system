@@ -143,6 +143,7 @@ class SkillGapController {
     }
   }
 
+  /// Deletes one of the user's past analyses. Returns false if it failed.
   Future<bool> deleteAnalysis(String analysisID) async {
     try {
       await _supabase

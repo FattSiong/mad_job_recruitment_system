@@ -58,6 +58,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
     SnackBarHelper.showError(context, 'This QR code is not a job seeker profile.');
   }
 
+  /// Handles a scanned code: opens the profile, or says it isn't a profile code.
   void _onDetect(BarcodeCapture capture) {
     if (_isNavigating) return;
 
@@ -184,6 +185,7 @@ class QRScannerOverlay extends StatelessWidget {
   }
 }
 
+/// Paints the dark overlay and the corners of the scan box.
 class _ScannerOverlayPainter extends CustomPainter {
   final Color overlayColour;
   final double scanAreaWidth;

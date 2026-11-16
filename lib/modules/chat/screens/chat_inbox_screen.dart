@@ -34,6 +34,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
     super.dispose();
   }
 
+  /// Opens a chat, then reloads the list (read status and last message may have changed).
   Future<void> _openRoom(ChatRoomModel room) async {
     await Navigator.push(
       context,
@@ -83,6 +84,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
     );
   }
 
+  /// Search box above the chat list.
   Widget _buildSearchField() {
     return ListenableBuilder(
       listenable: _controller,
@@ -118,6 +120,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
     );
   }
 
+  /// Spinner, error, empty message or the list of chats.
   Widget _buildBody() {
     if (_controller.isLoading) {
       return const Center(child: CircularProgressIndicator(color: AppColors.primary));
@@ -186,6 +189,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
     );
   }
 
+  /// Centered card for the error and empty states.
   Widget _stateCard({
     required IconData icon,
     required String title,

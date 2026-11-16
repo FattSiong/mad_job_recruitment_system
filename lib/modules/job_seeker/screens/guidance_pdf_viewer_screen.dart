@@ -41,6 +41,7 @@ class _GuidancePdfViewerScreenState extends State<GuidancePdfViewerScreen> {
     _generate();
   }
 
+  /// Builds the PDF and saves it to a temporary file for viewing and sharing.
   Future<void> _generate() async {
     setState(() {
       _bytes = null;
@@ -65,6 +66,7 @@ class _GuidancePdfViewerScreenState extends State<GuidancePdfViewerScreen> {
     }
   }
 
+  /// Opens the phone's share sheet with the PDF.
   Future<void> _share() async {
     final file = _file;
     if (file == null) return;
@@ -76,6 +78,7 @@ class _GuidancePdfViewerScreenState extends State<GuidancePdfViewerScreen> {
     );
   }
 
+  /// Opens the PDF in another app (says so if there is none).
   Future<void> _openExternally() async {
     final file = _file;
     if (file == null) return;
@@ -90,6 +93,7 @@ class _GuidancePdfViewerScreenState extends State<GuidancePdfViewerScreen> {
     }
   }
 
+  /// Small white icon button in the app bar.
   Widget _actionButton(IconData icon, String tooltip, VoidCallback? onPressed) {
     return Container(
       margin: const EdgeInsets.only(left: 8),
@@ -169,6 +173,7 @@ class _GuidancePdfViewerScreenState extends State<GuidancePdfViewerScreen> {
     );
   }
 
+  /// Shown when the PDF couldn't be made, with Try Again.
   Widget _buildError() {
     return Center(
       child: Padding(

@@ -38,6 +38,7 @@ class _EducationScreenState extends State<EducationScreen> {
   // Actions
   // ---------------------------------------------------------------------
 
+  /// Loads the user's education.
   Future<void> _load() async {
     setState(() {
       _isLoading = true;
@@ -59,6 +60,7 @@ class _EducationScreenState extends State<EducationScreen> {
     }
   }
 
+  /// Opens the add sheet and saves the new entry.
   Future<void> _add() async {
     final education = await showAddEducationSheet(context);
     if (education == null || !mounted) return;
@@ -72,6 +74,7 @@ class _EducationScreenState extends State<EducationScreen> {
     if (ok) _load();
   }
 
+  /// Opens the edit sheet for [item] and saves the changes.
   Future<void> _edit(EducationModel item) async {
     final updated = await showAddEducationSheet(context, initial: item);
     if (updated == null || !mounted) return;
@@ -85,6 +88,7 @@ class _EducationScreenState extends State<EducationScreen> {
     if (ok) _load();
   }
 
+  /// Deletes [item] after asking.
   Future<void> _delete(EducationModel item) async {
     if (item.educationID == null) return;
 
@@ -102,6 +106,7 @@ class _EducationScreenState extends State<EducationScreen> {
     _showSnack(ok ? 'Education removed.' : 'Failed to remove education.', success: ok);
   }
 
+  /// "Remove education?" dialog. True when confirmed.
   Future<bool> _confirmDelete(String label) {
     return showConfirmDialog(
       context,
@@ -111,6 +116,7 @@ class _EducationScreenState extends State<EducationScreen> {
     );
   }
 
+  /// Green or red snackbar.
   void _showSnack(String message, {required bool success}) {
     if (success) {
       SnackBarHelper.showSuccess(context, message);
@@ -167,6 +173,7 @@ class _EducationScreenState extends State<EducationScreen> {
     );
   }
 
+  /// Gradient header with the title and back button.
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
@@ -209,6 +216,7 @@ class _EducationScreenState extends State<EducationScreen> {
     );
   }
 
+  /// "Your Education (3)" (no count while loading or after an error).
   Widget _buildListTitle() {
     final count = (_isLoading || _loadError != null) ? '' : ' (${_items.length})';
     return Text(
@@ -217,6 +225,7 @@ class _EducationScreenState extends State<EducationScreen> {
     );
   }
 
+  /// The entries, or a spinner / error / empty message.
   List<Widget> _buildBody() {
     if (_isLoading) {
       return const [

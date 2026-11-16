@@ -26,6 +26,7 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
       ? _review.improvements
       : _review.improvements.where((i) => i.priority == _priorityFilter).toList();
 
+  /// Opens Build Resume to work on the tips.
   void _openBuilder() {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const BuildResumeScreen()));
   }
@@ -79,6 +80,7 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
   // Sections
   // ---------------------------------------------------------------------
 
+  /// Gradient header with the title and back button.
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
@@ -122,6 +124,7 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
     );
   }
 
+  /// White rounded card.
   Widget _card({required List<Widget> children}) {
     return Container(
       width: double.infinity,
@@ -134,6 +137,7 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
     );
   }
 
+  /// Card title with an optional subtitle.
   Widget _title(String title, [String? subtitle]) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -151,6 +155,7 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
     );
   }
 
+  /// Overall score ring, the target or detected role, the summary and quick counts.
   Widget _buildScoreCard() {
     final color = resumeScoreColor(_review.overallScore);
     final role = _review.targetJobRole != null
@@ -219,6 +224,7 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
     );
   }
 
+  /// One number under the score ring.
   Widget _stat(String value, String label) => Expanded(
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -237,6 +243,7 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
         ),
       );
 
+  /// Score bar for each area.
   Widget _buildCategoriesCard() {
     return _card(
       children: [
@@ -246,6 +253,7 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
     );
   }
 
+  /// What the resume already does well.
   Widget _buildStrengthsCard() {
     return _card(
       children: [
@@ -267,6 +275,7 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
     );
   }
 
+  /// Suggested changes, filtered by priority.
   Widget _buildImprovementsCard() {
     final visible = _visibleImprovements;
     Widget chip(String? value, String label) {
@@ -315,6 +324,7 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
     );
   }
 
+  /// Keywords and sections the AI suggests adding.
   Widget _buildAddCard() {
     Widget chips(List<String> items, IconData icon) => Wrap(
           spacing: 8,
@@ -358,6 +368,7 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
     );
   }
 
+  /// Notes on layout and ATS (resume scanner) friendliness.
   Widget _buildFormattingCard() {
     return _card(
       children: [
@@ -379,6 +390,7 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
     );
   }
 
+  /// "Edit Resume" (built resume) or "Improve in Resume Builder" (uploaded) button.
   Widget _buildBottomBar() {
     final isBuilder = _review.source == ResumeReviewSource.builder;
     return SafeArea(

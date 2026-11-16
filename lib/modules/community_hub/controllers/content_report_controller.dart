@@ -21,6 +21,7 @@ class ContentReportController {
 
   static const int maxDetailsLength = 500;
 
+  /// Sends the report on a post or comment.
   /// Returns an error message, or null when the report was sent.
   Future<String?> submit({
     required ReportTarget target,

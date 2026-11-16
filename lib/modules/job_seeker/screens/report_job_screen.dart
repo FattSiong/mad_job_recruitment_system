@@ -36,6 +36,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
     super.dispose();
   }
 
+  /// Checks a reason is chosen and sends the report.
   Future<void> _submitReport() async {
     if (_selectedCategory == null) {
       SnackBarHelper.showStyled(
@@ -96,6 +97,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
     }
   }
 
+  /// One selectable reason (radio style).
   Widget _buildRadioOption(String option) {
     final isSelected = _selectedCategory == option;
 

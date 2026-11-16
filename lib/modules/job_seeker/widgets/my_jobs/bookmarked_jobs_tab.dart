@@ -23,6 +23,7 @@ class BookmarkedJobsTab extends StatelessWidget {
   }
 }
 
+/// The bookmarked jobs list (built again whenever a bookmark changes).
 class _BookmarkedJobsList extends StatefulWidget {
   const _BookmarkedJobsList({super.key});
 
@@ -40,6 +41,7 @@ class _BookmarkedJobsListState extends State<_BookmarkedJobsList> {
     _jobsFuture = _bookmarkedController.fetchBookmarkedJobs();
   }
 
+  /// Loads the bookmarked jobs again.
   void _reload() {
     setState(() => _jobsFuture = _bookmarkedController.fetchBookmarkedJobs());
   }

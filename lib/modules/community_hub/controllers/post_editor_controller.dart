@@ -85,11 +85,13 @@ class PostEditorController extends ChangeNotifier {
   /// Something typed that leaving the screen would throw away.
   bool get hasUnsavedChanges => _valid && _changed;
 
+  /// The post text as the user types it.
   void setContent(String value) {
     _content = value;
     notifyListeners();
   }
 
+  /// The chosen topic.
   void setTopic(PostTopic topic) {
     if (topic == _topic) return;
     _topic = topic;
@@ -108,6 +110,7 @@ class PostEditorController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Removes the attachment (the old file is deleted only when the post is saved).
   void removeAttachment() {
     _newFile = null;
     _existingMediaURL = null;
@@ -182,6 +185,7 @@ class PostEditorController extends ChangeNotifier {
     }
   }
 
+  /// Uploads [file] to the user's folder in the post media bucket and returns its link.
   Future<String> _upload(File file) async {
     final name = file.path.split(Platform.pathSeparator).last.replaceAll(RegExp(r'[^\w.\-]'), '_');
     final path = '$currentUserID/${DateTime.now().millisecondsSinceEpoch}_$name';

@@ -91,6 +91,7 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
+  /// The bubble's content: text, photo, file, voice note or "deleted".
   Widget _buildBody(BuildContext context) {
     final textColor = message.isDeleted
         ? AppColors.textMuted

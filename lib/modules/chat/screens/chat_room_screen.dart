@@ -68,11 +68,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     }
   }
 
+  /// Red snackbar (if the screen is still open).
   void _showError(String message) {
     if (!mounted) return;
     SnackBarHelper.showError(context, message);
   }
 
+  /// Sends the typed text. On failure the text is put back so nothing is lost.
   Future<void> _sendText() async {
     final text = _textController.text;
     if (text.trim().isEmpty) return;
@@ -84,6 +86,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     }
   }
 
+  /// Photo / camera / document sheet, then sends the chosen file.
   Future<void> _showAttachOptions() async {
     final choice = await showModalBottomSheet<String>(
       context: context,
@@ -152,11 +155,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     if (error != null) _showError(error);
   }
 
+  /// Starts a voice note (the mic button is held down).
   Future<void> _startRecording() async {
     final ok = await _recorder.start();
     if (!ok) _showError('Please allow microphone access to send voice messages.');
   }
 
+  /// Mic button released: sends the voice note unless it was too short.
   Future<void> _stopRecording() async {
     final recording = await _recorder.stop();
     if (recording == null) return; // too short or cancelled
@@ -164,6 +169,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     if (error != null) _showError(error);
   }
 
+  /// Long-press menu on a message: copy (text) and delete (own messages).
   Future<void> _showMessageActions(MessageModel message) async {
     if (message.isDeleted) return;
     final isText = (message.mediaType ?? 'text') == 'text';
@@ -210,6 +216,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     }
   }
 
+  /// Blocks or unblocks the other person (blocking asks first).
   Future<void> _toggleBlock() async {
     final name = widget.otherUser.displayName;
     if (_controller.blockState == ChatBlockState.blockedByMe) {
@@ -242,6 +249,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     }
   }
 
+  /// Starts a voice call and opens the call screen.
   Future<void> _startCall() async {
     if (_isStartingCall || _controller.isBlocked) return;
     setState(() => _isStartingCall = true);
@@ -407,6 +415,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     );
   }
 
+  /// The messages (newest at the bottom), or a spinner / error.
   Widget _buildMessages() {
     if (_controller.isLoading) {
       return const Center(child: CircularProgressIndicator(color: AppColors.primary));

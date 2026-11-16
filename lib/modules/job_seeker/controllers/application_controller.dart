@@ -81,17 +81,20 @@ class ApplicationController extends ChangeNotifier {
   /// Typing doesn't rebuild the screen, so no notify here.
   void setTextAnswer(String questionID, String text) => _answers[questionID] = text;
 
+  /// Stores the file chosen for a file question.
   void setFileAnswer(String questionID, File file) {
     _answers[questionID] = file;
     _notify();
   }
 
+  /// Chooses which resume goes with the application.
   void chooseResume(ResumeChoice choice) {
     if (_resumeChoice == choice) return;
     _resumeChoice = choice;
     _notify();
   }
 
+  /// Uses a newly picked resume file for this application.
   void setNewResumeFile(File file) {
     _newResumeFile = file;
     _resumeChoice = ResumeChoice.newFile;
@@ -138,6 +141,7 @@ class ApplicationController extends ChangeNotifier {
     }
   }
 
+  /// notifyListeners, unless the controller was already disposed.
   void _notify() {
     if (!_disposed) notifyListeners();
   }
@@ -152,7 +156,8 @@ class ApplicationController extends ChangeNotifier {
   // Data
   // ---------------------------------------------------------------------
 
-  /// Throws [DataLoadException] if the questions can't be loaded (applying
+  /// The employer's questions for [jobId].
+  /// Throws [DataLoadException] if they can't be loaded (applying
   /// without them would skip required answers).
   Future<List<PreScreeningQuestionModel>> getQuestions(String jobId) async {
     try {
@@ -171,6 +176,7 @@ class ApplicationController extends ChangeNotifier {
     }
   }
 
+  /// The resume link saved on the seeker's profile, or null if there is none.
   Future<String?> getSeekerResume() async {
     try {
       final response = await _supabase
@@ -222,6 +228,8 @@ class ApplicationController extends ChangeNotifier {
     return (path: path, url: url);
   }
 
+  /// Deletes files uploaded for an application that was then not saved
+  /// (bucket -> paths). Failures are only logged.
   Future<void> _removeUploaded(Map<String, List<String>> uploaded) async {
     for (final entry in uploaded.entries) {
       if (entry.value.isEmpty) continue;
@@ -297,6 +305,7 @@ class ApplicationController extends ChangeNotifier {
     }
   }
 
+  /// Turns a database error from submit_job_application into a message to show.
   ApplicationException _mapDatabaseError(String message) {
     if (message.contains('already_applied') || message.contains('jobapplicant_job_seeker_uq')) {
       return ApplicationException('already_applied', 'You have already applied for this job.');

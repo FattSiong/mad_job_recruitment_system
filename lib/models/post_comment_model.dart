@@ -28,6 +28,7 @@ class PostCommentModel {
   /// The top-level comment a reply to this comment should be stored under.
   String get threadID => isReply ? parentCommentID! : commentID;
 
+  /// True if [id] wrote this comment.
   bool isOwnedBy(String id) => userID == id;
 
   /// "@Aisyah" at the start of a reply, or null.

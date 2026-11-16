@@ -107,6 +107,7 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
+  /// Author photo, name, role, topic and time.
   Widget _buildHeader() {
     return Row(
       children: [
@@ -162,9 +163,11 @@ class _PostCardState extends State<PostCard> {
     return post.isEdited ? '$time · Edited' : time;
   }
 
+  /// "Employer" / "Job Seeker" label in the role's colour.
   Widget _rolePill(String role, String label) =>
       _pill(label, role == 'employer' ? AppColors.teal : AppColors.primary);
 
+  /// Small rounded label.
   Widget _pill(String label, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
@@ -179,6 +182,7 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
+  /// The ⋯ menu: publish / edit / delete for own posts, report and message for others.
   Widget _buildMenu() {
     final items = <PopupMenuEntry<PostAction>>[
       if (_isMine && post.isDraft)
@@ -203,6 +207,7 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
+  /// One row of the ⋯ menu (red when [danger]).
   PopupMenuItem<PostAction> _menuItem(PostAction value, IconData icon, String label,
       {bool danger = false}) {
     final color = danger ? AppColors.danger : AppColors.textDark;
@@ -218,6 +223,7 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
+  /// Red notice on a post removed by an admin.
   Widget _buildRemovedNotice() {
     return Container(
       width: double.infinity,
@@ -268,6 +274,7 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
+  /// Like, comment and save buttons with their counts.
   Widget _buildActions() {
     final enabled = post.isInteractive;
     return Row(
@@ -299,6 +306,7 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
+  /// One like / comment / save button (greyed out when [onTap] is null).
   Widget _actionPill({
     required IconData icon,
     required String label,

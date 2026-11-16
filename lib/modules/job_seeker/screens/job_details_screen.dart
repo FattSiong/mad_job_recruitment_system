@@ -47,6 +47,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     _checkAppliedStatus();
   }
 
+  /// Checks whether the user already applied (or withdrew), to set the Apply button.
   Future<void> _checkAppliedStatus() async {
     if (widget.disableApplyButton || widget.job.jobID == null) {
       _isCheckingApplied = false; // still inside initState, so no setState needed
@@ -69,6 +70,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
   bool get _isClosed =>
       widget.job.status.trim().toLowerCase() != 'active' || widget.job.isExpired;
 
+  /// Opens the application form; afterwards the button shows "Applied".
   Future<void> _openApplication() async {
     final applied = await Navigator.push<bool>(
       context,
@@ -89,6 +91,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     super.dispose();
   }
 
+  /// Shows whether this job is bookmarked.
   Future<void> _checkBookmarkStatus() async {
     if (widget.job.jobID != null) {
       final isBookmarked =
@@ -99,6 +102,8 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     }
   }
 
+  /// Bookmarks or un-bookmarks the job (the icon changes straight away and
+  /// is put back if saving fails).
   Future<void> _toggleBookmark() async {
     if (widget.job.jobID == null || _isBookmarkUpdating) return;
 
@@ -146,6 +151,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
 
   }
 
+  /// Tracks whether the page is scrolled to the bottom.
   void _scrollListener() {
     if (_scrollController.hasClients) {
       final isBottom = _scrollController.position.pixels >=
@@ -159,6 +165,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     }
   }
 
+  /// "RM3000 - 4000 a month" ("an hour" for part-time jobs).
   String _formatSalaryOnly() {
     final salary = widget.job.salaryRange;
     if (salary.isEmpty) return 'Salary not specified';
@@ -168,6 +175,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     return '$salary $period';
   }
 
+  /// "Posted 2 weeks ago", "Posted 3 days ago", ...
   String _formatPostedDate() {
     final createdAt = widget.job.createdAt;
     if (createdAt == null) return 'Recently posted';
@@ -192,6 +200,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     return 'Posted recently';
   }
 
+  /// Opens the Report Job screen.
   void _handleReportJob() {
     Navigator.push(
       context,
@@ -201,6 +210,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     );
   }
 
+  /// Small see-through chip in the header (location, job type, ...).
   Widget _buildMetaChip(IconData icon, String label) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -228,6 +238,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     );
   }
 
+  /// One coloured detail tile (salary, job type, ...).
   Widget _buildInfoTile({
     required IconData icon,
     required String title,
@@ -283,6 +294,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     );
   }
 
+  /// White card with a title, optional subtitle and content.
   Widget _buildSectionCard({
     required String title,
     String? subtitle,
@@ -324,6 +336,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     );
   }
 
+  /// The job description, cut to 8 lines with Show more / Show less when it is long.
   Widget _buildDescriptionSection() {
     return _buildSectionCard(
       title: 'Full Job Description',
@@ -398,6 +411,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     );
   }
 
+  /// Salary, job type, location and other key details.
   Widget _buildAboutRoleSection() {
     return _buildSectionCard(
       title: 'Role Snapshot',

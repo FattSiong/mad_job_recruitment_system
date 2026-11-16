@@ -17,6 +17,7 @@ import 'skill_gap_analysis_screen.dart';
 import 'skill_gap_result_screen.dart';
 import '../../../shared_widgets/surface_card.dart';
 
+/// Which reports the timeline shows.
 enum _Filter { all, interviews, skillGaps }
 
 /// Use Case 4.61: historical dashboard of AI evaluations.
@@ -43,6 +44,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
     _load();
   }
 
+  /// Loads all reports (the spinner shows only on the first load).
   Future<void> _load() async {
     setState(() {
       _isLoading = _reports.isEmpty;
@@ -78,6 +80,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
     }
   }
 
+  /// Opens an interview scorecard or a skill gap report.
   Future<void> _openReport(GuidanceReportItem item) async {
     if (_openingID != null) return;
 
@@ -147,6 +150,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
     );
   }
 
+  /// Opens a new mock interview or analysis, then reloads the reports.
   void _startActivity(Widget screen) {
     Navigator.push(context, MaterialPageRoute(builder: (_) => screen)).then((_) {
       if (mounted) _load();
@@ -179,6 +183,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
     );
   }
 
+  /// Spinner, error, empty state, or the summary, chart and timeline.
   List<Widget> _buildBody() {
     if (_isLoading) {
       return const [
@@ -212,6 +217,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
     ];
   }
 
+  /// Gradient header with the title and back button.
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
@@ -256,6 +262,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
 
   // ---- Use case A1: no reports yet ------------------------------------
 
+  /// No reports yet: buttons to start a mock interview or a skill gap analysis.
   Widget _buildEmptyState() {
     return SurfaceCard(
       children: [
@@ -300,6 +307,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
     );
   }
 
+  /// Full-width button (filled or outlined) on the empty state.
   Widget _startButton(IconData icon, String label, VoidCallback onPressed, {bool filled = false}) {
     final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(18));
     const padding = EdgeInsets.symmetric(vertical: 15);
@@ -334,6 +342,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
 
   // ---- Use case A2: database error ------------------------------------
 
+  /// Shown when the reports couldn't be loaded, with Try Again.
   Widget _buildErrorState() {
     return SurfaceCard(
       children: [
@@ -356,6 +365,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
 
   // ---- Summary --------------------------------------------------------
 
+  /// Totals, average and best interview score, and the latest skill match.
   Widget _buildSummaryCard() {
     final interviewScores = _interviews.map((r) => r.score).whereType<int>().toList();
     final avgInterview = interviewScores.isEmpty
@@ -395,6 +405,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
     );
   }
 
+  /// One number in the summary card.
   Widget _statTile(IconData icon, String value, String label, Color color) {
     return Container(
       padding: const EdgeInsets.all(14),
@@ -422,6 +433,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
 
   // ---- Progress chart -------------------------------------------------
 
+  /// Score bars for interviews and skill gap analyses.
   Widget _buildProgressCard() {
     return SurfaceCard(
       children: [
@@ -433,6 +445,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
     );
   }
 
+  /// The last 8 scores as bars (oldest to newest) with the change since the first.
   Widget _progressRow(String title, List<GuidanceReportItem> items, Color color) {
     final recent = items.take(8).toList().reversed.toList(); // oldest -> newest
     String? trend;
@@ -506,6 +519,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
 
   // ---- Filter + timeline ----------------------------------------------
 
+  /// All / Interviews / Skill gaps filter, then the reports grouped by month.
   Widget _buildFilterBar() {
     Widget chip(_Filter f, String label, int count) {
       final selected = _filter == f;
@@ -586,6 +600,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
     return widgets;
   }
 
+  /// One report in the timeline; tapping it opens the full report.
   Widget _reportTile(GuidanceReportItem item) {
     final typeColor = item.isMockInterview ? AppColors.primary : AppColors.teal;
     final scoreColor = AppColors.forScore(item.score);

@@ -51,6 +51,7 @@ class PostMediaView extends StatelessWidget {
     return _fileCard(context, url);
   }
 
+  /// Card for a PDF attachment; tapping it opens the file.
   Widget _fileCard(BuildContext context, String url) {
     return Material(
       color: AppColors.surfaceAlt,

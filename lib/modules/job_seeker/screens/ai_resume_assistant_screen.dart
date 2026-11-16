@@ -57,6 +57,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
 
   String? _loadError;
 
+  /// Loads the resumes the user has and their past reviews.
   Future<void> _load() async {
     final List<Object?> results;
     try {
@@ -94,6 +95,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
 
   bool get _canReview => !_isReviewing && _selected != null;
 
+  /// Reviews the chosen resume and opens the report.
   Future<void> _review() async {
     final source = _selected;
     if (!_canReview || source == null) return;
@@ -117,6 +119,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
     }
   }
 
+  /// Opens a review report.
   void _openReview(ResumeReviewModel review) {
     Navigator.push(
       context,
@@ -124,17 +127,20 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
     );
   }
 
+  /// Opens Build Resume, then reloads (a resume may have been built).
   Future<void> _openBuilder() async {
     await Navigator.push(context, MaterialPageRoute(builder: (_) => const BuildResumeScreen()));
     if (mounted) _load();
   }
 
+  /// Fills the target job with [role]; tapping the same one again clears it.
   void _setRole(String role) {
     final same = _roleController.text.trim() == role;
     _roleController.text = same ? '' : role;
     _roleController.selection = TextSelection.collapsed(offset: _roleController.text.length);
   }
 
+  /// Deletes a past review after asking.
   Future<void> _confirmDelete(ResumeReviewModel item) async {
     final confirmed = await showConfirmDialog(
       context,
@@ -200,6 +206,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
     );
   }
 
+  /// Gradient header with the title and back button.
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
@@ -242,6 +249,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
 
   // ---- Resume choice --------------------------------------------------
 
+  /// Choice between the uploaded resume and the one built in the app.
   Widget _buildResumePickerCard() {
     final s = _sources;
     if (s == null) {
@@ -326,6 +334,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
     );
   }
 
+  /// One resume option (greyed out when it isn't available).
   Widget _sourceTile({
     required ResumeReviewSource source,
     required IconData icon,
@@ -409,6 +418,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
 
   // ---- Target job -----------------------------------------------------
 
+  /// Optional target job box with suggested roles.
   Widget _buildRoleCard() {
     return SurfaceCard(
       children: [
@@ -477,6 +487,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
 
   // ---- What is checked ------------------------------------------------
 
+  /// What the review looks at (content, impact, keywords, ...).
   Widget _buildChecklistCard() {
     return SurfaceCard(
       children: [
@@ -497,6 +508,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
     );
   }
 
+  /// One row of the checklist card.
   Widget _checklistItem(IconData icon, String title, String subtitle) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
@@ -531,6 +543,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
 
   // ---- History --------------------------------------------------------
 
+  /// Past reviews with their scores; tapping one opens it.
   Widget _buildHistoryCard() {
     return SurfaceCard(
       children: [
@@ -597,6 +610,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
     );
   }
 
+  /// "Review My Resume" button (with a progress note while reviewing).
   Widget _buildBottomButton() {
     return SafeArea(
       top: false,

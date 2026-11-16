@@ -57,6 +57,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadProfile();
   }
 
+  /// Rebuilds when the profile state changes.
   void _onProfileChanged() {
     if (mounted) setState(() {});
   }
@@ -73,6 +74,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // Loading
   // ---------------------------------------------------------------------
 
+  /// Loads the profile, then fills the form.
   Future<void> _loadProfile() async {
     await _myProfile.load();
     _fillForm();
@@ -106,6 +108,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (mounted) _loadProfile();
   }
 
+  /// Opens Skills; reloads the skills when it closes.
   Future<void> _openSkills() async {
     await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddSkillScreen()));
     if (mounted) await _myProfile.refreshSkills();
@@ -121,6 +124,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  /// Opens a LinkedIn / GitHub link, or says why it can't.
   Future<void> _openLink(String url) async {
     final opened = await LinkHelper.openExternal(url);
     if (!opened && mounted) {
@@ -159,6 +163,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // Editing
   // ---------------------------------------------------------------------
 
+  /// Camera / library / remove sheet; the change is applied on Save.
   Future<void> _changePhoto() async {
     final result = await pickProfilePhoto(context, hasPhoto: _myProfile.hasPhoto);
     if (!mounted || result == null) return;
@@ -170,6 +175,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  /// Validates and saves the form.
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     FocusScope.of(context).unfocus();
@@ -205,6 +211,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // Resume and logout
   // ---------------------------------------------------------------------
 
+  /// Picks a PDF or DOCX file and uploads it as the profile resume.
   Future<void> _pickAndUploadResume() async {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
@@ -223,6 +230,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  /// Logs out after asking, then opens Login.
   Future<void> _logout() async {
     final confirmed = await showConfirmDialog(
       context,
@@ -244,6 +252,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // UI
   // ---------------------------------------------------------------------
 
+  /// One work experience entry on the profile.
   Widget _experienceCard(WorkExperienceModel exp) {
     return ProfileRecordCard(
       icon: Icons.work_outline_rounded,
@@ -255,6 +264,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  /// One education entry on the profile.
   Widget _educationCard(EducationModel edu) {
     final field = edu.fieldOfStudy;
     return ProfileRecordCard(
@@ -298,6 +308,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  /// Spinner, load error, or the whole profile page.
   Widget _buildBody(bool editing, bool saving) {
     if (_myProfile.isLoading) {
       return const Center(child: CircularProgressIndicator(color: AppColors.primary));

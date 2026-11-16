@@ -16,6 +16,7 @@ class AppliedJobsController {
   /// (after applying for a job, or when the My Jobs tab is opened).
   static final ValueNotifier<int> refreshSignal = ValueNotifier(0);
 
+  /// Makes the Applied and Interviews tabs reload.
   static void notifyChanged() => refreshSignal.value++;
 
   /// The user's applications with their jobs, newest first.

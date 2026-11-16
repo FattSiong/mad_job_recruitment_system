@@ -149,6 +149,7 @@ class JobSearchPanel extends StatelessWidget {
     );
   }
 
+  /// Style of the keyword and location boxes.
   InputDecoration _inputDecoration({
     required String hint,
     required IconData icon,

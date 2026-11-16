@@ -82,6 +82,7 @@ Future<double?> showRadiusFilterSheet(BuildContext context, {required double cur
 // Sheet contents
 // ---------------------------------------------------------------------
 
+/// Shared layout of the filter sheets: handle, title, subtitle and content.
 Widget _sheetFrame(BuildContext context, {required String title, String? subtitle, required List<Widget> children}) {
   return Padding(
     padding: EdgeInsets.only(
@@ -129,6 +130,7 @@ Widget _sheetFrame(BuildContext context, {required String title, String? subtitl
   );
 }
 
+/// Style of the filled Apply button.
 ButtonStyle _applyButtonStyle() => ElevatedButton.styleFrom(
       backgroundColor: AppColors.primary,
       foregroundColor: Colors.white,
@@ -137,6 +139,7 @@ ButtonStyle _applyButtonStyle() => ElevatedButton.styleFrom(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     );
 
+/// Style of the outlined Clear button.
 ButtonStyle _clearButtonStyle() => OutlinedButton.styleFrom(
       foregroundColor: AppColors.textDark,
       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -144,6 +147,7 @@ ButtonStyle _clearButtonStyle() => OutlinedButton.styleFrom(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     );
 
+/// Content of the date posted / job type / salary sheet.
 class _JobFilterSheet extends StatefulWidget {
   final String filterType;
   final String currentValue;
@@ -185,6 +189,7 @@ class _JobFilterSheetState extends State<_JobFilterSheet> {
     super.dispose();
   }
 
+  /// Applies the typed minimum salary (empty = any salary).
   void _applyTypedSalary() {
     final typed = _salaryController.text.trim();
     if (typed.isEmpty) {
@@ -298,6 +303,7 @@ class _JobFilterSheetState extends State<_JobFilterSheet> {
   }
 }
 
+/// Content of the radius sheet.
 class _RadiusFilterSheet extends StatefulWidget {
   final double initialKm;
 

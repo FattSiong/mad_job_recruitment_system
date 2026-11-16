@@ -155,6 +155,8 @@ class MockInterviewController {
         ));
   }
 
+  /// Reads the recorded answer; an unreadable file becomes a
+  /// [MockInterviewException] asking the user to record again.
   static Future<List<int>> _readRecording(File file) async {
     try {
       return await file.readAsBytes();

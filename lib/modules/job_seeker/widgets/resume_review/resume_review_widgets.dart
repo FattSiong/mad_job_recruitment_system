@@ -12,12 +12,14 @@ Color resumeScoreColor(int score) {
   return AppColors.errorRed;
 }
 
+/// Red / amber / teal for high / medium / low priority.
 Color _priorityColor(String priority) => switch (priority) {
       'high' => AppColors.errorRed,
       'low' => AppColors.teal,
       _ => AppColors.warning,
     };
 
+/// "High priority", "Medium priority" or "Nice to have".
 String _priorityLabel(String priority) => switch (priority) {
       'high' => 'High priority',
       'low' => 'Nice to have',
@@ -135,6 +137,7 @@ class ResumeImprovementCard extends StatelessWidget {
 
   const ResumeImprovementCard({super.key, required this.item});
 
+  /// Copies the suggested rewrite.
   Future<void> _copy(BuildContext context) async {
     await Clipboard.setData(ClipboardData(text: item.after));
     if (!context.mounted) return;
@@ -214,6 +217,7 @@ class ResumeImprovementCard extends StatelessWidget {
     );
   }
 
+  /// Small coloured label.
   Widget _pill(String text, Color color) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
@@ -226,6 +230,7 @@ class ResumeImprovementCard extends StatelessWidget {
         ),
       );
 
+  /// Box with the "Before" or "Suggested" text.
   Widget _rewriteBox({
     required String label,
     required String text,

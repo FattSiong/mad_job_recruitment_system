@@ -28,6 +28,7 @@ class GuidancePdfBuilder {
 
   static pw.ThemeData? _theme;
 
+  /// Loads the Poppins fonts once and reuses them for every PDF.
   static Future<pw.ThemeData> _loadTheme() async {
     if (_theme != null) return _theme!;
     final regular = await rootBundle.load('assets/fonts/Poppins-Regular.ttf');
@@ -50,8 +51,10 @@ class GuidancePdfBuilder {
         .trim();
   }
 
+  /// Shortens [s] to [max] characters, ending with "…".
   static String _cut(String s, int max) => s.length > max ? '${s.substring(0, max)}…' : s;
 
+  /// Green / amber / red for a 0-100 score (grey when there is no score).
   static PdfColor _scoreColor(int? score) {
     if (score == null) return _muted;
     if (score >= 75) return _green;
@@ -59,6 +62,7 @@ class GuidancePdfBuilder {
     return _red;
   }
 
+  /// [s] with its first letter in capitals.
   static String _cap(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
 
   // =====================================================================
@@ -105,6 +109,7 @@ class GuidancePdfBuilder {
     return doc.save();
   }
 
+  /// One mock interview scorecard as a PDF.
   static Future<Uint8List> interviewReport(
     MockInterviewRecordModel r, {
     String? applicantName,
@@ -122,6 +127,7 @@ class GuidancePdfBuilder {
     return doc.save();
   }
 
+  /// One skill gap analysis as a PDF.
   static Future<Uint8List> skillGapReport(
     SkillGapAnalysisModel a, {
     String? applicantName,

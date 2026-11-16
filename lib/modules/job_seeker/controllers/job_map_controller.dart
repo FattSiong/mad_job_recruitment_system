@@ -47,6 +47,7 @@ class JobMapController extends ChangeNotifier {
       _salary != JobFilterOptions.anySalary ||
       _radiusKm != JobFilterOptions.defaultRadiusKm;
 
+  /// The current value of one filter chip (date posted, job type or salary).
   String filterValue(String filterType) => switch (filterType) {
         JobFilterOptions.datePosted => _datePosted,
         JobFilterOptions.jobType => _jobType,
@@ -226,6 +227,7 @@ class JobMapController extends ChangeNotifier {
     }
   }
 
+  /// Selects the job at [index] in the result list (its pin is highlighted).
   void select(int index) {
     if (index < 0 || index >= _jobs.length || index == _selectedIndex) return;
     _selectedIndex = index;
@@ -239,8 +241,10 @@ class JobMapController extends ChangeNotifier {
   // Filters (the screen runs a new search after each change)
   // ---------------------------------------------------------------------
 
+  /// The search keyword (used by the next search).
   void setKeyword(String value) => _keyword = value.trim();
 
+  /// Sets one filter (date posted, job type or salary).
   void setFilter(String filterType, String value) {
     switch (filterType) {
       case JobFilterOptions.datePosted:
@@ -253,6 +257,7 @@ class JobMapController extends ChangeNotifier {
     _notify();
   }
 
+  /// Sets the search radius (5 to 100 km).
   void setRadius(double km) {
     _radiusKm = km.clamp(5.0, 100.0);
     _notify();
@@ -265,6 +270,7 @@ class JobMapController extends ChangeNotifier {
     return true;
   }
 
+  /// Resets the keyword, filters and radius to their defaults.
   void clearFilters() {
     _keyword = '';
     _jobType = JobFilterOptions.anyJobType;
@@ -274,6 +280,7 @@ class JobMapController extends ChangeNotifier {
     _notify();
   }
 
+  /// notifyListeners, unless the controller was already disposed.
   void _notify() {
     if (!_disposed) notifyListeners();
   }

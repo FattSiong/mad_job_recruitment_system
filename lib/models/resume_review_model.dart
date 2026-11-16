@@ -1,6 +1,8 @@
+/// The non-empty strings in a JSON list ([] if [v] isn't a list).
 List<String> _strings(dynamic v) =>
     v is List ? v.map((e) => e.toString()).where((s) => s.trim().isNotEmpty).toList() : const [];
 
+/// The objects in a JSON list ([] if [v] isn't a list).
 List<Map<String, dynamic>> _maps(dynamic v) => v is List
     ? v.whereType<Map>().map((e) => e.cast<String, dynamic>()).toList()
     : const [];
@@ -13,6 +15,7 @@ enum ResumeReviewSource {
   final String label;
   const ResumeReviewSource(this.label);
 
+  /// Reads the stored source name ('uploaded' when missing or unknown).
   static ResumeReviewSource fromName(String? name) =>
       name == 'builder' ? ResumeReviewSource.builder : ResumeReviewSource.uploaded;
 }
@@ -184,6 +187,7 @@ class ResumeReviewSources {
     return name.endsWith('.pdf') || name.endsWith('.docx');
   }
 
+  /// True if [source] can be reviewed now (an uploaded file must also be readable).
   bool isAvailable(ResumeReviewSource source) => switch (source) {
         ResumeReviewSource.uploaded => hasUploaded && uploadedReadable,
         ResumeReviewSource.builder => hasBuiltResume,

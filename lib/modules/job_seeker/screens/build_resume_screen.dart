@@ -19,6 +19,7 @@ class BuildResumeScreen extends StatefulWidget {
   State<BuildResumeScreen> createState() => _BuildResumeScreenState();
 }
 
+/// Title, subtitle and icon of one builder step.
 class _ResumeStep {
   final String title;
   final String subtitle;
@@ -69,6 +70,7 @@ class _BuildResumeScreenState extends State<BuildResumeScreen> {
     super.dispose();
   }
 
+  /// Puts the loaded resume into the text boxes (only once).
   void _fillFieldsOnce() {
     if (_fieldsFilled || _controller.isLoading || _controller.error != null) return;
     final r = _controller.resume;
@@ -83,6 +85,7 @@ class _BuildResumeScreenState extends State<BuildResumeScreen> {
   // Navigation
   // ---------------------------------------------------------------------
 
+  /// Saves, then goes to the next step (the last step opens the PDF preview).
   Future<void> _next() async {
     FocusScope.of(context).unfocus();
     if (_step <= 2 && !(_formKey.currentState?.validate() ?? true)) return;
@@ -121,6 +124,7 @@ class _BuildResumeScreenState extends State<BuildResumeScreen> {
     );
   }
 
+  /// Previous step, or leaves the builder from the first step.
   void _back() {
     FocusScope.of(context).unfocus();
     if (_step == 0) {
@@ -171,6 +175,7 @@ class _BuildResumeScreenState extends State<BuildResumeScreen> {
     );
   }
 
+  /// Gradient header with the title and back button.
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.all(22),
@@ -212,6 +217,7 @@ class _BuildResumeScreenState extends State<BuildResumeScreen> {
     );
   }
 
+  /// "Step 3 of 7" with a progress bar.
   Widget _buildProgress() {
     final step = _steps[_step];
     return Container(
@@ -254,6 +260,7 @@ class _BuildResumeScreenState extends State<BuildResumeScreen> {
     );
   }
 
+  /// Note that the resume starts from the profile, and edits stay in the resume.
   Widget _buildPrefillNote() {
     return Container(
       padding: const EdgeInsets.all(14),
@@ -276,6 +283,7 @@ class _BuildResumeScreenState extends State<BuildResumeScreen> {
     );
   }
 
+  /// White card with the current step's title and fields.
   Widget _buildStepCard() {
     final step = _steps[_step];
     return Container(
@@ -300,6 +308,7 @@ class _BuildResumeScreenState extends State<BuildResumeScreen> {
     );
   }
 
+  /// The fields of the current step.
   Widget _buildStepBody() {
     switch (_step) {
       case 0:
@@ -375,6 +384,7 @@ class _BuildResumeScreenState extends State<BuildResumeScreen> {
     }
   }
 
+  /// One labelled text box with an icon.
   Widget _field({
     required TextEditingController controller,
     required String label,
@@ -415,6 +425,7 @@ class _BuildResumeScreenState extends State<BuildResumeScreen> {
     );
   }
 
+  /// Back and Next / Finish buttons.
   Widget _buildBottomButtons() {
     return SafeArea(
       top: false,

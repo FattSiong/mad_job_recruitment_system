@@ -19,6 +19,7 @@ Future<PostFilter?> showCommunityFilterSheet(BuildContext context, PostFilter cu
   );
 }
 
+/// Content of the filter sheet (changes apply only on Apply).
 class _CommunityFilterSheet extends StatefulWidget {
   final PostFilter initial;
 
@@ -31,6 +32,7 @@ class _CommunityFilterSheet extends StatefulWidget {
 class _CommunityFilterSheetState extends State<_CommunityFilterSheet> {
   late PostFilter _draft = widget.initial;
 
+  /// Sets every option back to its default (not applied until Apply).
   void _reset() {
     setState(() {
       _draft = _draft.copyWith(
@@ -127,6 +129,7 @@ class _CommunityFilterSheetState extends State<_CommunityFilterSheet> {
     );
   }
 
+  /// One titled group of choice chips (e.g. Sort by).
   Widget _section<T>(
     String title,
     List<T> options,

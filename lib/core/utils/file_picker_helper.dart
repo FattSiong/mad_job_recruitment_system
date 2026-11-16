@@ -16,6 +16,7 @@ class FileLimits {
   static const List<String> resumeExtensions = ['pdf', 'docx'];
   static const String resumeTypesLabel = 'PDF or Word (.docx)';
 
+  /// True if [path] has a resume extension the app accepts (PDF or DOCX).
   static bool isAllowedResume(String path) =>
       resumeExtensions.contains(path.split('.').last.toLowerCase());
 }

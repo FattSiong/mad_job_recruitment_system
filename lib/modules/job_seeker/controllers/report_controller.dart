@@ -49,6 +49,7 @@ class ReportController {
     }
   }
 
+  /// Trimmed details, cut to [maxDetailsLength]; null when empty.
   static String? _cleanDetails(String? details) {
     final text = details?.trim() ?? '';
     if (text.isEmpty) return null;

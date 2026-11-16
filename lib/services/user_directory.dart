@@ -12,6 +12,7 @@ class UserDirectory {
 
   static final Map<String, ChatParticipant> _cache = {};
 
+  /// Names, roles and photos of [userIds] (cached ones are not fetched again).
   static Future<Map<String, ChatParticipant>> fetch(Iterable<String> userIds) async {
     final ids = userIds.where((id) => id.isNotEmpty).toSet();
     final missing = ids.where((id) => !_cache.containsKey(id)).toList();
@@ -77,6 +78,7 @@ class UserDirectory {
     };
   }
 
+  /// One user, or "Unknown user" if they can't be found.
   static Future<ChatParticipant> fetchOne(String userId) async {
     final result = await fetch([userId]);
     return result[userId] ??

@@ -38,6 +38,7 @@ class BookmarkedController {
     return _loading!;
   }
 
+  /// Fetches the IDs of [userId]'s bookmarked jobs into [bookmarkedIds].
   Future<void> _loadIds(String userId) async {
     try {
       final rows = await _supabase
@@ -53,6 +54,7 @@ class BookmarkedController {
     }
   }
 
+  /// Updates the shared set, so every card's bookmark icon changes at once.
   void _setBookmarked(String jobId, bool bookmarked) {
     final updated = Set<String>.from(bookmarkedIds.value);
     bookmarked ? updated.add(jobId) : updated.remove(jobId);
@@ -65,6 +67,7 @@ class BookmarkedController {
     return bookmarkedIds.value.contains(jobId);
   }
 
+  /// Adds or removes a bookmark. Returns false if it failed.
   Future<bool> toggleBookmark(String jobId, bool currentlyBookmarked) async {
     try {
       if (currentlyBookmarked) {
@@ -99,6 +102,7 @@ class BookmarkedController {
     }
   }
 
+  /// The bookmarked jobs, newest bookmark first (jobs that were deleted are left out).
   Future<List<JobModel>> fetchBookmarkedJobs() async {
     try {
       final response = await _supabase
