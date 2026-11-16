@@ -719,6 +719,12 @@ class ChatRoomController extends ChangeNotifier {
     _readDebounce?.cancel();
     _retryTimer?.cancel();
     _subscription?.cancel();
+    // Leaving discards the "Not sent" messages (the screen asked first):
+    // remove the files they had uploaded and their temporary voice recordings.
+    for (final item in _outbox.failed) {
+      _deleteAttachmentFile(item.uploadedURL);
+      if (item.deleteFileWhenSent) _deleteLocalFile(item.file);
+    }
     super.dispose();
   }
 }

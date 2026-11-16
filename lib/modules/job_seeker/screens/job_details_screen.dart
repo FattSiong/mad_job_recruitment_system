@@ -27,7 +27,6 @@ class JobDetailsScreen extends StatefulWidget {
 class _JobDetailsScreenState extends State<JobDetailsScreen> {
   final BookmarkedController _bookmarkController = BookmarkedController();
   final ApplicationController _applicationController = ApplicationController();
-  final ScrollController _scrollController = ScrollController();
 
   // Blocks applying twice, whichever screen the job was opened from
   bool _hasApplied = false;
@@ -37,12 +36,10 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
   bool _isBookmarked = false;
   bool _isBookmarkUpdating = false;
   bool _isDescriptionExpanded = false;
-  bool _isAtBottom = false;
 
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_scrollListener);
     _checkBookmarkStatus();
     _checkAppliedStatus();
   }
@@ -86,8 +83,6 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
   @override
   void dispose() {
     _applicationController.dispose();
-    _scrollController.removeListener(_scrollListener);
-    _scrollController.dispose();
     super.dispose();
   }
 
@@ -149,20 +144,6 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
       actualState ? AppColors.teal : AppColors.textMuted,
     );
 
-  }
-
-  /// Tracks whether the page is scrolled to the bottom.
-  void _scrollListener() {
-    if (_scrollController.hasClients) {
-      final isBottom = _scrollController.position.pixels >=
-          (_scrollController.position.maxScrollExtent - 20);
-
-      if (isBottom != _isAtBottom) {
-        setState(() {
-          _isAtBottom = isBottom;
-        });
-      }
-    }
   }
 
   /// "RM3000 - 4000 a month" ("an hour" for part-time jobs).
@@ -379,12 +360,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                 const SizedBox(height: 12),
                 TextButton.icon(
                   onPressed: () {
-                    setState(() {
-                      _isDescriptionExpanded = !_isDescriptionExpanded;
-                      if (_isDescriptionExpanded) {
-                        _isAtBottom = false;
-                      }
-                    });
+                    setState(() => _isDescriptionExpanded = !_isDescriptionExpanded);
                   },
                   style: TextButton.styleFrom(
                     foregroundColor: AppColors.primary,
@@ -462,7 +438,6 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
         children: [
           SafeArea(
             child: CustomScrollView(
-              controller: _scrollController,
               slivers: [
                 SliverToBoxAdapter(
                   child: Padding(

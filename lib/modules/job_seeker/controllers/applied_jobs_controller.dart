@@ -128,7 +128,7 @@ class AppliedJobsController {
       }
       debugPrint('Respond to job offer PostgrestException: ${e.message}');
       throw DataLoadException(
-        'Could not submit your offer response. Please ensure the offer database migration has been applied.',
+        'Unable to submit your response right now. Please try again.',
       );
     } catch (e) {
       if (e is DataLoadException) rethrow;

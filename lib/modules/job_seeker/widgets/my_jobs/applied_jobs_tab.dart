@@ -166,10 +166,15 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
       final savePath = '${dir.path}/$fileName';
       final file = File(savePath);
 
-      if (!await file.exists()) {
+      if (!await _isSavedPdf(file)) {
         final signedUrl = await StorageUrlHelper.resolve(url);
-        final response = await http.get(Uri.parse(signedUrl));
-        await file.writeAsBytes(response.bodyBytes);
+        final response =
+            await http.get(Uri.parse(signedUrl)).timeout(const Duration(seconds: 30));
+        // Never save an error page as the PDF: it would be reopened every time
+        if (response.statusCode != 200) {
+          throw HttpException('HTTP ${response.statusCode}');
+        }
+        await file.writeAsBytes(response.bodyBytes, flush: true);
       }
 
       final result = await OpenFilex.open(savePath);
@@ -196,6 +201,18 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
       if (mounted) {
         setState(() => _isDownloadingPdf = false);
       }
+    }
+  }
+
+  /// True if [file] was downloaded before and really is a PDF (starts with
+  /// "%PDF"). A broken earlier download is fetched again.
+  static Future<bool> _isSavedPdf(File file) async {
+    try {
+      if (!await file.exists()) return false;
+      final head = await file.openRead(0, 4).first;
+      return String.fromCharCodes(head) == '%PDF';
+    } catch (_) {
+      return false;
     }
   }
 
@@ -592,11 +609,13 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
                                           );
                                         }
                                       } on DataLoadException catch (e) {
+                                        if (!sheetContext.mounted) return; // sheet closed meanwhile
                                         setSheetState(() {
                                           isSubmitting = false;
                                           errorText = e.message;
                                         });
                                       } catch (_) {
+                                        if (!sheetContext.mounted) return; // sheet closed meanwhile
                                         setSheetState(() {
                                           isSubmitting = false;
                                           errorText =
@@ -654,11 +673,13 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
                                           );
                                         }
                                       } on DataLoadException catch (e) {
+                                        if (!sheetContext.mounted) return; // sheet closed meanwhile
                                         setSheetState(() {
                                           isSubmitting = false;
                                           errorText = e.message;
                                         });
                                       } catch (_) {
+                                        if (!sheetContext.mounted) return; // sheet closed meanwhile
                                         setSheetState(() {
                                           isSubmitting = false;
                                           errorText =
