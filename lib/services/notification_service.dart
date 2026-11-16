@@ -482,7 +482,14 @@ class NotificationService {
       final bundle = await EmployerService().getApplicantDetailBundle(
         applicantId,
       );
-      if (bundle == null || !context.mounted) return;
+      if (!context.mounted) return;
+      if (bundle == null) {
+        // e.g. the candidate withdrew it (an old push banner was tapped)
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(content: Text('This application is no longer available.')),
+        );
+        return;
+      }
 
       await Navigator.of(context).push(
         MaterialPageRoute(

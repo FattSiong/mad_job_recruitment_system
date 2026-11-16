@@ -31,9 +31,26 @@ class PostListController extends ChangeNotifier {
   final _supabase = Supabase.instance.client;
 
   static const int pageSize = 15;
-  static const String _columns =
+  static const String _allColumns =
       'postID, authorID, content, mediaURL, status, category, createdAt, editedAt, isDraft, '
       'PostLike(userID), PostSaved(userID), PostComment(commentID, status)';
+  static const String _basicColumns =
+      'postID, authorID, content, mediaURL, status, category, createdAt, '
+      'PostLike(userID), PostSaved(userID), PostComment(commentID, status)';
+
+  /// False when the database doesn't have the draft / "edited" columns yet
+  /// (migration 20261116000000 not run). Posts then load without them and
+  /// drafts are turned off, instead of the whole Community Hub failing.
+  static bool draftsSupported = true;
+
+  /// The error the database gives for those missing columns
+  /// (42703 = no such column; PGRST204 = no such column to save).
+  static bool isMissingDraftColumns(Object e) =>
+      e is PostgrestException &&
+      (e.code == '42703' || e.code == 'PGRST204') &&
+      RegExp('isDraft|editedAt').hasMatch(e.message);
+
+  String get _columns => draftsSupported ? _allColumns : _basicColumns;
 
   List<FeedPostModel> _posts = [];
   bool _isLoading = true;
@@ -160,6 +177,19 @@ class PostListController extends ChangeNotifier {
   Future<({List<Map<String, dynamic>> rows, int count, bool full})> _fetch({
     required int offset,
   }) async {
+    try {
+      return await _fetchOnce(offset: offset);
+    } catch (e) {
+      if (!draftsSupported || !isMissingDraftColumns(e)) rethrow;
+      debugPrint('Community: run migration 20261116000000 for drafts and "Edited" ($e)');
+      draftsSupported = false;
+      return _fetchOnce(offset: offset);
+    }
+  }
+
+  Future<({List<Map<String, dynamic>> rows, int count, bool full})> _fetchOnce({
+    required int offset,
+  }) async {
     switch (mode) {
       case PostListMode.feed:
         // The database function filters, sorts and pages; it returns post IDs.
@@ -205,13 +235,13 @@ class PostListController extends ChangeNotifier {
         final reported = await _reportedPostIds();
         ids.removeWhere(reported.contains);
         if (ids.isEmpty) return (rows: <Map<String, dynamic>>[], count: 0, full: false);
-        final rows = await _supabase
+        var query = _supabase
             .from(TableConstants.communityPost)
             .select(_columns)
             .inFilter('postID', ids)
-            .eq('status', 'active')
-            .eq('isDraft', false)
-            .order('createdAt', ascending: false);
+            .eq('status', 'active');
+        if (draftsSupported) query = query.eq('isDraft', false);
+        final rows = await query.order('createdAt', ascending: false);
         return (rows: List<Map<String, dynamic>>.from(rows), count: rows.length, full: false);
     }
   }

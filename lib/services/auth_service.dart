@@ -67,7 +67,7 @@ class AuthService {
     required String password,
   }) async {
     final lock = await _lockout.status(email);
-    if (lock.locked) throw LoginLockedException(lock.remaining);
+    if (lock.locked) throw LoginLockedException(lock.remaining, accountWide: lock.accountWide);
 
     try {
       final AuthResponse response = await _supabase.auth.signInWithPassword(
@@ -91,7 +91,7 @@ class AuthService {
     } on AuthException catch (e) {
       if (LoginLockoutService.isWrongPassword(e)) {
         final after = await _lockout.recordFailure(email);
-        if (after.locked) throw LoginLockedException(after.remaining);
+        if (after.locked) throw LoginLockedException(after.remaining, accountWide: after.accountWide);
         throw WrongPasswordException(after);
       }
       throw Exception(e.message);
@@ -119,6 +119,8 @@ class AuthService {
   Future<void> updatePassword(String newPassword) async {
     try {
       await _supabase.auth.updateUser(UserAttributes(password: newPassword));
+      // The owner proved it's them: remove any login lock on the account
+      await _lockout.clearAllFailures();
     } on AuthException catch (e) {
       throw Exception(e.message);
     } catch (e) {
