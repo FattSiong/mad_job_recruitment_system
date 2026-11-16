@@ -59,6 +59,9 @@ class _JobMapScreenState extends State<JobMapScreen> {
     final start = await _controller.findStartLocation();
     if (!mounted) return;
     _showLocationIssue(start.issue);
+    // The user already searched (a keyword or a place) while the phone was
+    // being located: keep their search instead of replacing it.
+    if (_controller.searchCenter != null) return;
     _cameraTarget = start.position;
     await _searchAt(start.position);
   }

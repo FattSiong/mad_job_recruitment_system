@@ -104,7 +104,7 @@ class CareerAdvisorController extends ChangeNotifier {
   /// the error is thrown as [AdvisorException] so the screen can give the
   /// text back to the user.
   Future<void> send(String text) async {
-    if (_isSending) return;
+    if (_isSending || _isLoadingHistory) return;
     final question = text.trim();
     if (question.isEmpty) {
       throw AdvisorException('empty_message', 'Please enter a question for the advisor.');

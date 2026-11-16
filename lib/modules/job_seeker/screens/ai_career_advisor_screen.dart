@@ -94,7 +94,9 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
 
   /// Sends the typed question, or [presetText] from a suggestion.
   Future<void> _sendMessage([String? presetText]) async {
-    if (_isSending) return;
+    // Wait for a past conversation to finish loading, or the question would
+    // show above its older messages.
+    if (_isSending || _isLoadingHistory) return;
     final text = (presetText ?? _messageController.text).trim();
 
     // Use case A2: ignore empty input and prompt the user
@@ -422,7 +424,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
 
   /// Question box and send button.
   Widget _buildComposer() {
-    final canSend = _hasMessageText && !_isSending;
+    final canSend = _hasMessageText && !_isSending && !_isLoadingHistory;
 
     return SafeArea(
       top: false,
@@ -505,7 +507,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
                             ),
                           )
                         : const Icon(Icons.send_rounded, color: Colors.white),
-                    onPressed: _isSending ? null : () => _sendMessage(),
+                    onPressed: (_isSending || _isLoadingHistory) ? null : () => _sendMessage(),
                   ),
                 ),
               ],
