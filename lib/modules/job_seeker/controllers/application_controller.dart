@@ -187,13 +187,9 @@ class ApplicationController extends ChangeNotifier {
     }
   }
 
-  /// True if the current user already applied for this job.
-  /// Returns false if it can't be checked: the server still blocks a
-  /// duplicate application when it is submitted.
-  Future<bool> hasApplied(String jobId) async => await appliedStatus(jobId) != null;
-
   /// Status of the user's application for [jobId] ('pending', 'withdrawn',
-  /// ...), or null when they haven't applied (or it couldn't be checked).
+  /// ...), or null when they haven't applied (or it couldn't be checked:
+  /// the server still blocks a duplicate application when it is submitted).
   Future<String?> appliedStatus(String jobId) async {
     try {
       final row = await _supabase
