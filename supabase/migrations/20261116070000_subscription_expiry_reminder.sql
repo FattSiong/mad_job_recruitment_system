@@ -10,7 +10,8 @@
 -- Every day at 09:05 Malaysia time, for each company whose Premium plan
 -- ends in 3 days (Malaysia date):
 --   * a "Notification" row (type 'subscription_expiring') is added for the
---     employer who paid last and for the company owners: it shows in the
+--     employer who paid last (if still in the company) and for the company
+--     owners: it shows in the
 --     bell, and tapping it opens the Subscription screen;
 --   * the phone gets a push through the send-push Edge Function (FCM),
 --     unless a trigger on "Notification" already pushes new rows.
@@ -64,12 +65,18 @@ begin
     select distinct c."companyID", c."name", c."subscriptionEndsAt", who."userID"
     from public."Company" c
     cross join lateral (
-      -- the employer who paid for the plan that is ending ...
-      (select ps."paidByEmployerID" as "userID"
-       from public."PaymentSubscription" ps
-       where ps."companyID" = c."companyID"
-       order by ps."endDate" desc
-       limit 1)
+      -- the employer who paid for the plan that is ending (if still in
+      -- the company) ...
+      select payer."userID"
+      from (select ps."paidByEmployerID" as "userID"
+            from public."PaymentSubscription" ps
+            where ps."companyID" = c."companyID"
+            order by ps."endDate" desc
+            limit 1) payer
+      where exists (select 1 from public."CompanyMember" m
+                    where m."companyID" = c."companyID"
+                      and m."employerID" = payer."userID"
+                      and m."status" = 'active')
       union
       -- ... and the company owners
       select cm."employerID"
