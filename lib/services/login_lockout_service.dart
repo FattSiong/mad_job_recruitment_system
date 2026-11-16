@@ -55,10 +55,14 @@ class LoginLockStatus {
   final Duration remaining;
   final int attemptsLeft;
 
+  /// False when the database could not be asked (then no count is shown).
+  final bool known;
+
   const LoginLockStatus({
     required this.locked,
     required this.remaining,
     required this.attemptsLeft,
+    this.known = true,
   });
 
   /// Used when the database could not be asked.
@@ -66,6 +70,7 @@ class LoginLockStatus {
     locked: false,
     remaining: Duration.zero,
     attemptsLeft: LoginLockoutService.maxAttempts,
+    known: false,
   );
 
   factory LoginLockStatus.fromJson(dynamic json) {
@@ -90,7 +95,8 @@ class LoginLockStatus {
 
   /// Message under the password field after a wrong password.
   String get wrongPasswordMessage {
-    if (attemptsLeft <= 0) return 'Incorrect email or password.';
+    // Don't promise "5 attempts left" when the count couldn't be checked
+    if (!known || attemptsLeft <= 0) return 'Incorrect email or password.';
     final tries = attemptsLeft == 1 ? '1 attempt' : '$attemptsLeft attempts';
     return 'Incorrect email or password. $tries left before your account '
         'is locked for ${LoginLockoutService.lockMinutes} minutes.';

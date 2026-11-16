@@ -29,6 +29,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
 
   // Blocks applying twice, whichever screen the job was opened from
   bool _hasApplied = false;
+  bool _withdrawn = false; // applied before, then withdrew (can't apply again)
   bool _isCheckingApplied = true;
 
   bool _isBookmarked = false;
@@ -49,10 +50,11 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
       _isCheckingApplied = false; // runs synchronously inside initState, no setState needed
       return;
     }
-    final applied = await _applicationController.hasApplied(widget.job.jobID!);
+    final status = await _applicationController.appliedStatus(widget.job.jobID!);
     if (mounted) {
       setState(() {
-        _hasApplied = applied;
+        _hasApplied = status != null;
+        _withdrawn = status == 'withdrawn';
         _isCheckingApplied = false;
       });
     }
@@ -622,14 +624,18 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                                   child: CircularProgressIndicator(strokeWidth: 2),
                                 )
                               : Icon(
-                                  _alreadyApplied
-                                      ? Icons.check_circle_outline
-                                      : (_isClosed ? Icons.block_rounded : Icons.send_rounded),
+                                  _withdrawn
+                                      ? Icons.undo_rounded
+                                      : (_alreadyApplied
+                                          ? Icons.check_circle_outline
+                                          : (_isClosed ? Icons.block_rounded : Icons.send_rounded)),
                                 ),
                           label: Text(
-                            _alreadyApplied
-                                ? 'Already Applied'
-                                : (_isClosed ? 'Applications Closed' : 'Apply Now'),
+                            _withdrawn
+                                ? 'Application Withdrawn'
+                                : (_alreadyApplied
+                                    ? 'Already Applied'
+                                    : (_isClosed ? 'Applications Closed' : 'Apply Now')),
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,

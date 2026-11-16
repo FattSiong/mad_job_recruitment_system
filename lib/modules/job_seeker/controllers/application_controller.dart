@@ -190,19 +190,24 @@ class ApplicationController extends ChangeNotifier {
   /// True if the current user already applied for this job.
   /// Returns false if it can't be checked: the server still blocks a
   /// duplicate application when it is submitted.
-  Future<bool> hasApplied(String jobId) async {
+  Future<bool> hasApplied(String jobId) async => await appliedStatus(jobId) != null;
+
+  /// Status of the user's application for [jobId] ('pending', 'withdrawn',
+  /// ...), or null when they haven't applied (or it couldn't be checked).
+  Future<String?> appliedStatus(String jobId) async {
     try {
       final row = await _supabase
           .from(TableConstants.jobApplicant)
-          .select('applicantID')
+          .select('applicantID, applicationStatus')
           .eq('jobID', jobId)
           .eq('seekerID', _currentSeekerID)
           .limit(1)
           .maybeSingle();
-      return row != null;
+      if (row == null) return null;
+      return (row['applicationStatus'] ?? 'pending').toString().trim().toLowerCase();
     } catch (e) {
       debugPrint('Error checking existing application: $e');
-      return false;
+      return null;
     }
   }
 
