@@ -4,6 +4,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import 'public_profile_screen.dart';
 
+/// Scans a job seeker's profile QR code and opens their public profile.
 class QRScannerScreen extends StatefulWidget {
   const QRScannerScreen({super.key});
 
@@ -33,13 +34,13 @@ class QRScannerScreen extends StatefulWidget {
 }
 
 class _QRScannerScreenState extends State<QRScannerScreen> {
-  // MobileScannerController allows us to control the camera (flash, front/back)
+  // The camera used for scanning (also turns the flash on and off)
   final MobileScannerController _scannerController = MobileScannerController(
     detectionSpeed: DetectionSpeed.noDuplicates,
     facing: CameraFacing.back,
   );
 
-  bool _isNavigating = false; // Prevents multiple pushes if scanned twice quickly
+  bool _isNavigating = false; // the same code is seen many times: open it only once
   DateTime? _lastWrongCodeHint;
 
   @override
@@ -57,6 +58,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
     SnackBarHelper.showError(context, 'This QR code is not a job seeker profile.');
   }
 
+  /// Handles a scanned code: opens the profile, or says it isn't a profile code.
   void _onDetect(BarcodeCapture capture) {
     if (_isNavigating) return;
 
@@ -73,7 +75,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
 
       // Found a profile: stop scanning and open it
       setState(() => _isNavigating = true);
-      _scannerController.stop(); // Stop camera to save battery
+      _scannerController.stop(); // camera off while the profile is open
 
       // Open the read-only public profile
       Navigator.push(
@@ -101,7 +103,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
-          // Flashlight Toggle
+          // Flash on / off
           IconButton(
             color: Colors.white,
             icon: ValueListenableBuilder(
@@ -111,7 +113,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                   case TorchState.on:
                     return const Icon(Icons.flash_on, color: Colors.yellow);
                   case TorchState.off:
-                  default: // Handles unavailable or auto states
+                  default: // auto, or the phone has no flash
                     return const Icon(Icons.flash_off, color: Colors.grey);
                 }
               },
@@ -121,19 +123,19 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
           ),
         ],
       ),
-      extendBodyBehindAppBar: true, // Makes camera go full screen behind AppBar
+      extendBodyBehindAppBar: true, // the camera fills the screen behind the AppBar
       body: Stack(
         children: [
-          // 1. The Camera View
+          // 1. Camera
           MobileScanner(
             controller: _scannerController,
             onDetect: _onDetect,
           ),
 
-          // 2. The Scanner Overlay (creates the darkened edges and clear center box)
+          // 2. Dark overlay with a clear scan box
           QRScannerOverlay(overlayColour: Colors.black.withValues(alpha: 0.6)),
 
-          // 3. Instructions at the bottom
+          // 3. Instructions
           const Positioned(
             bottom: 40,
             left: 0,
@@ -160,9 +162,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
   }
 }
 
-// =========================================================================
-// CUSTOM OVERLAY PAINTER (Makes it look like a real scanner)
-// =========================================================================
+/// Darkens everything outside the scan box and draws its rounded corners.
 class QRScannerOverlay extends StatelessWidget {
   const QRScannerOverlay({super.key, required this.overlayColour});
 
@@ -185,6 +185,7 @@ class QRScannerOverlay extends StatelessWidget {
   }
 }
 
+/// Paints the dark overlay and the corners of the scan box.
 class _ScannerOverlayPainter extends CustomPainter {
   final Color overlayColour;
   final double scanAreaWidth;
@@ -206,7 +207,7 @@ class _ScannerOverlayPainter extends CustomPainter {
       height: scanAreaWidth,
     );
 
-    // Draw the darkened background
+    // Dark background with a hole for the scan box
     canvas.drawPath(
       Path.combine(
         PathOperation.difference,
@@ -218,7 +219,7 @@ class _ScannerOverlayPainter extends CustomPainter {
       backgroundPaint,
     );
 
-    // Draw corner brackets
+    // Corner brackets
     final double cornerLength = 30;
     final double radius = 20;
 

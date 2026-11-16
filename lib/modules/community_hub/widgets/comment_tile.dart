@@ -5,6 +5,7 @@ import '../../../models/post_comment_model.dart';
 import '../../../shared_widgets/user_avatar.dart';
 import '../community_formatters.dart';
 
+/// Menu actions on a comment.
 enum CommentAction { edit, delete, report }
 
 /// One comment or reply in the comments sheet.
@@ -56,7 +57,8 @@ class CommentTile extends StatelessWidget {
                             ),
                             TextSpan(
                               text: '  ·  ${comment.author.roleLabel}  ·  '
-                                  '${CommunityFormatters.relative(comment.createdAt)}',
+                                  '${CommunityFormatters.relative(comment.createdAt)}'
+                                  '${comment.isEdited ? '  ·  Edited' : ''}',
                               style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
                             ),
                           ],

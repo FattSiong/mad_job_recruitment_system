@@ -37,6 +37,7 @@ class JobsPage {
   const JobsPage({required this.jobs, required this.nextOffset, required this.hasMore});
 }
 
+/// The Home job list: search, filters and paging.
 class JobDiscoveryController {
   final _supabase = Supabase.instance.client;
 

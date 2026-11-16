@@ -45,6 +45,7 @@ class ResumeBuilderController extends ChangeNotifier {
   // Load / save
   // ---------------------------------------------------------------------
 
+  /// Loads the saved resume, or starts one from the profile the first time.
   Future<void> load() async {
     _isLoading = true;
     _error = null;
@@ -123,6 +124,7 @@ class ResumeBuilderController extends ChangeNotifier {
     }
   }
 
+  /// Replaces the resume with [next] and marks it as changed (not saved yet).
   void _update(ResumeModel next) {
     _resume = next;
     _hasUnsavedChanges = true;
@@ -134,33 +136,47 @@ class ResumeBuilderController extends ChangeNotifier {
   // Steps
   // ---------------------------------------------------------------------
 
+  /// Name on the resume.
   void setName(String value) => _update(_resume.copyWith(fullName: value.trim()));
+
+  /// Email on the resume.
   void setEmail(String value) => _update(_resume.copyWith(email: value.trim()));
+
+  /// Phone number on the resume.
   void setPhone(String value) => _update(_resume.copyWith(phone: value.trim()));
+
+  /// Address on the resume.
   void setAddress(String value) => _update(_resume.copyWith(address: value.trim()));
 
+  /// Adds an education entry (the list stays newest first).
   void addEducation(EducationModel e) =>
       _update(_resume.copyWith(education: [..._resume.education, e]..sort(_newestEducationFirst)));
 
+  /// Replaces the education entry at [index].
   void replaceEducation(int index, EducationModel e) {
     final list = [..._resume.education]..[index] = e;
     _update(_resume.copyWith(education: list..sort(_newestEducationFirst)));
   }
 
+  /// Removes the education entry at [index].
   void removeEducation(int index) =>
       _update(_resume.copyWith(education: [..._resume.education]..removeAt(index)));
 
+  /// Adds a work experience entry (the list stays newest first).
   void addExperience(WorkExperienceModel e) =>
       _update(_resume.copyWith(experience: [..._resume.experience, e]..sort(_newestExperienceFirst)));
 
+  /// Replaces the work experience entry at [index].
   void replaceExperience(int index, WorkExperienceModel e) {
     final list = [..._resume.experience]..[index] = e;
     _update(_resume.copyWith(experience: list..sort(_newestExperienceFirst)));
   }
 
+  /// Removes the work experience entry at [index].
   void removeExperience(int index) =>
       _update(_resume.copyWith(experience: [..._resume.experience]..removeAt(index)));
 
+  /// Adds a skill with an optional level (no duplicates, up to 50 characters).
   /// Returns an error message, or null when added.
   String? addSkill(String name, String? level) {
     final clean = name.trim().replaceAll(RegExp(r'\s+'), ' ');
@@ -173,12 +189,14 @@ class ResumeBuilderController extends ChangeNotifier {
     return null;
   }
 
+  /// Sets or clears the level of the skill at [index].
   void setSkillLevel(int index, String? level) {
     final list = [..._resume.skills];
     list[index] = ResumeSkill(list[index].name, level);
     _update(_resume.copyWith(skills: list));
   }
 
+  /// Removes the skill at [index].
   void removeSkill(int index) =>
       _update(_resume.copyWith(skills: [..._resume.skills]..removeAt(index)));
 
@@ -188,6 +206,7 @@ class ResumeBuilderController extends ChangeNotifier {
       .where((t) => !_resume.sections.any((s) => s.type == t))
       .toList();
 
+  /// Adds an empty optional section (sections keep a fixed order).
   void addSection(ResumeSectionType type) {
     if (_resume.sections.any((s) => s.type == type)) return;
     final sections = [..._resume.sections, ResumeSection(type: type)]
@@ -195,32 +214,40 @@ class ResumeBuilderController extends ChangeNotifier {
     _update(_resume.copyWith(sections: sections));
   }
 
+  /// Removes an optional section with everything in it.
   void removeSection(ResumeSectionType type) =>
       _update(_resume.copyWith(sections: _resume.sections.where((s) => s.type != type).toList()));
 
+  /// The text of a text section (e.g. the summary).
   void setSectionText(ResumeSectionType type, String text) =>
       _replaceSection(type, (s) => s.copyWith(text: text));
 
+  /// Adds an item to a list section (e.g. a project).
   void addSectionItem(ResumeSectionType type, ResumeSectionItem item) =>
       _replaceSection(type, (s) => s.copyWith(items: [...s.items, item]));
 
+  /// Replaces item [index] of a list section.
   void replaceSectionItem(ResumeSectionType type, int index, ResumeSectionItem item) =>
       _replaceSection(type, (s) => s.copyWith(items: [...s.items]..[index] = item));
 
+  /// Removes item [index] of a list section.
   void removeSectionItem(ResumeSectionType type, int index) =>
       _replaceSection(type, (s) => s.copyWith(items: [...s.items]..removeAt(index)));
 
+  /// Applies [change] to the section of [type].
   void _replaceSection(ResumeSectionType type, ResumeSection Function(ResumeSection) change) {
     _update(_resume.copyWith(
       sections: _resume.sections.map((s) => s.type == type ? change(s) : s).toList(),
     ));
   }
 
+  /// Sort order: current studies first, then the latest start date.
   static int _newestEducationFirst(EducationModel a, EducationModel b) {
     if (a.isCurrent != b.isCurrent) return a.isCurrent ? -1 : 1;
     return b.startDate.compareTo(a.startDate);
   }
 
+  /// Sort order: current jobs first, then the latest start date.
   static int _newestExperienceFirst(WorkExperienceModel a, WorkExperienceModel b) {
     if (a.isCurrent != b.isCurrent) return a.isCurrent ? -1 : 1;
     return b.startDate.compareTo(a.startDate);
@@ -237,6 +264,7 @@ class ResumeBuilderController extends ChangeNotifier {
     return null;
   }
 
+  /// The resume as PDF bytes.
   Future<Uint8List> buildPdf() => ResumePdfBuilder.build(_resume);
 
   String get pdfFileName {
@@ -258,6 +286,7 @@ class ResumeBuilderController extends ChangeNotifier {
     }
   }
 
+  /// notifyListeners, unless the controller was already disposed.
   void _notify() {
     if (!_disposed) notifyListeners();
   }

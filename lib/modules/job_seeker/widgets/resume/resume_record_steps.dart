@@ -94,6 +94,7 @@ class ResumeExperienceStep extends StatelessWidget {
   }
 }
 
+/// Hint card shown while a resume step has no entries yet.
 class ResumeEmptyHint extends StatelessWidget {
   final String text;
 
@@ -125,6 +126,7 @@ class ResumeEmptyHint extends StatelessWidget {
   }
 }
 
+/// Outlined "Add ..." button under a resume step's list.
 class ResumeAddButton extends StatelessWidget {
   final String label;
   final VoidCallback onPressed;

@@ -68,6 +68,7 @@ class _ProfilePhotoCropScreenState extends State<ProfilePhotoCropScreen> {
     super.dispose();
   }
 
+  /// Decodes the chosen photo so it can be moved and zoomed.
   Future<void> _decode() async {
     try {
       final bytes = await widget.source.readAsBytes();
@@ -103,6 +104,7 @@ class _ProfilePhotoCropScreenState extends State<ProfilePhotoCropScreen> {
     return Offset(offset.dx.clamp(-maxX, maxX), offset.dy.clamp(-maxY, maxY));
   }
 
+  /// Remembers the zoom and position when a pinch or drag starts.
   void _onScaleStart(ScaleStartDetails details, Offset centre) {
     _startZoom = _zoom;
     _startOffset = _offset;
@@ -121,6 +123,7 @@ class _ProfilePhotoCropScreenState extends State<ProfilePhotoCropScreen> {
     });
   }
 
+  /// Sets the zoom (from the slider or buttons), keeping the photo inside the circle.
   void _setZoom(double zoom) {
     final newZoom = zoom.clamp(1.0, _maxZoom);
     setState(() {
@@ -133,6 +136,7 @@ class _ProfilePhotoCropScreenState extends State<ProfilePhotoCropScreen> {
   // Saving
   // ---------------------------------------------------------------------
 
+  /// Cuts out the area inside the circle and closes with the 512 x 512 PNG.
   Future<void> _usePhoto() async {
     final image = _image;
     if (image == null || _saving) return;
@@ -289,6 +293,7 @@ class _ProfilePhotoCropScreenState extends State<ProfilePhotoCropScreen> {
     );
   }
 
+  /// The photo with the circle, or a message if it couldn't be opened.
   Widget _buildCropArea() {
     if (_loadFailed) {
       return const Center(
@@ -339,6 +344,7 @@ class _ProfilePhotoCropScreenState extends State<ProfilePhotoCropScreen> {
     );
   }
 
+  /// Zoom out / slider / zoom in.
   Widget _buildZoomRow() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),

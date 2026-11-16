@@ -57,6 +57,7 @@ class _SkillGapAnalysisScreenState extends State<SkillGapAnalysisScreen> {
 
   String? _loadError;
 
+  /// Loads the profile readiness counts and past analyses.
   Future<void> _load() async {
     try {
       final results = await Future.wait([
@@ -79,6 +80,7 @@ class _SkillGapAnalysisScreenState extends State<SkillGapAnalysisScreen> {
     }
   }
 
+  /// Try Again after loading failed.
   Future<void> _retryLoad() async {
     setState(() => _isLoading = true);
     await _load();
@@ -89,6 +91,7 @@ class _SkillGapAnalysisScreenState extends State<SkillGapAnalysisScreen> {
       _roleController.text.trim().isNotEmpty &&
       (_readiness?.canAnalyse ?? false);
 
+  /// Runs the analysis for the typed role and opens the report.
   Future<void> _analyse() async {
     if (!_canAnalyse) return;
     FocusScope.of(context).unfocus();
@@ -160,11 +163,13 @@ class _SkillGapAnalysisScreenState extends State<SkillGapAnalysisScreen> {
     );
   }
 
+  /// Fills the role box with a suggested role.
   void _setRole(String role) {
     _roleController.text = role;
     _roleController.selection = TextSelection.collapsed(offset: role.length);
   }
 
+  /// Deletes a past analysis after asking.
   Future<void> _confirmDelete(SkillGapAnalysisModel item) async {
     final confirmed = await showConfirmDialog(
       context,
@@ -217,6 +222,7 @@ class _SkillGapAnalysisScreenState extends State<SkillGapAnalysisScreen> {
     );
   }
 
+  /// Gradient header with the title and back button.
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
@@ -263,6 +269,7 @@ class _SkillGapAnalysisScreenState extends State<SkillGapAnalysisScreen> {
     );
   }
 
+  /// Target job role box with suggested roles.
   Widget _buildRoleCard() {
     return SurfaceCard(
       children: [
@@ -320,6 +327,7 @@ class _SkillGapAnalysisScreenState extends State<SkillGapAnalysisScreen> {
     );
   }
 
+  /// What the analysis can use: resume, skills, education, experience.
   Widget _buildReadinessCard() {
     final r = _readiness;
     if (r == null) {
@@ -402,6 +410,7 @@ class _SkillGapAnalysisScreenState extends State<SkillGapAnalysisScreen> {
     if (mounted) _load();
   }
 
+  /// One readiness row (tick or warning); tappable to fix it.
   Widget _readinessTile(
     IconData icon,
     String title,
@@ -453,6 +462,7 @@ class _SkillGapAnalysisScreenState extends State<SkillGapAnalysisScreen> {
     return GestureDetector(onTap: onTap, behavior: HitTestBehavior.opaque, child: tile);
   }
 
+  /// Past analyses with their match %; tapping one opens it.
   Widget _buildHistoryCard() {
     return SurfaceCard(
       children: [
@@ -521,6 +531,7 @@ class _SkillGapAnalysisScreenState extends State<SkillGapAnalysisScreen> {
     );
   }
 
+  /// "Analyse Skill Gap" button (with a progress note while running).
   Widget _buildBottomButton() {
     return SafeArea(
       top: false,

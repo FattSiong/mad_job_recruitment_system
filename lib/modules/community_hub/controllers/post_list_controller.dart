@@ -31,9 +31,26 @@ class PostListController extends ChangeNotifier {
   final _supabase = Supabase.instance.client;
 
   static const int pageSize = 15;
-  static const String _columns =
+  static const String _allColumns =
       'postID, authorID, content, mediaURL, status, category, createdAt, editedAt, isDraft, '
       'PostLike(userID), PostSaved(userID), PostComment(commentID, status)';
+  static const String _basicColumns =
+      'postID, authorID, content, mediaURL, status, category, createdAt, '
+      'PostLike(userID), PostSaved(userID), PostComment(commentID, status)';
+
+  /// False when the database doesn't have the draft / "edited" columns yet
+  /// (migration 20261116000000 not run). Posts then load without them and
+  /// drafts are turned off, instead of the whole Community Hub failing.
+  static bool draftsSupported = true;
+
+  /// The error the database gives for those missing columns
+  /// (42703 = no such column; PGRST204 = no such column to save).
+  static bool isMissingDraftColumns(Object e) =>
+      e is PostgrestException &&
+      (e.code == '42703' || e.code == 'PGRST204') &&
+      RegExp('isDraft|editedAt').hasMatch(e.message);
+
+  String get _columns => draftsSupported ? _allColumns : _basicColumns;
 
   List<FeedPostModel> _posts = [];
   bool _isLoading = true;
@@ -93,6 +110,7 @@ class PostListController extends ChangeNotifier {
     load();
   }
 
+  /// Feed: removes every filter and reloads.
   void clearFilter() => setFilter(PostFilter.none);
 
   /// My Posts: show all, visible, draft or removed posts.
@@ -106,6 +124,7 @@ class PostListController extends ChangeNotifier {
   // Loading
   // ---------------------------------------------------------------------
 
+  /// Loads the first page again (pull to refresh, new filter, or after a change).
   Future<void> load() async {
     final token = ++_loadToken;
     _isLoading = _posts.isEmpty;
@@ -160,6 +179,19 @@ class PostListController extends ChangeNotifier {
   Future<({List<Map<String, dynamic>> rows, int count, bool full})> _fetch({
     required int offset,
   }) async {
+    try {
+      return await _fetchOnce(offset: offset);
+    } catch (e) {
+      if (!draftsSupported || !isMissingDraftColumns(e)) rethrow;
+      debugPrint('Community: run migration 20261116000000 for drafts and "Edited" ($e)');
+      draftsSupported = false;
+      return _fetchOnce(offset: offset);
+    }
+  }
+
+  Future<({List<Map<String, dynamic>> rows, int count, bool full})> _fetchOnce({
+    required int offset,
+  }) async {
     switch (mode) {
       case PostListMode.feed:
         // The database function filters, sorts and pages; it returns post IDs.
@@ -205,13 +237,13 @@ class PostListController extends ChangeNotifier {
         final reported = await _reportedPostIds();
         ids.removeWhere(reported.contains);
         if (ids.isEmpty) return (rows: <Map<String, dynamic>>[], count: 0, full: false);
-        final rows = await _supabase
+        var query = _supabase
             .from(TableConstants.communityPost)
             .select(_columns)
             .inFilter('postID', ids)
-            .eq('status', 'active')
-            .eq('isDraft', false)
-            .order('createdAt', ascending: false);
+            .eq('status', 'active');
+        if (draftsSupported) query = query.eq('isDraft', false);
+        final rows = await query.order('createdAt', ascending: false);
         return (rows: List<Map<String, dynamic>>.from(rows), count: rows.length, full: false);
     }
   }
@@ -230,6 +262,7 @@ class PostListController extends ChangeNotifier {
     }
   }
 
+  /// Turns database rows into posts with the authors' names and photos.
   Future<List<FeedPostModel>> _toModels(List<Map<String, dynamic>> rows) async {
     final authors = await UserDirectory.fetch(rows.map((r) => r['authorID']?.toString() ?? ''));
     return rows.map((row) {
@@ -247,12 +280,13 @@ class PostListController extends ChangeNotifier {
   // Actions (optimistic: the screen updates first, and is undone on error)
   // ---------------------------------------------------------------------
 
-  /// Returns an error message, or null when it worked.
   /// Posts with a like / save still being sent: a second quick tap is ignored,
   /// so the request can't race and leave a double like or a wrong count.
   final Set<String> _likeBusy = {};
   final Set<String> _saveBusy = {};
 
+  /// Likes or unlikes [post] (shown at once, undone if it fails).
+  /// Returns an error message, or null when it worked.
   Future<String?> toggleLike(FeedPostModel post) async {
     if (!post.isInteractive || !_likeBusy.add(post.postID)) return null;
     final liked = !post.isLiked;
@@ -276,6 +310,7 @@ class PostListController extends ChangeNotifier {
     }
   }
 
+  /// Saves or unsaves [post] (on Saved Posts an unsaved post leaves the list).
   /// Returns an error message, or null when it worked.
   Future<String?> toggleSave(FeedPostModel post) async {
     if (!post.isInteractive || !_saveBusy.add(post.postID)) return null;
@@ -385,6 +420,7 @@ class PostListController extends ChangeNotifier {
     _notify();
   }
 
+  /// Puts the updated [post] in place of the old one in the list.
   void _replace(FeedPostModel post) {
     final i = _posts.indexWhere((p) => p.postID == post.postID);
     if (i == -1) return;
@@ -392,6 +428,7 @@ class PostListController extends ChangeNotifier {
     _notify();
   }
 
+  /// notifyListeners, unless the controller was already disposed.
   void _notify() {
     if (!_disposed) notifyListeners();
   }

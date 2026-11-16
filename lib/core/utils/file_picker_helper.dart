@@ -16,10 +16,12 @@ class FileLimits {
   static const List<String> resumeExtensions = ['pdf', 'docx'];
   static const String resumeTypesLabel = 'PDF or Word (.docx)';
 
+  /// True if [path] has a resume extension the app accepts (PDF or DOCX).
   static bool isAllowedResume(String path) =>
       resumeExtensions.contains(path.split('.').last.toLowerCase());
 }
 
+/// Picking files from the phone and making their names safe for upload.
 class FilePickerHelper {
   FilePickerHelper._();
 
@@ -53,7 +55,7 @@ class FilePickerHelper {
   }
 
   /// Opens the device file picker.
-  /// If [allowedExtensions] are provided (e.g., ['pdf', 'png']), it restricts the file types.
+  /// [allowedExtensions] (e.g. ['pdf', 'png']) limits the file types.
   /// If [maxSizeMB] is set and the file is bigger, [onTooLarge] is called with a
   /// message and null is returned.
   /// Returns a [File] if the user picks one, or null if they cancel.

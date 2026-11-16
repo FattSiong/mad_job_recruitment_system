@@ -8,6 +8,8 @@ import 'report_job_screen.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared_widgets/hero_icon_button.dart';
 
+/// Full job details with Apply, Bookmark and Report.
+/// [disableApplyButton] hides applying (e.g. opened from My Jobs > Applied).
 class JobDetailsScreen extends StatefulWidget {
   final JobModel job;
   final bool disableApplyButton;
@@ -25,34 +27,34 @@ class JobDetailsScreen extends StatefulWidget {
 class _JobDetailsScreenState extends State<JobDetailsScreen> {
   final BookmarkedController _bookmarkController = BookmarkedController();
   final ApplicationController _applicationController = ApplicationController();
-  final ScrollController _scrollController = ScrollController();
 
   // Blocks applying twice, whichever screen the job was opened from
   bool _hasApplied = false;
+  bool _withdrawn = false; // applied before, then withdrew (can't apply again)
   bool _isCheckingApplied = true;
 
   bool _isBookmarked = false;
   bool _isBookmarkUpdating = false;
   bool _isDescriptionExpanded = false;
-  bool _isAtBottom = false;
 
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_scrollListener);
     _checkBookmarkStatus();
     _checkAppliedStatus();
   }
 
+  /// Checks whether the user already applied (or withdrew), to set the Apply button.
   Future<void> _checkAppliedStatus() async {
     if (widget.disableApplyButton || widget.job.jobID == null) {
-      _isCheckingApplied = false; // runs synchronously inside initState, no setState needed
+      _isCheckingApplied = false; // still inside initState, so no setState needed
       return;
     }
-    final applied = await _applicationController.hasApplied(widget.job.jobID!);
+    final status = await _applicationController.appliedStatus(widget.job.jobID!);
     if (mounted) {
       setState(() {
-        _hasApplied = applied;
+        _hasApplied = status != null;
+        _withdrawn = status == 'withdrawn';
         _isCheckingApplied = false;
       });
     }
@@ -65,6 +67,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
   bool get _isClosed =>
       widget.job.status.trim().toLowerCase() != 'active' || widget.job.isExpired;
 
+  /// Opens the application form; afterwards the button shows "Applied".
   Future<void> _openApplication() async {
     final applied = await Navigator.push<bool>(
       context,
@@ -80,11 +83,10 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
   @override
   void dispose() {
     _applicationController.dispose();
-    _scrollController.removeListener(_scrollListener);
-    _scrollController.dispose();
     super.dispose();
   }
 
+  /// Shows whether this job is bookmarked.
   Future<void> _checkBookmarkStatus() async {
     if (widget.job.jobID != null) {
       final isBookmarked =
@@ -95,6 +97,8 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     }
   }
 
+  /// Bookmarks or un-bookmarks the job (the icon changes straight away and
+  /// is put back if saving fails).
   Future<void> _toggleBookmark() async {
     if (widget.job.jobID == null || _isBookmarkUpdating) return;
 
@@ -142,19 +146,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
 
   }
 
-  void _scrollListener() {
-    if (_scrollController.hasClients) {
-      final isBottom = _scrollController.position.pixels >=
-          (_scrollController.position.maxScrollExtent - 20);
-
-      if (isBottom != _isAtBottom) {
-        setState(() {
-          _isAtBottom = isBottom;
-        });
-      }
-    }
-  }
-
+  /// "RM3000 - 4000 a month" ("an hour" for part-time jobs).
   String _formatSalaryOnly() {
     final salary = widget.job.salaryRange;
     if (salary.isEmpty) return 'Salary not specified';
@@ -164,6 +156,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     return '$salary $period';
   }
 
+  /// "Posted 2 weeks ago", "Posted 3 days ago", ...
   String _formatPostedDate() {
     final createdAt = widget.job.createdAt;
     if (createdAt == null) return 'Recently posted';
@@ -188,6 +181,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     return 'Posted recently';
   }
 
+  /// Opens the Report Job screen.
   void _handleReportJob() {
     Navigator.push(
       context,
@@ -197,6 +191,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     );
   }
 
+  /// Small see-through chip in the header (location, job type, ...).
   Widget _buildMetaChip(IconData icon, String label) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -224,6 +219,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     );
   }
 
+  /// One coloured detail tile (salary, job type, ...).
   Widget _buildInfoTile({
     required IconData icon,
     required String title,
@@ -279,6 +275,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     );
   }
 
+  /// White card with a title, optional subtitle and content.
   Widget _buildSectionCard({
     required String title,
     String? subtitle,
@@ -320,6 +317,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     );
   }
 
+  /// The job description, cut to 8 lines with Show more / Show less when it is long.
   Widget _buildDescriptionSection() {
     return _buildSectionCard(
       title: 'Full Job Description',
@@ -362,12 +360,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                 const SizedBox(height: 12),
                 TextButton.icon(
                   onPressed: () {
-                    setState(() {
-                      _isDescriptionExpanded = !_isDescriptionExpanded;
-                      if (_isDescriptionExpanded) {
-                        _isAtBottom = false;
-                      }
-                    });
+                    setState(() => _isDescriptionExpanded = !_isDescriptionExpanded);
                   },
                   style: TextButton.styleFrom(
                     foregroundColor: AppColors.primary,
@@ -394,6 +387,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     );
   }
 
+  /// Salary, job type, location and other key details.
   Widget _buildAboutRoleSection() {
     return _buildSectionCard(
       title: 'Role Snapshot',
@@ -444,7 +438,6 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
         children: [
           SafeArea(
             child: CustomScrollView(
-              controller: _scrollController,
               slivers: [
                 SliverToBoxAdapter(
                   child: Padding(
@@ -622,14 +615,18 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                                   child: CircularProgressIndicator(strokeWidth: 2),
                                 )
                               : Icon(
-                                  _alreadyApplied
-                                      ? Icons.check_circle_outline
-                                      : (_isClosed ? Icons.block_rounded : Icons.send_rounded),
+                                  _withdrawn
+                                      ? Icons.undo_rounded
+                                      : (_alreadyApplied
+                                          ? Icons.check_circle_outline
+                                          : (_isClosed ? Icons.block_rounded : Icons.send_rounded)),
                                 ),
                           label: Text(
-                            _alreadyApplied
-                                ? 'Already Applied'
-                                : (_isClosed ? 'Applications Closed' : 'Apply Now'),
+                            _withdrawn
+                                ? 'Application Withdrawn'
+                                : (_alreadyApplied
+                                    ? 'Already Applied'
+                                    : (_isClosed ? 'Applications Closed' : 'Apply Now')),
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,

@@ -107,6 +107,7 @@ class SkillController {
     }
   }
 
+  /// Removes a skill from the profile. Returns false if it failed.
   Future<bool> deleteSkill(String skillID) async {
     try {
       await _supabase.from(TableConstants.skill).delete().eq('skillID', skillID);

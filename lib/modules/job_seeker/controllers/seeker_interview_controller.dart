@@ -5,8 +5,8 @@ import '../../../core/constants/table_constants.dart';
 import '../../../core/utils/data_load_exception.dart';
 import '../../../services/interview_service.dart';
 
-/// Data access for the job seeker's "Interviews" tab
-/// (moved out of my_jobs_screen.dart so the screen no longer queries Supabase).
+/// Data for the job seeker's My Jobs > Interviews tab (the tab itself does
+/// no database work).
 class SeekerInterviewController {
   final _supabase = Supabase.instance.client;
   final InterviewService _interviewService = InterviewService();

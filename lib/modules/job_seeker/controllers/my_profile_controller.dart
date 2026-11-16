@@ -122,6 +122,7 @@ class MyProfileController extends ChangeNotifier {
   // Loading
   // ---------------------------------------------------------------------
 
+  /// Loads the profile and skills. Shows the spinner only on the first load.
   Future<void> load() async {
     _isLoading = _profile == null;
     _loadError = null;
@@ -161,12 +162,14 @@ class MyProfileController extends ChangeNotifier {
   // Editing
   // ---------------------------------------------------------------------
 
+  /// Switches the Profile tab to edit mode.
   void startEditing() {
     if (_profile == null) return;
     _isEditing = true;
     _notify();
   }
 
+  /// Leaves edit mode and forgets an unsaved photo change.
   void cancelEditing() {
     _isEditing = false;
     _newPhoto = null;
@@ -174,12 +177,14 @@ class MyProfileController extends ChangeNotifier {
     _notify();
   }
 
+  /// A new photo to upload on Save.
   void setNewPhoto(File file) {
     _newPhoto = file;
     _removePhoto = false;
     _notify();
   }
 
+  /// Removes the photo on Save.
   void removePhoto() {
     _newPhoto = null;
     _removePhoto = true;
@@ -272,8 +277,10 @@ class MyProfileController extends ChangeNotifier {
     }
   }
 
+  /// Logs out (see [ProfileController.signOut]).
   Future<void> signOut() => _profiles.signOut();
 
+  /// notifyListeners, unless the controller was already disposed.
   void _notify() {
     if (!_disposed) notifyListeners();
   }

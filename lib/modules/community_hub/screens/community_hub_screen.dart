@@ -35,6 +35,7 @@ class _CommunityHubScreenState extends State<CommunityHubScreen> {
     super.dispose();
   }
 
+  /// Opens the post editor; reloads both lists when a post was saved.
   Future<void> _createPost() async {
     final saved = await Navigator.push<bool>(
       context,
@@ -46,6 +47,7 @@ class _CommunityHubScreenState extends State<CommunityHubScreen> {
     }
   }
 
+  /// Opens Saved Posts.
   Future<void> _openSaved() async {
     await Navigator.push(
       context,

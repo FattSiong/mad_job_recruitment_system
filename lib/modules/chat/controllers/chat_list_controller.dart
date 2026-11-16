@@ -50,6 +50,7 @@ class ChatListController extends ChangeNotifier {
     }).toList();
   }
 
+  /// Filters the list by name or last message (done on the phone).
   void setSearchQuery(String value) {
     _searchQuery = value;
     _notify();
@@ -59,6 +60,8 @@ class ChatListController extends ChangeNotifier {
   // Loading
   // ---------------------------------------------------------------------
 
+  /// First load, or a reload after returning from a chat. Shows the spinner
+  /// only when there is nothing to show yet.
   Future<void> load() async {
     _isLoading = _rooms.isEmpty;
     _error = null;
@@ -66,6 +69,8 @@ class ChatListController extends ChangeNotifier {
     await _refresh();
   }
 
+  /// Fetches the rooms again and listens to changes in them. On an error the
+  /// last list stays on screen.
   Future<void> _refresh() async {
     try {
       final rooms = await _fetchRooms();
@@ -83,6 +88,7 @@ class ChatListController extends ChangeNotifier {
     }
   }
 
+  /// The user's rooms with the other person, latest message and unread count.
   Future<List<ChatRoomModel>> _fetchRooms() async {
     final me = currentUserID;
 
@@ -157,6 +163,7 @@ class ChatListController extends ChangeNotifier {
     }
   }
 
+  /// Unread messages from the other person, per room (empty on an error).
   Future<Map<String, int>> _fetchUnreadCounts(List<String> roomIds) async {
     try {
       final rows = await _supabase
@@ -230,6 +237,7 @@ class ChatListController extends ChangeNotifier {
     _channel = channel;
   }
 
+  /// Reloads once, 400 ms after the last change (a burst of messages causes one reload).
   void _scheduleRefresh() {
     _refreshDebounce?.cancel();
     _refreshDebounce = Timer(const Duration(milliseconds: 400), () {
@@ -237,6 +245,7 @@ class ChatListController extends ChangeNotifier {
     });
   }
 
+  /// Stops the live updates.
   void _unsubscribe() {
     final channel = _channel;
     _channel = null;
@@ -269,7 +278,10 @@ class ChatListController extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------
 
+  /// notifyListeners, unless the controller was already disposed.
   void _notify() {
     if (!_disposed) notifyListeners();
   }

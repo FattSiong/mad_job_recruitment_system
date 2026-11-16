@@ -40,6 +40,7 @@ Future<EducationModel?> showAddEducationSheet(
     degreeOptions.add(existingDegree);
   }
 
+  /// True for Diploma and higher (these ask for a field of study).
   bool isDiplomaOrAbove(String? degree) {
     return degree == 'Diploma' ||
         degree == "Bachelor's Degree" ||

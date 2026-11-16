@@ -7,6 +7,7 @@ import '../../../core/utils/session_helper.dart';
 /// Outcome of reporting a job.
 enum JobReportResult { submitted, alreadyReported, failed }
 
+/// Reporting a job post to the admins.
 class ReportController {
   final _supabase = Supabase.instance.client;
 
@@ -48,6 +49,7 @@ class ReportController {
     }
   }
 
+  /// Trimmed details, cut to [maxDetailsLength]; null when empty.
   static String? _cleanDetails(String? details) {
     final text = details?.trim() ?? '';
     if (text.isEmpty) return null;

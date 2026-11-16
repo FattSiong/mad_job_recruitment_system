@@ -6,6 +6,8 @@ import '../../../models/job_model.dart';
 import '../../../core/constants/table_constants.dart';
 import '../../../core/utils/session_helper.dart';
 
+/// The job seeker's applications (My Jobs > Applied): loading, withdrawing
+/// and answering job offers.
 class AppliedJobsController {
   final _supabase = Supabase.instance.client;
   String get _currentSeekerID => SessionHelper.requireUserId();
@@ -14,9 +16,10 @@ class AppliedJobsController {
   /// (after applying for a job, or when the My Jobs tab is opened).
   static final ValueNotifier<int> refreshSignal = ValueNotifier(0);
 
+  /// Makes the Applied and Interviews tabs reload.
   static void notifyChanged() => refreshSignal.value++;
 
-  /// Fetches all jobs the user has applied for
+  /// The user's applications with their jobs, newest first.
   Future<List<Map<String, dynamic>>> fetchAppliedJobs() async {
     try {
       final response = await _supabase
@@ -51,8 +54,47 @@ class AppliedJobsController {
     }
   }
 
-  /// Accepts (`accept == true`) or declines (`accept == false`) an active job offer (`applicationStatus == 'offered'`).
-  /// Calls the `respond_to_job_offer` RPC in Supabase and notifies listeners on success.
+  /// Only a pending application can be withdrawn (FN-JAM-06).
+  static bool canWithdraw(String status) => status.trim().toLowerCase() == 'pending';
+
+  /// Withdraws one of the user's pending applications. The record is kept
+  /// as 'withdrawn' (the employer no longer sees it, its notifications are
+  /// removed, and the job can't be applied for again).
+  /// Throws [DataLoadException] with a message to show.
+  Future<void> withdrawApplication(String applicantId) async {
+    try {
+      await _supabase.rpc(
+        'withdraw_job_application',
+        params: {'p_applicant_id': applicantId.trim()},
+      );
+      notifyChanged();
+    } on PostgrestException catch (e) {
+      final msg = e.message.toLowerCase();
+      if (msg.contains('not_pending')) {
+        notifyChanged(); // show its real status
+        throw DataLoadException(
+          'The employer has already started processing this application, so it can\'t be withdrawn.',
+        );
+      }
+      if (msg.contains('application_not_found')) {
+        notifyChanged();
+        throw DataLoadException('This application no longer exists.');
+      }
+      debugPrint('Withdraw application PostgrestException: ${e.message}');
+      throw DataLoadException('Unable to withdraw your application. Please try again.');
+    } catch (e) {
+      if (e is DataLoadException) rethrow;
+      debugPrint('Withdraw application error: $e');
+      throw DataLoadException(
+        'Unable to withdraw your application. Please check your connection and try again.',
+      );
+    }
+  }
+
+  /// Accepts ([accept] true) or declines an active job offer (status
+  /// 'offered') through the `respond_to_job_offer` database function.
+  /// Returns the new status and reloads the My Jobs tabs.
+  /// Throws [DataLoadException] with a message to show.
   Future<String> respondToJobOffer({
     required String applicantId,
     required bool accept,
@@ -86,7 +128,7 @@ class AppliedJobsController {
       }
       debugPrint('Respond to job offer PostgrestException: ${e.message}');
       throw DataLoadException(
-        'Could not submit your offer response. Please ensure the offer database migration has been applied.',
+        'Unable to submit your response right now. Please try again.',
       );
     } catch (e) {
       if (e is DataLoadException) rethrow;

@@ -1,6 +1,7 @@
 import 'education_model.dart';
 import 'work_experience_model.dart';
 
+/// A job seeker's profile ("JobSeeker"), with work experience and education.
 class JobSeekerModel {
   final String seekerID;
   final String fullName;
@@ -16,7 +17,7 @@ class JobSeekerModel {
   final String? linkedInURL;
   final String? gitHubURL;
 
-  // Relational Data
+  // Joined rows (WorkExperience, Education)
   final List<EducationModel> education;
   final List<WorkExperienceModel> workExperience;
 
@@ -37,7 +38,7 @@ class JobSeekerModel {
   });
 
   factory JobSeekerModel.fromJson(Map<String, dynamic> json) {
-    // Safely extract joined tables if they are fetched from Supabase
+    // Joined rows are only there when the query selected them
     var eduList = json['Education'] as List? ?? [];
     var expList = json['WorkExperience'] as List? ?? [];
 

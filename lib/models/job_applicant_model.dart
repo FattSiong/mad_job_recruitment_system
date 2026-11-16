@@ -1,3 +1,4 @@
+/// One job application ("JobApplicant"), including any job offer details.
 class JobApplicantModel {
   final String? applicantID;
   final String jobID;
@@ -40,7 +41,7 @@ class JobApplicantModel {
       seekerID: json['seekerID'] as String,
       submittedResumeURL: json['submittedResumeURL'] as String,
       applicationStatus: json['applicationStatus'] as String,
-      // Using 'num?' before converting to double safely handles if Supabase returns a whole number like '5' instead of '5.0'
+      // read as num: the database may send 5 instead of 5.0
       aiRankingScore: (json['aiRankingScore'] as num?)?.toDouble(),
       aiFeedback: json['aiFeedback'] as String?,
       appliedAt: json['appliedAt'] != null

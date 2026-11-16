@@ -39,12 +39,14 @@ class PostCommentsController extends ChangeNotifier {
   List<PostCommentModel> repliesOf(String commentID) =>
       _comments.where((c) => c.parentCommentID == commentID).toList();
 
+  /// True if the replies under [commentID] are shown.
   bool isExpanded(String commentID) => _expanded.contains(commentID);
 
   // ---------------------------------------------------------------------
   // Loading
   // ---------------------------------------------------------------------
 
+  /// Loads the post's comments and replies.
   Future<void> load() async {
     _isLoading = _comments.isEmpty;
     _error = null;
@@ -52,7 +54,7 @@ class PostCommentsController extends ChangeNotifier {
     try {
       final rows = List<Map<String, dynamic>>.from(await _supabase
           .from(TableConstants.postComment)
-          .select('commentID, postID, parentCommentID, userID, content, createdAt, status')
+          .select('commentID, postID, parentCommentID, userID, content, createdAt, updateAt, status')
           .eq('postID', postID)
           .order('createdAt', ascending: true));
 
@@ -71,16 +73,7 @@ class PostCommentsController extends ChangeNotifier {
       // A reply whose top-level comment is gone is shown as a normal comment.
       final ids = all.map((c) => c.commentID).toSet();
       _comments = all
-          .map((c) => c.isReply && !ids.contains(c.parentCommentID)
-              ? PostCommentModel(
-                  commentID: c.commentID,
-                  postID: c.postID,
-                  userID: c.userID,
-                  content: c.content,
-                  createdAt: c.createdAt,
-                  author: c.author,
-                )
-              : c)
+          .map((c) => c.isReply && !ids.contains(c.parentCommentID) ? c.copyWith(asTopLevel: true) : c)
           .toList();
     } catch (e) {
       debugPrint('PostCommentsController load failed: $e');
@@ -95,17 +88,20 @@ class PostCommentsController extends ChangeNotifier {
   // Replying
   // ---------------------------------------------------------------------
 
+  /// The next comment sent is a reply to [comment].
   void startReply(PostCommentModel comment) {
     _replyingTo = comment;
     _notify();
   }
 
+  /// Back to writing a normal comment.
   void cancelReply() {
     if (_replyingTo == null) return;
     _replyingTo = null;
     _notify();
   }
 
+  /// Shows or hides the replies under [commentID].
   void toggleThread(String commentID) {
     if (!_expanded.remove(commentID)) _expanded.add(commentID);
     _notify();
@@ -155,12 +151,14 @@ class PostCommentsController extends ChangeNotifier {
     }
   }
 
+  /// Changes the text of one of the user's comments.
   /// Returns an error message, or null when it worked.
   Future<String?> edit(PostCommentModel comment, String text) async {
     final content = text.trim();
     if (!comment.isOwnedBy(currentUserID)) return 'You can only edit your own comments.';
     if (content.isEmpty) return 'Comment cannot be empty.';
     if (content.length > maxLength) return 'Comments can be up to $maxLength characters.';
+    if (content == comment.content) return null; // nothing changed: not "Edited"
     try {
       await _supabase
           .from(TableConstants.postComment)
@@ -168,7 +166,8 @@ class PostCommentsController extends ChangeNotifier {
           .eq('commentID', comment.commentID)
           .eq('userID', currentUserID);
       final i = _comments.indexWhere((c) => c.commentID == comment.commentID);
-      if (i != -1) _comments[i] = _comments[i].copyWith(content: content);
+      // the database sets "updateAt" too; show "Edited" straight away
+      if (i != -1) _comments[i] = _comments[i].copyWith(content: content, updateAt: DateTime.now());
       _notify();
       return null;
     } catch (e) {
@@ -198,6 +197,7 @@ class PostCommentsController extends ChangeNotifier {
     }
   }
 
+  /// notifyListeners, unless the controller was already disposed.
   void _notify() {
     if (!_disposed) notifyListeners();
   }

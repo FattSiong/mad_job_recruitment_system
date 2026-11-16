@@ -130,6 +130,7 @@ class NearbyJobCard extends StatelessWidget {
     );
   }
 
+  /// Small coloured pill with an icon (distance, job type).
   Widget _pill(IconData icon, String text, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

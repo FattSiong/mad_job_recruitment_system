@@ -11,6 +11,7 @@ class TopicChip extends StatelessWidget {
 
   const TopicChip({super.key, required this.topic, this.onTap});
 
+  /// The label colour for each topic.
   static Color colorOf(PostTopic topic) {
     switch (topic) {
       case PostTopic.general:

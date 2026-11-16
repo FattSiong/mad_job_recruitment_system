@@ -11,15 +11,12 @@
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
     <application
-        android:label="mad_job_recruitment_system"
+        android:label="JobBoleh"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
         <meta-data android:name="com.google.android.geo.API_KEY"
             android:value="${mapsApiKey}"/>
-        <meta-data
-            android:name="com.onesignal.NotificationServiceExtension"
-            android:value="com.example.mad_job_recruitment_system.NotificationServiceExtension" />
 
         <activity
             android:name=".MainActivity"

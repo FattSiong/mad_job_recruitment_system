@@ -81,10 +81,12 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
     super.dispose();
   }
 
+  /// Rebuilds when the interview state changes.
   void _onSessionChanged() {
     if (mounted) setState(() {});
   }
 
+  /// Closes the screen when the session no longer exists on the server.
   void _closeAfterSessionGone() {
     if (mounted) Navigator.pop(context);
   }
@@ -112,6 +114,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
   // Camera
   // ---------------------------------------------------------------------
 
+  /// Turns the camera preview on or off.
   Future<void> _toggleCamera() async {
     if (_cameraOn) {
       final cam = _camera;
@@ -126,6 +129,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
     }
   }
 
+  /// Opens the front camera for the preview and the face checks.
   Future<void> _initCamera() async {
     setState(() => _cameraLoading = true);
     try {
@@ -174,12 +178,16 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
   // Answers and navigation (logic is in MockInterviewSessionController)
   // ---------------------------------------------------------------------
 
+  /// Mic tapped: start recording the answer.
   Future<void> _startRecording() => _session.startRecording();
 
+  /// Stop tapped: send the answer for feedback.
   Future<void> _stopAndEvaluate() => _session.stopAndEvaluate();
 
+  /// Goes to the next question.
   void _nextQuestion() => _session.nextQuestion();
 
+  /// Ends the interview and opens the scorecard.
   Future<void> _endInterview() async {
     try {
       final record = await _session.finish();
@@ -216,6 +224,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
     if (mounted) Navigator.pop(context);
   }
 
+  /// Red snackbar (if the screen is still open).
   void _showError(String message) {
     if (!mounted) return;
     SnackBarHelper.showError(context, message, duration: const Duration(seconds: 3));
@@ -262,6 +271,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
     );
   }
 
+  /// Header with the question number, progress bar and exit button.
   Widget _buildHeader() {
     final progress = (_position + (_session.currentAnswered ? 1 : 0)) /
         _totalQuestions;
@@ -340,6 +350,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
     );
   }
 
+  /// Camera preview with the recording badge and camera switch.
   Widget _buildCameraCard() {
     final cam = _camera;
     final ready = cam != null && cam.value.isInitialized;
@@ -454,6 +465,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
     );
   }
 
+  /// The current question.
   Widget _buildQuestionCard() {
     final q = _current;
     return Container(
@@ -496,6 +508,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
     );
   }
 
+  /// Mic button, recording panel, spinner or feedback, by stage.
   Widget _buildAnswerArea() {
     switch (_stage) {
       case InterviewStage.ready:
@@ -515,6 +528,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
     }
   }
 
+  /// White rounded panel under the question.
   Widget _panel({required Widget child}) {
     return Container(
       width: double.infinity,
@@ -527,6 +541,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
     );
   }
 
+  /// "Tap to answer" mic button.
   Widget _buildMicPrompt() {
     return _panel(
       child: Column(
@@ -566,6 +581,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
     );
   }
 
+  /// Level meter, timer and stop button while recording.
   Widget _buildRecordingPanel() {
     return _panel(
       child: Column(
@@ -625,6 +641,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
     );
   }
 
+  /// Spinner with a message (e.g. while the answer is evaluated).
   Widget _buildLoadingPanel(String message) {
     return _panel(
       child: Column(
@@ -647,6 +664,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
     );
   }
 
+  /// Feedback on the answer just given.
   Widget _buildReviewPanel(MockInterviewAnswerModel answer) {
     return _panel(
       child: Column(
@@ -709,6 +727,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
     );
   }
 
+  /// Small chip with an icon (e.g. words per minute).
   Widget _statChip(IconData icon, String label) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -727,6 +746,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
     );
   }
 
+  /// Next Question or End Interview, shown once the answer is reviewed.
   Widget _buildBottomBar() {
     if (_stage != InterviewStage.reviewed) return const SizedBox.shrink();
 
@@ -774,6 +794,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
     );
   }
 
+  /// "1:05" (minutes:seconds).
   String _formatDuration(Duration d) {
     final m = d.inMinutes.remainder(60).toString().padLeft(1, '0');
     final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');

@@ -13,6 +13,8 @@ import '../widgets/load_error_view.dart';
 import '../../../shared_widgets/hero_icon_button.dart';
 import '../../../shared_widgets/surface_card.dart';
 
+/// Applying for a job: answer the employer's questions, choose a resume,
+/// then submit.
 class JobApplicationScreen extends StatefulWidget {
   final JobModel job;
 
@@ -34,6 +36,8 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
   List<PreScreeningQuestionModel> get _questions => _appController.questions;
   String? get _existingResumeUrl => _appController.existingResumeUrl;
   File? get _newResumeFile => _appController.newResumeFile;
+
+  /// True if [choice] is the selected resume option.
   bool _isResume(ResumeChoice choice) => _appController.resumeChoice == choice;
 
   @override
@@ -51,10 +55,12 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     super.dispose();
   }
 
+  /// Rebuilds when the form state changes.
   void _onControllerChanged() {
     if (mounted) setState(() {});
   }
 
+  /// Snackbar when a chosen file is too large.
   void _showFileTooLarge(String message) {
     if (!mounted) return;
     SnackBarHelper.showStyled(
@@ -65,6 +71,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     );
   }
 
+  /// Checks the resume step, submits, and closes the screen when it worked.
   Future<void> _submitApplication() async {
     final problem = _appController.validateResume();
     if (problem != null) {
@@ -106,6 +113,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     }
   }
 
+  /// Style of the filled navy buttons (Next, Submit).
   ButtonStyle _primaryButtonStyle() {
     return ElevatedButton.styleFrom(
       backgroundColor: AppColors.primary,
@@ -118,6 +126,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     );
   }
 
+  /// Style of the white outlined buttons (Back, file pickers).
   ButtonStyle _secondaryButtonStyle() {
     return OutlinedButton.styleFrom(
       foregroundColor: AppColors.textDark,
@@ -131,6 +140,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     );
   }
 
+  /// One numbered step at the top (done, current or still to come).
   Widget _buildStepIndicator({
     required int stepNumber,
     required String title,
@@ -184,6 +194,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     );
   }
 
+  /// One question with a text box or a file picker, depending on its type.
   Widget _buildQuestionCard({
     required PreScreeningQuestionModel question,
   }) {
@@ -308,6 +319,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     );
   }
 
+  /// Step 1: the employer's questions.
   Widget _buildQuestionsPage() {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
@@ -346,6 +358,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     );
   }
 
+  /// One selectable resume option (profile resume or a new file).
   Widget _buildResumeOptionCard({
     required bool selected,
     required IconData icon,
@@ -415,6 +428,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     );
   }
 
+  /// Step 2: choose the resume to send.
   Widget _buildResumePage() {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),

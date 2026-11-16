@@ -50,6 +50,7 @@ class _ProfileAvatarState extends State<ProfileAvatar> {
     return ResizeImage(CachedNetworkImageProvider(url), width: 300);
   }
 
+  /// The photo failed to load: show the initial instead.
   void _onImageError(Object error, StackTrace? stackTrace) {
     final url = widget.imageUrl;
     debugPrint('Profile photo failed to load ($url): $error');

@@ -26,6 +26,7 @@ class ProfileResumeCard extends StatelessWidget {
     this.onReturn,
   });
 
+  /// Opens [screen], then calls [onReturn].
   Future<void> _open(BuildContext context, Widget screen) async {
     await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
     onReturn?.call();
@@ -123,6 +124,7 @@ class ProfileResumeCard extends StatelessWidget {
     );
   }
 
+  /// Full-width outlined button.
   Widget _button({required Widget icon, required String label, required VoidCallback? onPressed}) {
     return SizedBox(
       width: double.infinity,

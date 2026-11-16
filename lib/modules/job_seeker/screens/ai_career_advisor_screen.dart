@@ -22,8 +22,6 @@ class AiCareerAdvisorScreen extends StatefulWidget {
 }
 
 class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
-  // Same palette as the other job seeker screens
-
   static const List<String> _suggestedQuestions = [
     'What career paths suit my skills?',
     'How can I improve my resume for my first job?',
@@ -67,6 +65,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
     super.dispose();
   }
 
+  /// Rebuilds when the conversation changes.
   void _onControllerChanged() {
     if (mounted) setState(() {});
   }
@@ -75,6 +74,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
   // Actions
   // ---------------------------------------------------------------------
 
+  /// Shows a past conversation (from the history sheet).
   Future<void> _openConversation(String conversationID, {String? title}) async {
     final error = await _controller.openConversation(conversationID, title: title);
     if (!mounted) return;
@@ -85,12 +85,14 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
     _scrollToBottom();
   }
 
+  /// Clears the chat for a new conversation.
   void _startNewConversation() {
     if (_isSending) return;
     _controller.startNewConversation();
     _messageController.clear();
   }
 
+  /// Sends the typed question, or [presetText] from a suggestion.
   Future<void> _sendMessage([String? presetText]) async {
     if (_isSending) return;
     final text = (presetText ?? _messageController.text).trim();
@@ -125,6 +127,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
     }
   }
 
+  /// Scrolls to the newest message after the next frame.
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -137,6 +140,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
     });
   }
 
+  /// Copies a message to the clipboard.
   Future<void> _copyMessage(String text) async {
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
@@ -147,6 +151,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
   // History bottom sheet
   // ---------------------------------------------------------------------
 
+  /// Opens the past conversations sheet.
   void _showHistorySheet() {
     showModalBottomSheet(
       context: context,
@@ -199,6 +204,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
     );
   }
 
+  /// App bar with the conversation title, history and new chat buttons.
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
       backgroundColor: AppColors.background,
@@ -270,6 +276,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
     );
   }
 
+  /// Small white icon button in the app bar.
   Widget _buildActionButton({
     required IconData icon,
     required String tooltip,
@@ -290,6 +297,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
     );
   }
 
+  /// The messages, or the welcome card when the chat is empty.
   Widget _buildBody() {
     if (_isLoadingHistory) {
       return const Center(child: CircularProgressIndicator(color: AppColors.primary));
@@ -318,6 +326,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
     );
   }
 
+  /// Welcome card with suggested questions.
   Widget _buildEmptyState() {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
@@ -371,6 +380,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
     );
   }
 
+  /// One suggested question; tapping it sends it.
   Widget _buildSuggestionTile(String question) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -410,6 +420,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
     );
   }
 
+  /// Question box and send button.
   Widget _buildComposer() {
     final canSend = _hasMessageText && !_isSending;
 
@@ -506,9 +517,11 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
   }
 }
 
-// ------------------------------------------------------------------------
+// ---------------------------------------------------------------------
 // Message bubble
-// ------------------------------------------------------------------------
+// ---------------------------------------------------------------------
+
+/// One chat message: the user's question or the advisor's answer.
 class _AdvisorMessageBubble extends StatelessWidget {
   final AdvisorMessageModel message;
   final VoidCallback onLongPress;
@@ -592,9 +605,11 @@ class _AdvisorMessageBubble extends StatelessWidget {
   }
 }
 
-// ------------------------------------------------------------------------
+// ---------------------------------------------------------------------
 // "Advisor is typing" bubble
-// ------------------------------------------------------------------------
+// ---------------------------------------------------------------------
+
+/// "Advisor is typing" bubble shown while waiting for the reply.
 class _TypingBubble extends StatelessWidget {
   const _TypingBubble();
 
@@ -638,9 +653,11 @@ class _TypingBubble extends StatelessWidget {
   }
 }
 
-// ------------------------------------------------------------------------
+// ---------------------------------------------------------------------
 // Past conversations bottom sheet
-// ------------------------------------------------------------------------
+// ---------------------------------------------------------------------
+
+/// Past conversations: open one or delete it.
 class _ConversationHistorySheet extends StatefulWidget {
   final CareerAdvisorController controller;
   final String? currentConversationID;
@@ -668,6 +685,7 @@ class _ConversationHistorySheetState extends State<_ConversationHistorySheet> {
     _future = widget.controller.fetchConversations();
   }
 
+  /// Deletes a past conversation after asking.
   Future<void> _confirmDelete(AdvisorConversationModel conversation) async {
     final confirmed = await showConfirmDialog(
       context,

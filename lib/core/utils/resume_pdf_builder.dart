@@ -22,6 +22,7 @@ class ResumePdfBuilder {
 
   static pw.ThemeData? _theme;
 
+  /// Loads the Poppins fonts once and reuses them for every PDF.
   static Future<pw.ThemeData> _loadTheme() async {
     if (_theme != null) return _theme!;
     final regular = await rootBundle.load('assets/fonts/Poppins-Regular.ttf');
@@ -39,12 +40,15 @@ class ResumePdfBuilder {
         .trim();
   }
 
+  /// "Jan 2024 - Present" (or just the start month when there is no end).
   static String _period(DateTime start, DateTime? end, bool isCurrent) {
     final from = _month.format(start);
     final to = isCurrent ? 'Present' : (end != null ? _month.format(end) : '');
     return to.isEmpty ? from : '$from - $to';
   }
 
+  // =====================================================================
+  // The PDF
   // =====================================================================
 
   static Future<Uint8List> build(ResumeModel r) async {

@@ -473,7 +473,6 @@ async function evaluateAnswer(supabase: SupabaseClient, seekerID: string, body: 
       longPauseCount: metrics.longPauseCount,
       hesitationCount: metrics.hesitationCount,
       responseLatencySeconds: metrics.responseLatencySeconds,
-      confidence: stt.confidence,
       contentScore: feedback.contentScore,
       deliveryScore: feedback.deliveryScore,
       // Explicit nulls so re-recording without the camera clears the old values
@@ -591,7 +590,6 @@ never guess emotions, confidence or personality from them.
     .from("MockInterviewRecord")
     .update({
       status: "completed",
-      transcriptText,
       overallScore,
       contentScore,
       deliveryScore,

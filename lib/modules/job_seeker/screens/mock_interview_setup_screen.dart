@@ -96,6 +96,7 @@ class _MockInterviewSetupScreenState extends State<MockInterviewSetupScreen> {
     return false;
   }
 
+  /// Asks for the microphone, creates the session and opens the interview.
   Future<void> _start() async {
     if (!_canStart) return;
     FocusScope.of(context).unfocus();
@@ -162,6 +163,7 @@ class _MockInterviewSetupScreenState extends State<MockInterviewSetupScreen> {
     );
   }
 
+  /// Gradient header with the title and back button.
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
@@ -208,6 +210,7 @@ class _MockInterviewSetupScreenState extends State<MockInterviewSetupScreen> {
     );
   }
 
+  /// Job role or topic box with suggested roles.
   Widget _buildRoleCard() {
     return SurfaceCard(
       children: [
@@ -269,6 +272,7 @@ class _MockInterviewSetupScreenState extends State<MockInterviewSetupScreen> {
     );
   }
 
+  /// Experience level and number of questions.
   Widget _buildOptionsCard() {
     return SurfaceCard(
       children: [
@@ -350,6 +354,7 @@ class _MockInterviewSetupScreenState extends State<MockInterviewSetupScreen> {
     );
   }
 
+  /// The three steps of the interview.
   Widget _buildHowItWorksCard() {
     return SurfaceCard(
       children: [
@@ -363,6 +368,7 @@ class _MockInterviewSetupScreenState extends State<MockInterviewSetupScreen> {
     );
   }
 
+  /// One numbered step.
   Widget _stepTile(int number, String title, String subtitle) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -405,6 +411,7 @@ class _MockInterviewSetupScreenState extends State<MockInterviewSetupScreen> {
     );
   }
 
+  /// What the AI does with the recordings, and the consent checkbox.
   Widget _buildConsentCard() {
     return SurfaceCard(
       children: [
@@ -480,6 +487,7 @@ class _MockInterviewSetupScreenState extends State<MockInterviewSetupScreen> {
     );
   }
 
+  /// One point in the consent card.
   Widget _consentPoint(IconData icon, String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -496,6 +504,7 @@ class _MockInterviewSetupScreenState extends State<MockInterviewSetupScreen> {
     );
   }
 
+  /// Start Interview button (enabled after the role and consent are given).
   Widget _buildBottomButton() {
     return SafeArea(
       top: false,

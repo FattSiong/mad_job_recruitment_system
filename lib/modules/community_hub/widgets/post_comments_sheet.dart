@@ -31,6 +31,7 @@ Future<int> showPostComments(
   return count;
 }
 
+/// The comments sheet's content (opened by the function above).
 class PostCommentsSheet extends StatefulWidget {
   final PostCommentsController controller;
 
@@ -59,10 +60,12 @@ class _PostCommentsSheetState extends State<PostCommentsSheet> {
     super.dispose();
   }
 
+  /// Red snackbar.
   void _showError(String message) {
     SnackBarHelper.showError(context, message, duration: const Duration(seconds: 3));
   }
 
+  /// Sends the comment or reply; the box is cleared only when it worked.
   Future<void> _send() async {
     final error = await _c.send(_input.text);
     if (!mounted) return;
@@ -73,11 +76,13 @@ class _PostCommentsSheetState extends State<PostCommentsSheet> {
     }
   }
 
+  /// Starts a reply to [comment] and opens the keyboard.
   void _reply(PostCommentModel comment) {
     _c.startReply(comment);
     _focus.requestFocus();
   }
 
+  /// Edit, delete or report a comment (from its menu).
   Future<void> _onAction(PostCommentModel comment, CommentAction action) async {
     switch (action) {
       case CommentAction.edit:
@@ -99,6 +104,7 @@ class _PostCommentsSheetState extends State<PostCommentsSheet> {
     }
   }
 
+  /// Edit dialog for one of the user's comments.
   Future<void> _edit(PostCommentModel comment) async {
     final editController = TextEditingController(text: comment.content);
     final newText = await showDialog<String>(
@@ -140,6 +146,7 @@ class _PostCommentsSheetState extends State<PostCommentsSheet> {
     if (error != null && mounted) _showError(error);
   }
 
+  /// Deletes a comment and its replies (asks first).
   Future<void> _delete(PostCommentModel comment) async {
     final ok = await showConfirmDialog(
       context,
@@ -175,6 +182,7 @@ class _PostCommentsSheetState extends State<PostCommentsSheet> {
     );
   }
 
+  /// Drag handle and the "Comments" title.
   Widget _buildHeader() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 10, 8, 6),
@@ -208,6 +216,7 @@ class _PostCommentsSheetState extends State<PostCommentsSheet> {
     );
   }
 
+  /// Spinner, error, "no comments yet" or the comment threads.
   Widget _buildList() {
     if (_c.isLoading) {
       return const Center(child: CircularProgressIndicator(color: AppColors.primary));
@@ -256,6 +265,7 @@ class _PostCommentsSheetState extends State<PostCommentsSheet> {
     );
   }
 
+  /// One comment with its replies (collapsed behind "View replies").
   Widget _buildThread(PostCommentModel comment) {
     final replies = _c.repliesOf(comment.commentID);
     final expanded = _c.isExpanded(comment.commentID);
@@ -317,6 +327,7 @@ class _PostCommentsSheetState extends State<PostCommentsSheet> {
     );
   }
 
+  /// Text box and send button; shows "Replying to ..." while replying.
   Widget _buildComposer() {
     final replyingTo = _c.replyingTo;
     final canSend = _input.text.trim().isNotEmpty && !_c.isSending;

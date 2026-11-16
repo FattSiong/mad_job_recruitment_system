@@ -62,6 +62,7 @@ class CareerToolsGrid extends StatelessWidget {
   }
 }
 
+/// One career tool tile; tapping it opens [screen].
 class _ToolTile extends StatelessWidget {
   final IconData icon;
   final String label;

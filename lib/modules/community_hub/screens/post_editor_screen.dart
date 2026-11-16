@@ -38,6 +38,7 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
     super.dispose();
   }
 
+  /// Red (error) or green snackbar.
   void _snack(String message, {bool error = true}) {
     if (error) {
       SnackBarHelper.showError(context, message, duration: const Duration(seconds: 3));
@@ -46,6 +47,7 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
     }
   }
 
+  /// Publishes the post, or saves it as a draft, then closes the screen.
   Future<void> _save({bool asDraft = false}) async {
     FocusScope.of(context).unfocus();
     final error = await _controller.save(asDraft: asDraft);
@@ -223,6 +225,7 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
     );
   }
 
+  /// "Add a PDF or image" button, or the chosen attachment with a remove button.
   Widget _buildAttachment() {
     if (!_controller.hasAttachment) {
       return Material(

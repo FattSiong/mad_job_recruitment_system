@@ -22,6 +22,8 @@ class MockInterviewException implements Exception {
   String toString() => message;
 }
 
+/// A new mock interview session and its opening question (the other
+/// questions are generated after the introduction is answered).
 class StartInterviewResult {
   final String sessionID;
   final List<InterviewQuestion> questions;
@@ -29,6 +31,7 @@ class StartInterviewResult {
   StartInterviewResult(this.sessionID, this.questions);
 }
 
+/// The AI feedback on one answer.
 class EvaluateAnswerResult {
   final MockInterviewAnswerModel answer;
 
@@ -38,6 +41,8 @@ class EvaluateAnswerResult {
   EvaluateAnswerResult(this.answer, this.questions);
 }
 
+/// AI Mock Interview: talks to the `mock-interview` Edge Function (start,
+/// evaluate each answer, finish) and loads past interviews.
 class MockInterviewController {
   final _supabase = Supabase.instance.client;
   String get _currentSeekerID => SessionHelper.requireUserId();
@@ -150,6 +155,8 @@ class MockInterviewController {
         ));
   }
 
+  /// Reads the recorded answer; an unreadable file becomes a
+  /// [MockInterviewException] asking the user to record again.
   static Future<List<int>> _readRecording(File file) async {
     try {
       return await file.readAsBytes();

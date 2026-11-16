@@ -4,6 +4,8 @@ import '../../../models/job_model.dart';
 import '../../../core/theme/app_colors.dart';
 import '../controllers/bookmarked_controller.dart';
 
+/// A job in the Home list: title, company, location, salary and a bookmark
+/// button.
 class JobCard extends StatefulWidget {
   final JobModel job;
   final VoidCallback onTap;
@@ -25,6 +27,7 @@ class _JobCardState extends State<JobCard> {
     _bookmarkedController.ensureBookmarksLoaded();
   }
 
+  /// Bookmarks or un-bookmarks the job and says which (or that it failed).
   Future<void> _handleBookmarkTap() async {
     final jobId = widget.job.jobID;
     if (jobId == null || _isUpdating) return;
@@ -55,6 +58,7 @@ class _JobCardState extends State<JobCard> {
     );
   }
 
+  /// "RM3000 / month", or "/ hour" for part-time jobs.
   String _formatSalary(String range, String? type) {
     if (type == 'Part-time') {
       return '$range / hour';
@@ -113,7 +117,6 @@ class _JobCardState extends State<JobCard> {
                   Icon(Icons.location_on, size: 14, color: Colors.grey.shade600),
                   const SizedBox(width: 4),
                   Expanded(
-                    // Replaced FutureBuilder with instant text
                     child: Text(
                       widget.job.locationName ?? 'Location unavailable',
                       style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
@@ -139,6 +142,7 @@ class _JobCardState extends State<JobCard> {
     );
   }
 
+  /// Small chip with an icon (job type, salary).
   Widget _buildChip(String label, IconData icon) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

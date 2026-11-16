@@ -35,6 +35,7 @@ class ChatFormatters {
     return DateFormat('EEEE, d MMM yyyy').format(local);
   }
 
+  /// True if [a] and [b] fall on the same local calendar day.
   static bool isSameDay(DateTime a, DateTime b) {
     final x = a.toLocal(), y = b.toLocal();
     return x.year == y.year && x.month == y.month && x.day == y.day;

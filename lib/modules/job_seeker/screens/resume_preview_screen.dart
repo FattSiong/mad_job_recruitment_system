@@ -38,6 +38,7 @@ class _ResumePreviewScreenState extends State<ResumePreviewScreen> {
     _generate();
   }
 
+  /// Builds the resume PDF and saves it to a temporary file for viewing.
   Future<void> _generate() async {
     setState(() {
       _bytes = null;
@@ -60,6 +61,7 @@ class _ResumePreviewScreenState extends State<ResumePreviewScreen> {
     }
   }
 
+  /// Green or red snackbar (if the screen is still open).
   void _toast(String message, {bool success = true}) {
     if (!mounted) return;
     if (success) {
@@ -103,6 +105,7 @@ class _ResumePreviewScreenState extends State<ResumePreviewScreen> {
     if (yes == true) await _useAsResume();
   }
 
+  /// Uploads this PDF and makes it the profile resume.
   Future<void> _useAsResume() async {
     final bytes = _bytes;
     if (bytes == null || _isSettingResume) return;
@@ -119,6 +122,7 @@ class _ResumePreviewScreenState extends State<ResumePreviewScreen> {
     );
   }
 
+  /// Opens the phone's share sheet with the PDF.
   Future<void> _share() async {
     final file = _file;
     if (file == null) return;
@@ -130,6 +134,7 @@ class _ResumePreviewScreenState extends State<ResumePreviewScreen> {
     );
   }
 
+  /// Lets the user save the PDF where they choose.
   Future<void> _download() async {
     final bytes = _bytes;
     if (bytes == null) return;
@@ -148,6 +153,7 @@ class _ResumePreviewScreenState extends State<ResumePreviewScreen> {
     }
   }
 
+  /// Opens the PDF in another app (says so if there is none).
   Future<void> _openExternally() async {
     final file = _file;
     if (file == null) return;
@@ -160,6 +166,8 @@ class _ResumePreviewScreenState extends State<ResumePreviewScreen> {
     }
   }
 
+  // ---------------------------------------------------------------------
+  // UI
   // ---------------------------------------------------------------------
 
   @override
@@ -264,6 +272,7 @@ class _ResumePreviewScreenState extends State<ResumePreviewScreen> {
     );
   }
 
+  /// Shown when the PDF couldn't be made, with Try Again.
   Widget _buildError() {
     return Center(
       child: Padding(

@@ -125,6 +125,7 @@ class ChatListTile extends StatelessWidget {
     );
   }
 
+  /// Small rounded label next to the name (e.g. "Employer", "Blocked").
   Widget _tag(String label, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

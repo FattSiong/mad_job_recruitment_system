@@ -1,3 +1,4 @@
+/// A question the employer asks every applicant for a job ("PreScreeningQuestion").
 class PreScreeningQuestionModel {
   final String? questionID;
   final String jobID;
@@ -10,7 +11,7 @@ class PreScreeningQuestionModel {
     required this.jobID,
     required this.questionText,
     this.isAIGenerated = false,
-    this.questionType = 'Text', // Defaulting to 'Text' based on your current UI
+    this.questionType = 'Text', // a written answer unless the employer chose another type
   });
 
   factory PreScreeningQuestionModel.fromJson(Map<String, dynamic> json) {

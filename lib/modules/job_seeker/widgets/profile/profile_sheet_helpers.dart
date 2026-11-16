@@ -3,8 +3,9 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
 
-/// Shared bits for the profile bottom sheets and record cards.
+// Shared bits for the profile bottom sheets and record cards.
 
+/// Date picker in the app's colours.
 Future<DateTime?> pickProfileDate(BuildContext context, DateTime? initialDate) {
   return showDatePicker(
     context: context,
@@ -22,6 +23,7 @@ Future<DateTime?> pickProfileDate(BuildContext context, DateTime? initialDate) {
   );
 }
 
+/// Style of the text boxes in the profile sheets.
 InputDecoration profileSheetInputDecoration(String label, IconData icon) {
   return InputDecoration(
     labelText: label,

@@ -77,6 +77,7 @@ class FeedPostModel {
     return name.replaceFirst(RegExp(r'^\d{10,}_'), '');
   }
 
+  /// True if [userID] wrote this post.
   bool isOwnedBy(String userID) => authorID == userID;
 
   FeedPostModel copyWith({

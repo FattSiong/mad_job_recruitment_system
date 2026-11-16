@@ -66,6 +66,7 @@ class _VoiceMessagePlayerState extends State<VoiceMessagePlayer> {
     ]);
   }
 
+  /// Pauses this player when another voice note starts playing.
   void _pauseIfAnotherStarts() {
     if (_currentlyPlayingId.value != widget.messageID && _isPlaying) {
       _player.pause();
@@ -80,6 +81,7 @@ class _VoiceMessagePlayerState extends State<VoiceMessagePlayer> {
     return known ?? Duration.zero;
   }
 
+  /// Play / pause. Resumes from where it stopped.
   Future<void> _toggle() async {
     if (_isPlaying) {
       await _player.pause();

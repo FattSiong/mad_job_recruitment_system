@@ -29,6 +29,7 @@ class VoiceRecorderController extends ChangeNotifier {
   Duration get elapsed =>
       _startedAt == null ? Duration.zero : DateTime.now().difference(_startedAt!);
 
+  /// Starts recording a voice note (the mic button is pressed).
   /// Returns false if the microphone permission was refused.
   Future<bool> start() async {
     if (_busy || isRecording) return true;
@@ -87,6 +88,7 @@ class VoiceRecorderController extends ChangeNotifier {
     }
   }
 
+  /// Stops recording and throws the recording away (slid to cancel).
   Future<void> cancel() async {
     if (_busy) {
       _releasedWhileStarting = true;
@@ -100,6 +102,7 @@ class VoiceRecorderController extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Back to "not recording" (stops the timer).
   void _reset() {
     _startedAt = null;
     _ticker?.cancel();
@@ -107,10 +110,12 @@ class VoiceRecorderController extends ChangeNotifier {
     _notify();
   }
 
+  /// Deletes [file]; a failure is ignored (it is only a temporary file).
   void _deleteQuietly(File file) {
     file.delete().catchError((_) => file);
   }
 
+  /// notifyListeners, unless the controller was already disposed.
   void _notify() {
     if (!_disposed) notifyListeners();
   }

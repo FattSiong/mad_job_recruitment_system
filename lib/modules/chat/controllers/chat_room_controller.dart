@@ -16,6 +16,7 @@ import '../../../models/message_model.dart';
 import '../../../services/call_service.dart';
 import '../../../services/push_service.dart';
 import '../../../services/user_directory.dart';
+import '../chat_outbox.dart';
 
 /// Who has blocked whom in this chat.
 enum ChatBlockState {
@@ -30,6 +31,10 @@ enum ChatBlockState {
 
 /// Data for one conversation: live messages, sending text / files / voice,
 /// read receipts, deleting, shared attachments, blocking and starting a call.
+///
+/// A message that can't be sent (e.g. no connection) stays in the chat as
+/// "Not sent" and is resent automatically, or when the user taps it
+/// (NF-REL-02, see [ChatOutbox]).
 ///
 /// Push notifications are NOT sent from here: a database trigger calls the
 /// send-push Edge Function (FCM) when a Message row is inserted.
@@ -52,13 +57,17 @@ class ChatRoomController extends ChangeNotifier {
 
   List<MessageModel> _messages = []; // live window, newest first
   List<MessageModel> _older = []; // loaded on scroll, newest first, all older than _messages
-  final List<MessageModel> _pending = []; // sent, waiting for the server echo
+  final ChatOutbox _outbox = ChatOutbox(); // sent by this user, not confirmed yet
+  final Set<String> _inFlight = {}; // outbox messages being sent right now
+  Timer? _retryTimer;
+  DateTime? _retryAt; // when [_retryTimer] fires
+  int _retryRound = 0; // automatic resend rounds in a row that still failed
+  bool _resending = false;
   bool _hasOlder = false;
   bool _isLoadingOlder = false;
   String? _olderError;
   bool _isLoading = true;
   String? _error;
-  bool _isUploading = false;
   ChatBlockState _blockState = ChatBlockState.none;
   bool _isChangingBlock = false;
   StreamSubscription<List<MessageModel>>? _subscription;
@@ -67,7 +76,12 @@ class ChatRoomController extends ChangeNotifier {
 
   bool get isLoading => _isLoading;
   String? get error => _error;
-  bool get isUploading => _isUploading;
+
+  /// A photo, file or voice note is being uploaded.
+  bool get isUploading => _outbox.isUploading;
+
+  /// Messages that could not be sent and are waiting to be resent.
+  int get unsentCount => _outbox.failed.length;
 
   /// While either person has blocked the other, nobody can send or call.
   ChatBlockState get blockState => _blockState;
@@ -87,21 +101,39 @@ class ChatRoomController extends ChangeNotifier {
   /// and older messages loaded by [loadOlder].
   List<MessageModel> get messages {
     final serverIds = _messages.map((m) => m.messageID).toSet();
-    final stillPending = _pending.where((m) => !serverIds.contains(m.messageID)).toList();
+    final unconfirmed = _outbox.items
+        .where((i) => !serverIds.contains(i.id))
+        .map((i) => i.message)
+        .toList();
     final older = _older.where((m) => !serverIds.contains(m.messageID));
-    return [...stillPending.reversed, ..._messages, ...older];
+    return [...unconfirmed.reversed, ..._messages, ...older];
   }
 
+  /// True while [message] is being sent or waits for the server to confirm it.
   bool isPending(MessageModel message) =>
-      _pending.any((m) => m.messageID == message.messageID) &&
+      _outbox.contains(message.messageID) &&
+      !_outbox.isFailed(message.messageID) &&
       !_messages.any((m) => m.messageID == message.messageID);
 
+  /// True if [message] could not be sent (shown as "Not sent · Tap to retry").
+  bool isFailed(MessageModel message) => _outbox.isFailed(message.messageID);
+
+  /// The photo / file / voice note on the phone for a message that isn't
+  /// uploaded yet (the bubble shows it from there).
+  File? localFileOf(MessageModel message) {
+    final item = _outbox[message.messageID];
+    return item?.uploadedURL == null ? item?.file : null;
+  }
+
+  /// True if the current user sent [message].
   bool isMine(MessageModel message) => message.senderID == currentUserID;
 
   // ---------------------------------------------------------------------
   // Live messages
   // ---------------------------------------------------------------------
 
+  /// Opens the chat: checks blocking and starts the live message stream.
+  /// Call once when the screen opens.
   void start() {
     PushService.activeChatRoomID = roomID; // no pop-ups for this chat while open
     refreshBlockState();
@@ -123,11 +155,13 @@ class ChatRoomController extends ChangeNotifier {
             _messages = rows;
             // A full page means there may be more before it (unless already loaded).
             if (_older.isEmpty) _hasOlder = rows.length >= pageSize;
-            _pending.removeWhere((p) => rows.any((m) => m.messageID == p.messageID));
+            _outbox.removeConfirmed(rows.map((m) => m.messageID));
             _isLoading = false;
             _error = null;
             _notify();
             _scheduleMarkAsRead();
+            // Messages arriving again: the connection works, so resend soon.
+            if (_outbox.hasFailed) _scheduleResend(const Duration(seconds: 1));
           },
           onError: (Object e) {
             debugPrint('Chat stream error: $e');
@@ -195,6 +229,7 @@ class ChatRoomController extends ChangeNotifier {
     _readDebounce = Timer(const Duration(milliseconds: 500), markAsRead);
   }
 
+  /// Marks the other person's unread messages in this chat as read.
   Future<void> markAsRead() async {
     try {
       await _supabase
@@ -212,30 +247,24 @@ class ChatRoomController extends ChangeNotifier {
   // Sending
   // ---------------------------------------------------------------------
 
-  /// Returns null on success, otherwise a message to show.
+  /// Sends a text message (shown straight away, before the server confirms it).
+  /// Returns a message to show when it can't be sent at all (blocked, too
+  /// long, refused). A connection problem returns null: the message stays in
+  /// the chat as "Not sent" and is resent.
   Future<String?> sendText(String text) async {
     final content = text.trim();
     if (content.isEmpty) return null;
     if (isBlocked) return blockedMessage;
     if (content.length > 4000) return 'Messages can be up to 4000 characters.';
 
-    final message = _newMessage(content: content, mediaType: 'text');
-    _pending.add(message);
+    final item = OutboxItem(_newMessage(content: content, mediaType: 'text'));
+    _outbox.add(item);
     _notify();
-
-    try {
-      await _insert(message);
-      return null;
-    } catch (e) {
-      debugPrint('Error sending message: $e');
-      _pending.removeWhere((m) => m.messageID == message.messageID);
-      _notify();
-      if (await _blockedJustNow(e)) return blockedMessage;
-      return 'Message not sent. Please check your connection and try again.';
-    }
+    return _deliver(item.id);
   }
 
-  /// Image or document. Returns null on success, otherwise a message to show.
+  /// Image or document. Returns a message to show when it can't be sent at
+  /// all; null when sent or kept as "Not sent" to resend.
   Future<String?> sendAttachment(File file, String fileName) async {
     if (isBlocked) return blockedMessage;
     final sizeError = await FilePickerHelper.checkSize(file, maxAttachmentMB);
@@ -243,47 +272,142 @@ class ChatRoomController extends ChangeNotifier {
 
     final ext = fileName.split('.').last.toLowerCase();
     final isImage = const ['jpg', 'jpeg', 'png', 'webp', 'gif'].contains(ext);
-
-    return _withUpload(() async {
-      final url = await _upload(file, fileName);
-      await _insertWithFile(_newMessage(
-        content: fileName,
-        mediaType: isImage ? 'image' : 'file',
-        mediaURL: url,
-      ));
-    }, failure: 'Failed to send the file. Please try again.');
+    final item = OutboxItem(
+      _newMessage(content: fileName, mediaType: isImage ? 'image' : 'file'),
+      file: file,
+      fileName: fileName,
+    );
+    _outbox.add(item);
+    _notify();
+    return _deliver(item.id);
   }
 
-  /// Voice note recorded by [VoiceRecorderController].
+  /// Voice note recorded by [VoiceRecorderController]. Same results as
+  /// [sendAttachment]; the recording is kept until it is sent.
   Future<String?> sendVoice(File file, int seconds) async {
     if (isBlocked) return blockedMessage;
-    return _withUpload(() async {
-      final url = await _upload(file, 'voice_${DateTime.now().millisecondsSinceEpoch}.m4a');
-      await _insertWithFile(_newMessage(
-        // The "(12s)" part is read by older app versions to show the length.
-        content: 'Voice Message (${seconds}s)',
-        mediaType: 'audio',
-        mediaURL: url,
-      ));
-    }, failure: 'Failed to send the voice message. Please try again.');
+    final item = OutboxItem(
+      // The "(12s)" part is read by older app versions to show the length.
+      _newMessage(content: 'Voice Message (${seconds}s)', mediaType: 'audio'),
+      file: file,
+      fileName: 'voice_${DateTime.now().millisecondsSinceEpoch}.m4a',
+      deleteFileWhenSent: true,
+    );
+    _outbox.add(item);
+    _notify();
+    return _deliver(item.id);
   }
 
-  Future<String?> _withUpload(Future<void> Function() action, {required String failure}) async {
-    _isUploading = true;
+  /// Uploads the file (once) and saves the message. On a connection problem
+  /// the message is marked "Not sent" and a resend is scheduled (returns
+  /// null). When the server refuses it, it is removed and a message to show
+  /// is returned.
+  Future<String?> _deliver(String id) async {
+    final item = _outbox[id];
+    if (item == null || !_inFlight.add(id)) return null;
+    item.status = OutboxStatus.sending;
     _notify();
     try {
-      await action();
+      if (item.hasFile && item.uploadedURL == null) {
+        item.markUploaded(await _upload(item.file!, item.fileName ?? 'file'));
+        _notify();
+      }
+      try {
+        await _insert(item.message);
+      } catch (e) {
+        if (!ChatOutbox.isAlreadySaved(e)) rethrow; // an earlier try got through
+      }
+      item.status = OutboxStatus.sent; // stays shown until the live stream has it
+      _retryRound = 0;
+      if (item.deleteFileWhenSent) _deleteLocalFile(item.file);
       return null;
     } catch (e) {
-      debugPrint('Chat upload error: $e');
-      if (await _blockedJustNow(e)) return blockedMessage;
-      return failure;
+      debugPrint('Send failed (${item.message.mediaType}): $e');
+      if (await _blockedJustNow(e)) {
+        await _discard(item);
+        return blockedMessage;
+      }
+      if (!ChatOutbox.isRetryable(e)) {
+        await _discard(item);
+        return switch (item.message.mediaType) {
+          'audio' => 'Failed to send the voice message. Please try again.',
+          'image' || 'file' => 'Failed to send the file. Please try again.',
+          _ => 'Message not sent. Please try again.',
+        };
+      }
+      item.status = OutboxStatus.failed;
+      item.failures++;
+      if (!_resending) _scheduleResend(ChatOutbox.retryDelay(_retryRound));
+      return null;
     } finally {
-      _isUploading = false;
+      _inFlight.remove(id);
       _notify();
     }
   }
 
+  /// "Not sent" message tapped: try again now.
+  /// Returns a message to show if it can't be sent at all.
+  Future<String?> retry(MessageModel message) async {
+    if (!_outbox.isFailed(message.messageID)) return null;
+    if (isBlocked) return blockedMessage;
+    _retryRound = 0;
+    return _deliver(message.messageID);
+  }
+
+  /// Removes a "Not sent" message without sending it.
+  Future<void> discard(MessageModel message) async {
+    final item = _outbox[message.messageID];
+    if (item == null || item.status != OutboxStatus.failed) return;
+    await _discard(item);
+    _notify();
+  }
+
+  /// Takes [item] out of the chat; an upload it no longer needs is deleted.
+  Future<void> _discard(OutboxItem item) async {
+    _outbox.remove(item.id);
+    await _deleteAttachmentFile(item.uploadedURL);
+    if (item.deleteFileWhenSent) _deleteLocalFile(item.file);
+  }
+
+  /// Resends every "Not sent" message, oldest first. Called automatically
+  /// (with a growing wait), when messages arrive again, and when the app
+  /// comes back to the foreground. Stops at the first one that still fails.
+  Future<void> resendFailed() async {
+    _retryTimer?.cancel();
+    if (_disposed || _resending || isBlocked || !_outbox.hasFailed) return;
+    _resending = true;
+    try {
+      for (final item in _outbox.failed) {
+        if (_disposed || isBlocked) return;
+        await _deliver(item.id);
+        if (_outbox.isFailed(item.id)) break; // still no connection
+      }
+    } finally {
+      _resending = false;
+    }
+    if (_outbox.hasFailed && !_disposed) {
+      _retryRound++;
+      _scheduleResend(ChatOutbox.retryDelay(_retryRound));
+    }
+  }
+
+  /// Runs [resendFailed] after [delay], unless a resend is already due sooner.
+  void _scheduleResend(Duration delay) {
+    if (_disposed) return;
+    final at = DateTime.now().add(delay);
+    if ((_retryTimer?.isActive ?? false) && !_retryAt!.isAfter(at)) return;
+    _retryTimer?.cancel();
+    _retryAt = at;
+    _retryTimer = Timer(delay, resendFailed);
+  }
+
+  /// Deletes the app's own temporary file (a sent or discarded voice note).
+  void _deleteLocalFile(File? file) {
+    if (file == null) return;
+    file.delete().catchError((_) => file);
+  }
+
+  /// Uploads a chat file to "chats/<roomID>/..." and returns its stored link.
   Future<String> _upload(File file, String fileName) async {
     final safeName = fileName.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
     final path = 'chats/$roomID/${DateTime.now().millisecondsSinceEpoch}_$safeName';
@@ -293,21 +417,12 @@ class ChatRoomController extends ChangeNotifier {
     return _supabase.storage.from(attachmentsBucket).getPublicUrl(path);
   }
 
+  /// Saves [message] in the database.
   Future<void> _insert(MessageModel message) async {
     await _supabase.from(TableConstants.message).insert(message.toJson());
   }
 
-  /// Saves a message whose file is already uploaded. If that fails, the file
-  /// is removed again, so no unused upload is left in storage.
-  Future<void> _insertWithFile(MessageModel message) async {
-    try {
-      await _insert(message);
-    } catch (_) {
-      await _deleteAttachmentFile(message.mediaURL);
-      rethrow;
-    }
-  }
-
+  /// A new message from the current user in this room, with a fresh ID.
   MessageModel _newMessage({
     required String content,
     required String mediaType,
@@ -360,24 +475,69 @@ class ChatRoomController extends ChangeNotifier {
       return false;
     }
     await _deleteAttachmentFile(message.mediaURL);
-    // Older messages are not in the live stream, so update the copy shown.
-    final i = _older.indexWhere((m) => m.messageID == message.messageID);
-    if (i != -1) {
-      final m = _older[i];
-      _older[i] = MessageModel(
-        messageID: m.messageID,
-        roomID: m.roomID,
-        senderID: m.senderID,
-        content: 'This message was deleted',
-        isRead: m.isRead,
-        sentAt: m.sentAt,
-        mediaType: m.mediaType,
-        mediaURL: null,
-        isDeleted: true,
-      );
-      _notify();
-    }
+    _replaceShown(message.messageID,
+        (m) => m.copyWith(content: 'This message was deleted', isDeleted: true, clearMedia: true));
     return true;
+  }
+
+  /// True if the user may still edit [message]: their own text message,
+  /// sent and confirmed less than 2 minutes ago, in a chat that isn't blocked.
+  bool canEdit(MessageModel message) =>
+      !isBlocked &&
+      !_outbox.contains(message.messageID) &&
+      message.canBeEditedBy(currentUserID);
+
+  /// Changes the text of one of the user's messages (within 2 minutes of
+  /// sending). Returns null when saved, otherwise a message to show.
+  Future<String?> editMessage(MessageModel message, String text) async {
+    final content = text.trim();
+    if (content == message.content.trim()) return null; // nothing changed
+    if (content.isEmpty) return 'A message can\'t be empty.';
+    if (content.length > 4000) return 'Messages can be up to 4000 characters.';
+    if (!canEdit(message)) return isBlocked ? blockedMessage : editClosedMessage;
+    try {
+      final rows = await _supabase
+          .from(TableConstants.message)
+          .update({'content': content})
+          .eq('messageID', message.messageID)
+          .eq('senderID', currentUserID)
+          .select('editedAt');
+      if (rows.isEmpty) return editClosedMessage;
+      final editedAt = DateTime.tryParse(rows.first['editedAt']?.toString() ?? '') ?? DateTime.now();
+      // The live stream also brings the change; show it straight away.
+      _replaceShown(message.messageID, (m) => m.copyWith(content: content, editedAt: editedAt));
+      return null;
+    } on PostgrestException catch (e) {
+      debugPrint('Edit message failed: ${e.code} ${e.message}');
+      if (e.message.contains('edit_window_closed')) return editClosedMessage;
+      if (e.message.contains('chat_blocked')) {
+        await refreshBlockState();
+        return blockedMessage;
+      }
+      return 'Unable to edit the message. Please try again.';
+    } catch (e) {
+      debugPrint('Edit message failed: $e');
+      return 'Unable to edit the message. Please check your connection and try again.';
+    }
+  }
+
+  static const String editClosedMessage = 'Messages can only be edited within 2 minutes of sending.';
+
+  /// Updates the copy of a message on screen (older messages are not in the
+  /// live stream, so they would otherwise keep the old version).
+  void _replaceShown(String messageID, MessageModel Function(MessageModel) change) {
+    var changed = false;
+    final i = _messages.indexWhere((m) => m.messageID == messageID);
+    if (i != -1) {
+      _messages = [..._messages]..[i] = change(_messages[i]);
+      changed = true;
+    }
+    final j = _older.indexWhere((m) => m.messageID == messageID);
+    if (j != -1) {
+      _older[j] = change(_older[j]);
+      changed = true;
+    }
+    if (changed) _notify();
   }
 
   /// Removes a chat file from storage. Failure is only logged: the message is
@@ -539,11 +699,15 @@ class ChatRoomController extends ChangeNotifier {
     }
   }
 
+  /// Name, role and photo of [userID] (cached by UserDirectory).
   static Future<ChatParticipant> fetchParticipant(String userID) =>
       UserDirectory.fetchOne(userID);
 
   // ---------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------
 
+  /// notifyListeners, unless the controller was already disposed.
   void _notify() {
     if (!_disposed) notifyListeners();
   }
@@ -553,7 +717,14 @@ class ChatRoomController extends ChangeNotifier {
     _disposed = true;
     if (PushService.activeChatRoomID == roomID) PushService.activeChatRoomID = null;
     _readDebounce?.cancel();
+    _retryTimer?.cancel();
     _subscription?.cancel();
+    // Leaving discards the "Not sent" messages (the screen asked first):
+    // remove the files they had uploaded and their temporary voice recordings.
+    for (final item in _outbox.failed) {
+      _deleteAttachmentFile(item.uploadedURL);
+      if (item.deleteFileWhenSent) _deleteLocalFile(item.file);
+    }
     super.dispose();
   }
 }

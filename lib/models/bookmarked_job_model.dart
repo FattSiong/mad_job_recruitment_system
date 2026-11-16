@@ -1,3 +1,4 @@
+/// A job the seeker bookmarked ("BookmarkedJob").
 class BookmarkedJobModel {
   final String? bookmarkedID;
   final String seekerID;

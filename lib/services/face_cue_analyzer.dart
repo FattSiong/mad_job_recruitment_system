@@ -85,7 +85,10 @@ class FaceCueAnalyzer {
   }
 
   // ---------------------------------------------------------------------
+  // Camera frames -> ML Kit
+  // ---------------------------------------------------------------------
 
+  /// Starts sending camera frames to ML Kit (only while answering).
   Future<void> _startStream() async {
     final cam = _camera;
     if (_disposed || _streaming || cam == null || !cam.value.isInitialized) return;
@@ -101,6 +104,7 @@ class FaceCueAnalyzer {
     }
   }
 
+  /// Stops the frame stream; waits for a stream that is still starting.
   Future<void> _stopStream() {
     if (!_streaming) return _stopping ?? Future.value();
     _streaming = false;
@@ -120,6 +124,7 @@ class FaceCueAnalyzer {
     }();
   }
 
+  /// Checks one camera frame (about 3 a second) and keeps its result.
   Future<void> _onFrame(CameraImage image, CameraController cam) async {
     if (!_answering || _busy) return;
     final at = _clock.elapsed;

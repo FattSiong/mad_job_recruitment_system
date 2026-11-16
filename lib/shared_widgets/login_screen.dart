@@ -43,6 +43,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // Login lockout (5 wrong passwords -> 15 minutes)
   DateTime? _lockedUntil;
+  bool _lockAccountWide = false; // all phones, not just this one
   Timer? _lockTimer;
 
   bool get _isLocked => _lockedUntil != null && _lockedUntil!.isAfter(DateTime.now());
@@ -50,10 +51,11 @@ class _LoginScreenState extends State<LoginScreen> {
   Duration get _lockLeft =>
       _isLocked ? _lockedUntil!.difference(DateTime.now()) : Duration.zero;
 
-  void _startLock(Duration remaining) {
+  void _startLock(Duration remaining, {bool accountWide = false}) {
     _lockTimer?.cancel();
     setState(() {
       _lockedUntil = DateTime.now().add(remaining);
+      _lockAccountWide = accountWide;
       _passwordError = null;
     });
     // Ticks the countdown; ends the lock on screen when the time is up
@@ -146,7 +148,7 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } on LoginLockedException catch (e) {
-      if (mounted) _startLock(e.remaining);
+      if (mounted) _startLock(e.remaining, accountWide: e.accountWide);
     } on WrongPasswordException catch (e) {
       _setValidationErrors(passwordError: e.toString());
     } catch (e) {
@@ -468,10 +470,15 @@ class _LoginScreenState extends State<LoginScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Too many failed attempts. For your security, login for this '
-              'account is locked for ${LoginLockoutService.lockMinutes} minutes '
-              '(${LoginLockStatus.countdown(_lockLeft)} left). '
-              'Forgot your password? You can reset it above.',
+              _lockAccountWide
+                  ? 'Too many failed attempts on this account. For your security, '
+                      'login is locked on all devices '
+                      '(${LoginLockStatus.countdown(_lockLeft)} left). '
+                      'Resetting your password with Forgot Password above unlocks it.'
+                  : 'Too many failed attempts. For your security, login on this '
+                      'phone is locked for ${LoginLockoutService.lockMinutes} minutes '
+                      '(${LoginLockStatus.countdown(_lockLeft)} left). '
+                      'Forgot your password? Resetting it above unlocks it.',
               style: const TextStyle(
                 color: _errorText,
                 fontSize: 13,

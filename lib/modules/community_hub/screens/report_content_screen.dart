@@ -40,6 +40,7 @@ class _ReportContentScreenState extends State<ReportContentScreen> {
     super.dispose();
   }
 
+  /// Sends the report and closes the screen when it worked.
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
     setState(() => _isSubmitting = true);
@@ -224,6 +225,7 @@ class _ReportContentScreenState extends State<ReportContentScreen> {
     );
   }
 
+  /// White card with a title and subtitle, used for each part of the form.
   Widget _card({required String title, required String subtitle, required Widget child}) {
     return Container(
       padding: const EdgeInsets.all(20),

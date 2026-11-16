@@ -42,11 +42,14 @@ class FaceMetricsTracker {
   /// Starts a new answer.
   void reset() => _samples.clear();
 
+  /// Adds one camera frame's result.
   void add(FaceSample sample) => _samples.add(sample);
 
   /// Metrics for the frames added since [reset]; null if there are too few.
   FaceMetrics? result() => summarize(_samples);
 
+  /// Eye contact, smiling and look-aways for [samples]; null if there are
+  /// too few frames.
   static FaceMetrics? summarize(List<FaceSample> samples) {
     if (samples.length < minSamples) return null;
 
@@ -94,6 +97,7 @@ class FaceMetricsTracker {
     );
   }
 
+  /// The median of [values], limited to [maxBaselineDegrees] (0 if empty).
   static double _baseline(List<double> values) {
     if (values.isEmpty) return 0;
     final v = List.of(values)..sort();
@@ -102,5 +106,6 @@ class FaceMetricsTracker {
     return median.clamp(-maxBaselineDegrees, maxBaselineDegrees).toDouble();
   }
 
+  /// [part] as a whole percentage of [total] (0 when [total] is 0).
   static int _percent(int part, int total) => total == 0 ? 0 : (part * 100 / total).round();
 }

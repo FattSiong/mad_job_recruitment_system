@@ -5,6 +5,8 @@ import '../../../core/utils/snackbar_helper.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared_widgets/hero_icon_button.dart';
 
+/// Choose a location for the Home job search (typed, current location or
+/// a popular one). Pops with {'keyword': ..., 'location': ...}.
 class LocationSearchScreen extends StatefulWidget {
   final String initialKeyword;
   final String initialLocation;
@@ -20,8 +22,6 @@ class LocationSearchScreen extends StatefulWidget {
 }
 
 class _LocationSearchScreenState extends State<LocationSearchScreen> {
-  // Theme Colors matching Seeker Dashboard
-
   late TextEditingController _keywordController;
   late TextEditingController _locationController;
   bool _isLocating = false;
@@ -52,6 +52,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
     super.dispose();
   }
 
+  /// Closes the screen with the keyword and the chosen location.
   void _selectLocation(String location) {
     Navigator.pop(context, {
       'keyword': _keywordController.text.trim(),
@@ -59,6 +60,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
     });
   }
 
+  /// Uses the phone's location: finds the city and chooses it.
   Future<void> _getCurrentLocation() async {
     setState(() => _isLocating = true);
     try {
@@ -126,6 +128,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
     }
   }
 
+  /// Style of the keyword and location boxes.
   InputDecoration _searchInputDecoration({
     required String hint,
     required IconData icon,
@@ -158,7 +161,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        // Wrap the entire Column in a SingleChildScrollView so everything scrolls together
+        // The whole page scrolls as one
         child: SingleChildScrollView(
           child: Column(
             children: [
@@ -166,7 +169,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                 child: Column(
                   children: [
-                    // Hero Header
+                    // Header
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(24),
@@ -229,7 +232,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Search Inputs Card
+                    // Keyword and location boxes
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
@@ -344,8 +347,8 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
                     ),
                     const SizedBox(height: 14),
                     GridView.builder(
-                      shrinkWrap: true, // Important when inside SingleChildScrollView
-                      physics: const NeverScrollableScrollPhysics(), // Disables GridView's internal scroll
+                      shrinkWrap: true, // only as tall as its tiles (inside the scroll view)
+                      physics: const NeverScrollableScrollPhysics(), // the page scrolls, not the grid
                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 2,
                         childAspectRatio: 2.8,

@@ -44,16 +44,19 @@ class PostListView extends StatelessWidget {
 
   String get _me => controller.currentUserID;
 
+  /// Red snackbar when [message] is not null.
   void _showError(BuildContext context, String? message) {
     if (message == null) return;
     SnackBarHelper.showError(context, message, duration: const Duration(seconds: 3));
   }
 
+  /// Likes or unlikes [post].
   Future<void> _like(BuildContext context, FeedPostModel post) async {
     final error = await controller.toggleLike(post);
     if (context.mounted) _showError(context, error);
   }
 
+  /// Saves or unsaves [post] and says so.
   Future<void> _save(BuildContext context, FeedPostModel post) async {
     final error = await controller.toggleSave(post);
     if (!context.mounted) return;
@@ -69,11 +72,13 @@ class PostListView extends StatelessWidget {
     }
   }
 
+  /// Opens the comments, then shows the new comment count on the card.
   Future<void> _comments(BuildContext context, FeedPostModel post) async {
     final count = await showPostComments(context, post: post, currentUserID: _me);
     controller.setCommentCount(post.postID, count);
   }
 
+  /// Handles a choice from a post's ⋯ menu.
   Future<void> _onAction(BuildContext context, FeedPostModel post, PostAction action) async {
     switch (action) {
       case PostAction.edit:

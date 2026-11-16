@@ -39,6 +39,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
         : _controller.fetchInterview(widget.sessionID);
   }
 
+  /// Loads the interview again (Try Again).
   void _retry() => setState(() => _future = _controller.fetchInterview(widget.sessionID));
 
   // ---------------------------------------------------------------------
@@ -122,6 +123,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
     );
   }
 
+  /// Gradient header with the role and date.
   Widget _buildHeader(MockInterviewRecordModel? record) {
     final date = record?.completedAt ?? record?.createdAt;
     return Container(
@@ -170,6 +172,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
     );
   }
 
+  /// Overall score ring and the score for each part.
   Widget _buildScoreCard(MockInterviewRecordModel record) {
     final overall = record.overallScore ?? 0;
     final color = AppColors.forScore(overall);
@@ -251,6 +254,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
     );
   }
 
+  /// One labelled score bar.
   Widget _scoreBar(String label, int score, String hint) {
     final color = AppColors.forScore(score);
     return Padding(
@@ -284,6 +288,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
     );
   }
 
+  /// Speaking pace, filler words and pauses.
   Widget _buildSpeechCard(MockInterviewRecordModel record) {
     final speech = record.speech;
     num n(String key) => (speech[key] as num?) ?? 0;
@@ -377,6 +382,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
     );
   }
 
+  /// One number in the speaking delivery grid.
   Widget _metricTile(IconData icon, String value, String label, String hint) {
     return Container(
       padding: const EdgeInsets.all(14),
@@ -413,6 +419,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
     );
   }
 
+  /// The AI's summary, strengths and things to improve.
   Widget _buildSummaryCard(MockInterviewRecordModel record) {
     return SurfaceCard(
       children: [
@@ -429,6 +436,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
     );
   }
 
+  /// A titled bullet list (hidden when empty).
   Widget _bulletSection(String title, List<String> items, IconData icon, Color color) {
     if (items.isEmpty) return const SizedBox.shrink();
     return Padding(
@@ -458,6 +466,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
     );
   }
 
+  /// Every question with the user's answer and its feedback.
   Widget _buildQuestionsCard(MockInterviewRecordModel record) {
     return SurfaceCard(
       children: [
@@ -467,6 +476,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
     );
   }
 
+  /// One question: score, transcript and feedback (tap to expand).
   Widget _buildAnswerTile(MockInterviewAnswerModel a) {
     final avgScore = (((a.contentScore ?? 0) + (a.deliveryScore ?? 0)) / 2).round();
     final color = AppColors.forScore(avgScore);
@@ -565,6 +575,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
     );
   }
 
+  /// Small outlined label.
   Widget _chip(String label) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -578,6 +589,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
     );
   }
 
+  /// A bold title with a paragraph under it.
   Widget _detailBlock(String title, String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
@@ -592,6 +604,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
     );
   }
 
+  /// Opens the scorecard as a PDF.
   Widget _buildPdfButton(MockInterviewRecordModel record) {
     return SizedBox(
       width: double.infinity,
@@ -623,6 +636,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
     );
   }
 
+  /// Practise Again and Done buttons.
   Widget _buildBottomButtons() {
     return SafeArea(
       top: false,

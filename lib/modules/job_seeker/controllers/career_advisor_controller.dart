@@ -136,6 +136,7 @@ class CareerAdvisorController extends ChangeNotifier {
     }
   }
 
+  /// notifyListeners, unless the controller was already disposed.
   void _notify() {
     if (!_disposed) notifyListeners();
   }

@@ -36,6 +36,7 @@ class MyPostsSummary extends StatelessWidget {
     );
   }
 
+  /// One count tile; tapping it filters My Posts to that status.
   Widget _tile(MyPostsStatus status, String value, String label, IconData icon, Color color) {
     final selected = controller.statusFilter == status;
     return Expanded(

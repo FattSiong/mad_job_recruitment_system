@@ -11,6 +11,9 @@ class PostCommentModel {
   final String userID;
   final String content;
   final DateTime createdAt;
+
+  /// When the text was last changed (null = never edited). Set by the database.
+  final DateTime? updateAt;
   final ChatParticipant author;
 
   const PostCommentModel({
@@ -20,14 +23,19 @@ class PostCommentModel {
     required this.userID,
     required this.content,
     required this.createdAt,
+    this.updateAt,
     required this.author,
   });
+
+  /// The author changed the text after posting (shows "Edited").
+  bool get isEdited => updateAt != null;
 
   bool get isReply => parentCommentID != null && parentCommentID!.isNotEmpty;
 
   /// The top-level comment a reply to this comment should be stored under.
   String get threadID => isReply ? parentCommentID! : commentID;
 
+  /// True if [id] wrote this comment.
   bool isOwnedBy(String id) => userID == id;
 
   /// "@Aisyah" at the start of a reply, or null.
@@ -40,13 +48,17 @@ class PostCommentModel {
     return content.trimLeft().substring(m.length).trimLeft();
   }
 
-  PostCommentModel copyWith({String? content}) => PostCommentModel(
+  /// A copy with new text and/or edit time. [asTopLevel] drops the parent
+  /// (a reply whose top-level comment is gone).
+  PostCommentModel copyWith({String? content, DateTime? updateAt, bool asTopLevel = false}) =>
+      PostCommentModel(
         commentID: commentID,
         postID: postID,
-        parentCommentID: parentCommentID,
+        parentCommentID: asTopLevel ? null : parentCommentID,
         userID: userID,
         content: content ?? this.content,
         createdAt: createdAt,
+        updateAt: updateAt ?? this.updateAt,
         author: author,
       );
 
@@ -59,6 +71,7 @@ class PostCommentModel {
       userID: json['userID']?.toString() ?? '',
       content: json['content']?.toString() ?? '',
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '')?.toLocal() ?? DateTime.now(),
+      updateAt: DateTime.tryParse(json['updateAt']?.toString() ?? '')?.toLocal(),
       author: author,
     );
   }

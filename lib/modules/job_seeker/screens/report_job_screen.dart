@@ -5,6 +5,7 @@ import '../controllers/report_controller.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared_widgets/hero_icon_button.dart';
 
+/// Report a job post to the admins (reason + optional details).
 class ReportJobScreen extends StatefulWidget {
   final JobModel job;
 
@@ -15,8 +16,6 @@ class ReportJobScreen extends StatefulWidget {
 }
 
 class _ReportJobScreenState extends State<ReportJobScreen> {
-  // Theme Colors
-
   final ReportController _reportController = ReportController();
   final TextEditingController _detailsController = TextEditingController();
 
@@ -37,6 +36,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
     super.dispose();
   }
 
+  /// Checks a reason is chosen and sends the report.
   Future<void> _submitReport() async {
     if (_selectedCategory == null) {
       SnackBarHelper.showStyled(
@@ -97,13 +97,14 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
     }
   }
 
+  /// One selectable reason (radio style).
   Widget _buildRadioOption(String option) {
     final isSelected = _selectedCategory == option;
 
     return GestureDetector(
       onTap: () {
         setState(() => _selectedCategory = option);
-        FocusScope.of(context).unfocus(); // Hide keyboard if open
+        FocusScope.of(context).unfocus(); // hide the keyboard
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
@@ -155,7 +156,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
                       padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
                       child: Column(
                         children: [
-                          // Hero Header
+                          // Header
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(24),
@@ -236,7 +237,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
                           ),
                           const SizedBox(height: 16),
 
-                          // Report Options Card
+                          // Reasons
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(22),
@@ -271,7 +272,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
                                 const Divider(color: AppColors.border),
                                 const SizedBox(height: 16),
 
-                                // Details Text Field
+                                // Additional details
                                 const Text(
                                   'Additional details',
                                   style: TextStyle(
@@ -314,7 +315,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
               ),
             ),
 
-            // Sticky Bottom Bar
+            // Submit bar (stays at the bottom)
             Container(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               decoration: BoxDecoration(

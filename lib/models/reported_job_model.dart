@@ -1,3 +1,4 @@
+/// A seeker's report on a job post ("ReportedJob"), reviewed by the admins.
 class ReportedJobModel {
   final String? reportID;
   final String jobID;

@@ -134,13 +134,15 @@ class ProfileController {
           '${DateTime.now().millisecondsSinceEpoch}_${FilePickerHelper.storageSafeName(original)}';
       final filePath = '$userId/$fileName';
 
-      // 1. Upload to Supabase Storage (Ensure you have a bucket named 'resumes')
+      // 1. Upload the file to the user's folder in the 'resumes' bucket
       await _supabase.storage.from(_resumesBucket).upload(filePath, file);
 
-      // 2. Get the public URL
+      // 2. Make the stored link. The bucket is private, so this link only
+      //    names the file: the app opens it through a signed URL
+      //    (StorageUrlHelper), and only people allowed to see it can.
       final newResumeUrl = _supabase.storage.from(_resumesBucket).getPublicUrl(filePath);
 
-      // 3. Update the JobSeeker table with the new URL
+      // 3. Save the link on the profile
       await _supabase
           .from(TableConstants.jobSeeker)
           .update({'resumeURL': newResumeUrl})
@@ -207,6 +209,7 @@ class ProfileController {
     }
   }
 
+  /// Uploads a profile photo and returns its public link, or null if it failed.
   Future<String?> uploadProfilePicture(File file) async {
     try {
       final userId = SessionHelper.requireUserId();
@@ -293,6 +296,7 @@ class ProfileController {
     }
   }
 
+  /// Saves changes to one of the user's work experience entries.
   Future<bool> updateWorkExperience(WorkExperienceModel experience) async {
     if (experience.experienceID == null) return false;
     try {
@@ -309,6 +313,7 @@ class ProfileController {
     }
   }
 
+  /// Saves changes to one of the user's education entries.
   Future<bool> updateEducation(EducationModel education) async {
     if (education.educationID == null) return false;
     try {
@@ -325,6 +330,7 @@ class ProfileController {
     }
   }
 
+  /// Adds a work experience entry to the user's profile.
   Future<bool> addWorkExperience(WorkExperienceModel experience) async {
     try {
       final data = experience.toJson();
@@ -337,6 +343,7 @@ class ProfileController {
     }
   }
 
+  /// Deletes one of the user's work experience entries.
   Future<bool> deleteWorkExperience(String experienceId) async {
     try {
       await _supabase
@@ -351,6 +358,7 @@ class ProfileController {
     }
   }
 
+  /// Adds an education entry to the user's profile.
   Future<bool> addEducation(EducationModel education) async {
     try {
       final data = education.toJson();
@@ -363,6 +371,7 @@ class ProfileController {
     }
   }
 
+  /// Deletes one of the user's education entries.
   Future<bool> deleteEducation(String educationId) async {
     try {
       await _supabase

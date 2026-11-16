@@ -57,23 +57,27 @@ class _CommunityFilterBarState extends State<CommunityFilterBar> {
     _debounce = Timer(const Duration(milliseconds: 400), () => _applySearch(value));
   }
 
+  /// Searches for [value] now (cancels the typing delay).
   void _applySearch(String value) {
     _debounce?.cancel();
     _c.setFilter(_c.filter.copyWith(search: value));
   }
 
+  /// Empties the search box and shows all posts again.
   void _clearSearch() {
     _search.clear();
     _applySearch('');
     setState(() {});
   }
 
+  /// Opens the filter sheet and applies what the user chose.
   Future<void> _openFilters() async {
     FocusScope.of(context).unfocus();
     final result = await showCommunityFilterSheet(context, _c.filter);
     if (result != null) _c.setFilter(result);
   }
 
+  /// Clears the search, topic and every filter.
   void _clearAll() {
     _debounce?.cancel();
     _search.clear();
@@ -109,6 +113,7 @@ class _CommunityFilterBarState extends State<CommunityFilterBar> {
     );
   }
 
+  /// "Search posts or people" box.
   Widget _buildSearchField() {
     return TextField(
       controller: _search,
@@ -139,6 +144,7 @@ class _CommunityFilterBarState extends State<CommunityFilterBar> {
     );
   }
 
+  /// Filter button with a badge showing how many filters are on.
   Widget _buildFilterButton(int count) {
     return Material(
       color: count > 0 ? AppColors.primary : AppColors.surface,
@@ -159,6 +165,7 @@ class _CommunityFilterBarState extends State<CommunityFilterBar> {
     );
   }
 
+  /// Horizontal row of topic chips ("All topics" first).
   Widget _buildTopicRow(PostTopic? selected) {
     return SizedBox(
       height: 40,

@@ -129,6 +129,7 @@ class ResumeReviewController {
     }
   }
 
+  /// Deletes one of the user's past reviews. Returns false if it failed.
   Future<bool> deleteReview(String reviewID) async {
     try {
       await _supabase

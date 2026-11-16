@@ -26,6 +26,7 @@ class _ResumeSkillsStepState extends State<ResumeSkillsStep> {
     super.dispose();
   }
 
+  /// Adds the typed skill, or shows why it can't be added.
   void _add() {
     final error = widget.controller.addSkill(_input.text, _level);
     setState(() => _error = error);
@@ -138,6 +139,7 @@ class _ResumeSkillsStepState extends State<ResumeSkillsStep> {
     );
   }
 
+  /// Sheet to choose a new level for the skill at [index].
   Future<void> _changeLevel(int index) async {
     final choice = await showModalBottomSheet<String>(
       context: context,

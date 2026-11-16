@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,9 @@ import '../../../../core/utils/data_load_exception.dart';
 import '../../../../core/utils/storage_url_helper.dart';
 import '../../../../models/job_applicant_model.dart';
 import '../../../../models/job_model.dart';
+import '../../../../core/utils/snackbar_helper.dart';
+import '../../../../services/notification_service.dart';
+import '../../../../shared_widgets/confirm_dialog.dart';
 import '../../controllers/applied_jobs_controller.dart';
 import '../../screens/job_details_screen.dart';
 import '../../screens/unavailable_job_notice_screen.dart';
@@ -30,6 +34,7 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
   bool _isLoading = true;
   bool _isDownloadingPdf = false;
   String? _loadError;
+  String? _withdrawingId; // application being withdrawn
 
   @override
   void initState() {
@@ -45,6 +50,7 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
     super.dispose();
   }
 
+  /// Loads the user's applications.
   Future<void> _loadAppliedJobs() async {
     try {
       final jobs = await _appliedController.fetchAppliedJobs();
@@ -65,11 +71,38 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
     }
   }
 
+  /// Try Again after loading failed.
   void _retry() {
     setState(() => _isLoading = true);
     _loadAppliedJobs();
   }
 
+  /// Withdraws a pending application after asking.
+  Future<void> _withdraw(JobApplicantModel application, String jobTitle) async {
+    final id = application.applicantID;
+    if (id == null || _withdrawingId != null) return;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Withdraw application?',
+      message: 'Your application for $jobTitle will be withdrawn. The employer will no '
+          'longer see it, and you won\'t be able to apply for this job again.',
+      confirmLabel: 'Withdraw',
+    );
+    if (!confirmed || !mounted) return;
+
+    setState(() => _withdrawingId = id);
+    try {
+      await _appliedController.withdrawApplication(id);
+      unawaited(NotificationService.refreshUnreadCount()); // its notifications are gone
+      if (mounted) SnackBarHelper.showSuccess(context, 'Application withdrawn.');
+    } on DataLoadException catch (e) {
+      if (mounted) SnackBarHelper.showError(context, e.message);
+    } finally {
+      if (mounted) setState(() => _withdrawingId = null);
+    }
+  }
+
+  /// The badge colour for an application status.
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'pending':
@@ -90,11 +123,14 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
         return AppColors.statusInactive;
       case 'deleted':
         return AppColors.textMuted;
+      case 'withdrawn':
+        return AppColors.statusInactive;
       default:
         return AppColors.textMuted;
     }
   }
 
+  /// The badge text for a status ("OFFER RECEIVED", "PENDING", ...).
   String _formatStatusBadgeLabel(String status) {
     switch (status.toLowerCase()) {
       case 'offered':
@@ -108,6 +144,7 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
     }
   }
 
+  /// Downloads the offer letter PDF and opens it.
   Future<void> _downloadAndOpenOfferPdf(String url) async {
     if (_isDownloadingPdf) return;
     setState(() => _isDownloadingPdf = true);
@@ -129,10 +166,15 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
       final savePath = '${dir.path}/$fileName';
       final file = File(savePath);
 
-      if (!await file.exists()) {
+      if (!await _isSavedPdf(file)) {
         final signedUrl = await StorageUrlHelper.resolve(url);
-        final response = await http.get(Uri.parse(signedUrl));
-        await file.writeAsBytes(response.bodyBytes);
+        final response =
+            await http.get(Uri.parse(signedUrl)).timeout(const Duration(seconds: 30));
+        // Never save an error page as the PDF: it would be reopened every time
+        if (response.statusCode != 200) {
+          throw HttpException('HTTP ${response.statusCode}');
+        }
+        await file.writeAsBytes(response.bodyBytes, flush: true);
       }
 
       final result = await OpenFilex.open(savePath);
@@ -162,6 +204,19 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
     }
   }
 
+  /// True if [file] was downloaded before and really is a PDF (starts with
+  /// "%PDF"). A broken earlier download is fetched again.
+  static Future<bool> _isSavedPdf(File file) async {
+    try {
+      if (!await file.exists()) return false;
+      final head = await file.openRead(0, 4).first;
+      return String.fromCharCodes(head) == '%PDF';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Asks why the offer is declined. Returns the reason, or null if cancelled.
   Future<String?> _promptDeclineReasonDialog() async {
     final controller = TextEditingController();
     return showDialog<String>(
@@ -262,6 +317,7 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
     );
   }
 
+  /// Shows the job offer with Accept / Decline.
   Future<void> _showOfferLetterModal({
     required JobApplicantModel application,
     required Map<String, dynamic> rawData,
@@ -553,11 +609,13 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
                                           );
                                         }
                                       } on DataLoadException catch (e) {
+                                        if (!sheetContext.mounted) return; // sheet closed meanwhile
                                         setSheetState(() {
                                           isSubmitting = false;
                                           errorText = e.message;
                                         });
                                       } catch (_) {
+                                        if (!sheetContext.mounted) return; // sheet closed meanwhile
                                         setSheetState(() {
                                           isSubmitting = false;
                                           errorText =
@@ -615,11 +673,13 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
                                           );
                                         }
                                       } on DataLoadException catch (e) {
+                                        if (!sheetContext.mounted) return; // sheet closed meanwhile
                                         setSheetState(() {
                                           isSubmitting = false;
                                           errorText = e.message;
                                         });
                                       } catch (_) {
+                                        if (!sheetContext.mounted) return; // sheet closed meanwhile
                                         setSheetState(() {
                                           isSubmitting = false;
                                           errorText =
@@ -927,6 +987,39 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
                         ],
                       ),
                     ),
+                    if (AppliedJobsController.canWithdraw(status) &&
+                        application.applicantID != null) ...[
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _withdrawingId == null
+                              ? () => _withdraw(application, displayTitle)
+                              : null,
+                          icon: _withdrawingId == application.applicantID
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.undo_rounded, size: 18),
+                          label: const Text(
+                            'Withdraw Application',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.errorRed,
+                            side: BorderSide(
+                              color: AppColors.errorRed.withValues(alpha: 0.35),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                     if (!isJobDeleted && hasOfferDetails) ...[
                       const SizedBox(height: 12),
                       SizedBox(

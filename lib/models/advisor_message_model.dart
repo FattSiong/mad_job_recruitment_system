@@ -1,3 +1,4 @@
+/// One message in an AI Career Advisor conversation ("AdvisorMessage").
 class AdvisorMessageModel {
   final String messageID;
   final String conversationID;
