@@ -158,35 +158,64 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
   }
 
   Future<void> _loadVerifiedCompanies() async {
-    if (widget.preselectedCompany != null) {
+    final currentUser = Supabase.instance.client.auth.currentUser;
+    if (currentUser == null) {
+      if (mounted) {
+        setState(() => _isLoadingCompanies = false);
+      }
+      return;
+    }
+
+    final allCompanies =
+        await _employerService.getCompanies(currentUser.id, 'employer');
+    final verifiedCompanies = allCompanies
+        .where((company) => company.isApprovedForJobPosting)
+        .toList();
+
+    if (!mounted) return;
+
+    final preselected = widget.preselectedCompany;
+    if (preselected != null) {
+      CompanyModel? verifiedMatch;
+      for (final company in verifiedCompanies) {
+        if (company.companyID != null &&
+            company.companyID == preselected.companyID) {
+          verifiedMatch = company;
+          break;
+        }
+      }
+
+      if (verifiedMatch != null) {
+        setState(() {
+          _myCompanies = [verifiedMatch!];
+          _selectedCompanyID = verifiedMatch.companyID;
+          _isLoadingCompanies = false;
+        });
+        return;
+      }
+
+      // Preselected company is not verified (pending or rejected): do not allow it.
       setState(() {
-        _myCompanies = [widget.preselectedCompany!];
-        _selectedCompanyID = widget.preselectedCompany!.companyID;
+        _myCompanies = verifiedCompanies;
+        if (verifiedCompanies.length == 1) {
+          _selectedCompanyID = verifiedCompanies.first.companyID;
+        }
+        if (verifiedCompanies.isNotEmpty) {
+          _companyError =
+              '"${preselected.name}" is not verified yet. Please select a verified company.';
+        }
         _isLoadingCompanies = false;
       });
       return;
     }
 
-    final currentUser = Supabase.instance.client.auth.currentUser;
-    if (currentUser == null) return;
-
-    final allCompanies =
-    await _employerService.getCompanies(currentUser.id, 'employer');
-
-    if (mounted) {
-      setState(() {
-        _myCompanies = allCompanies.where((company) {
-          final status = company.verificationStatus.toLowerCase();
-          return company.isVerified ||
-              status == 'verified' ||
-              status == 'approved';
-        }).toList();
-        if (_myCompanies.length == 1) {
-          _selectedCompanyID = _myCompanies.first.companyID;
-        }
-        _isLoadingCompanies = false;
-      });
-    }
+    setState(() {
+      _myCompanies = verifiedCompanies;
+      if (_myCompanies.length == 1) {
+        _selectedCompanyID = _myCompanies.first.companyID;
+      }
+      _isLoadingCompanies = false;
+    });
   }
 
   Future<void> _suggestSalary() async {
