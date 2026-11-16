@@ -29,10 +29,11 @@ Future<void> main() async {
   // Password reset link (myapp://reset-password) -> "Set a new password" screen.
   PasswordRecoveryService.initialize();
 
-  // Initialize push notifications and incoming call notification handling.
+  // In-app notification bell (live updates for the logged-in user).
   await NotificationService.initialize();
 
-  // Firebase Cloud Messaging (chat notifications).
+  // Firebase Cloud Messaging: chat, calls, recruitment updates and the
+  // Premium plan reminder.
   await PushService.initialize();
 
   runApp(const RecruitmentApp());

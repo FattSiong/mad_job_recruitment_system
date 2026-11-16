@@ -462,6 +462,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           color: Color(0xFF64748B),
           stageLabel: 'APPLICATION UPDATE',
         );
+      case 'subscription_expiring':
+        return const _NotificationTypeStyle(
+          icon: Icons.workspace_premium_rounded,
+          color: Color(0xFFD97706),
+          stageLabel: 'PREMIUM PLAN',
+        );
       default:
         return const _NotificationTypeStyle(
           icon: Icons.notifications_active_rounded,

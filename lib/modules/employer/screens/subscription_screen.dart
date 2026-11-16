@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:http/http.dart' as http;
-import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/table_constants.dart';
@@ -46,7 +45,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
   Future<void> _initializeScreen() async {
     await _loadCompanies();
-    await _setupNotifications();
   }
 
   Future<void> _loadCompanies() async {
@@ -137,32 +135,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       _activePlanType = 'annually';
     } else {
       _activePlanType = 'free';
-    }
-  }
-
-  Future<void> _setupNotifications() async {
-    final hasPermission = await OneSignal.Notifications.requestPermission(true);
-    if (!hasPermission) return;
-
-    await Future.delayed(const Duration(seconds: 2));
-
-    final deviceToken = OneSignal.User.pushSubscription.id;
-    final companyId = _selectedCompanyId;
-
-    if (deviceToken == null ||
-        deviceToken.isEmpty ||
-        companyId == null ||
-        companyId.isEmpty) {
-      return;
-    }
-
-    try {
-      await supabase
-          .from(TableConstants.company)
-          .update({'notification_token': deviceToken})
-          .eq('companyID', companyId);
-    } catch (e) {
-      debugPrint('Failed to save OneSignal token: $e');
     }
   }
 
@@ -566,7 +538,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   ),
                 )
                 .toList(),
-            onChanged: (value) async {
+            onChanged: (value) {
               if (value == null) return;
 
               final company = _companies.firstWhere(
@@ -578,8 +550,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 _selectedCompany = company;
                 _syncActivePlanFromSelectedCompany();
               });
-
-              await _setupNotifications();
             },
           ),
         ],

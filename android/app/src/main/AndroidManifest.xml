@@ -17,9 +17,6 @@
 
         <meta-data android:name="com.google.android.geo.API_KEY"
             android:value="${mapsApiKey}"/>
-        <meta-data
-            android:name="com.onesignal.NotificationServiceExtension"
-            android:value="com.example.mad_job_recruitment_system.NotificationServiceExtension" />
 
         <activity
             android:name=".MainActivity"
