@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -13,6 +15,13 @@ class MessageBubble extends StatelessWidget {
   final MessageModel message;
   final bool isMine;
   final bool isPending;
+
+  /// Could not be sent: shows "Not sent · Tap to retry" and tapping calls [onRetry].
+  final bool isFailed;
+  final VoidCallback? onRetry;
+
+  /// The photo / file / voice note on the phone while it isn't uploaded yet.
+  final File? localFile;
   final VoidCallback? onLongPress;
 
   const MessageBubble({
@@ -20,14 +29,23 @@ class MessageBubble extends StatelessWidget {
     required this.message,
     required this.isMine,
     this.isPending = false,
+    this.isFailed = false,
+    this.onRetry,
+    this.localFile,
     this.onLongPress,
   });
 
   bool get _hasMedia => (message.mediaURL ?? '').isNotEmpty;
 
+  /// A photo / file / voice note that is still on the phone (sending or not sent).
+  bool get _isLocalMedia =>
+      !_hasMedia && !message.isDeleted && const ['image', 'file', 'audio'].contains(message.mediaType);
+
   @override
   Widget build(BuildContext context) {
-    final isImage = !message.isDeleted && message.mediaType == 'image' && _hasMedia;
+    final isImage = !message.isDeleted &&
+        message.mediaType == 'image' &&
+        (_hasMedia || localFile != null);
 
     final background = message.isDeleted
         ? AppColors.border
@@ -42,6 +60,7 @@ class MessageBubble extends StatelessWidget {
         crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
           GestureDetector(
+            onTap: isFailed ? onRetry : null,
             onLongPress: onLongPress,
             child: ConstrainedBox(
               constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
@@ -66,25 +85,48 @@ class MessageBubble extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 3),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                ChatFormatters.bubbleTime(message.sentAt),
-                style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
-              ),
-              if (isMine && !message.isDeleted) ...[
-                const SizedBox(width: 4),
-                Icon(
-                  isPending ? Icons.schedule_rounded : Icons.done_all_rounded,
-                  size: 15,
-                  color: isPending
-                      ? AppColors.textMuted
-                      : (message.isRead ? AppColors.statusScheduled : AppColors.textMuted),
+          if (isFailed)
+            GestureDetector(
+              onTap: onRetry,
+              child: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 2),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.error_outline_rounded, size: 15, color: AppColors.errorRed),
+                    SizedBox(width: 4),
+                    Text(
+                      'Not sent · Tap to retry',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.errorRed,
+                      ),
+                    ),
+                  ],
                 ),
+              ),
+            )
+          else
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  ChatFormatters.bubbleTime(message.sentAt),
+                  style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                ),
+                if (isMine && !message.isDeleted) ...[
+                  const SizedBox(width: 4),
+                  Icon(
+                    isPending ? Icons.schedule_rounded : Icons.done_all_rounded,
+                    size: 15,
+                    color: isPending
+                        ? AppColors.textMuted
+                        : (message.isRead ? AppColors.statusScheduled : AppColors.textMuted),
+                  ),
+                ],
               ],
-            ],
-          ),
+            ),
         ],
       ),
     ),
@@ -110,6 +152,8 @@ class MessageBubble extends StatelessWidget {
         ],
       );
     }
+
+    if (_isLocalMedia) return _buildLocalMedia(textColor);
 
     if (_hasMedia && message.mediaType == 'image') {
       final url = message.mediaURL!;
@@ -215,6 +259,63 @@ class MessageBubble extends StatelessWidget {
     return Text(
       message.content,
       style: TextStyle(color: textColor, fontSize: 15, height: 1.4),
+    );
+  }
+
+  /// A photo, file or voice note that isn't uploaded yet: shown from the
+  /// phone (photo) or as a simple card (file, voice note).
+  Widget _buildLocalMedia(Color textColor) {
+    final file = localFile;
+    if (message.mediaType == 'image' && file != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Image.file(
+          file,
+          width: 220,
+          height: 220,
+          fit: BoxFit.cover,
+          cacheWidth: 660,
+          errorBuilder: (context, error, stack) => Container(
+            width: 220,
+            height: 220,
+            color: AppColors.surfaceAlt,
+            alignment: Alignment.center,
+            child: const Icon(Icons.image_outlined, color: AppColors.textMuted),
+          ),
+        ),
+      );
+    }
+
+    final isVoice = message.mediaType == 'audio';
+    final length = isVoice ? VoiceMessagePlayer.lengthFromContent(message.content) : null;
+    final label = isVoice
+        ? 'Voice message${length == null ? '' : ' · ${ChatFormatters.duration(length)}'}'
+        : message.content;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: isMine ? Colors.white.withValues(alpha: 0.18) : AppColors.primarySoft,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(
+            isVoice ? Icons.mic_rounded : Icons.insert_drive_file_rounded,
+            color: isMine ? Colors.white : AppColors.primary,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: textColor, fontWeight: FontWeight.w700),
+          ),
+        ),
+      ],
     );
   }
 }

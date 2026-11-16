@@ -30,7 +30,7 @@ class ChatRoomScreen extends StatefulWidget {
   State<ChatRoomScreen> createState() => _ChatRoomScreenState();
 }
 
-class _ChatRoomScreenState extends State<ChatRoomScreen> {
+class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObserver {
   late final ChatRoomController _controller =
       ChatRoomController(roomID: widget.roomID, otherUser: widget.otherUser);
   final VoiceRecorderController _recorder = VoiceRecorderController();
@@ -41,12 +41,20 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _controller.start();
     _scrollController.addListener(_onScroll);
   }
 
+  /// Back in the app (maybe with a connection again): resend "Not sent" messages.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _controller.resendFailed();
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _scrollController.dispose();
     _recorder.dispose();
     _controller.dispose();
@@ -74,7 +82,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     SnackBarHelper.showError(context, message);
   }
 
-  /// Sends the typed text. On failure the text is put back so nothing is lost.
+  /// Sends the typed text. Without a connection it stays in the chat as
+  /// "Not sent"; if it is refused (e.g. blocked) the text is put back.
   Future<void> _sendText() async {
     final text = _textController.text;
     if (text.trim().isEmpty) return;
@@ -169,9 +178,83 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     if (error != null) _showError(error);
   }
 
+  /// "Not sent" message tapped: try to send it again now.
+  Future<void> _retry(MessageModel message) async {
+    final error = await _controller.retry(message);
+    if (error != null) _showError(error);
+  }
+
+  /// Long-press menu on a "Not sent" message: retry, copy (text) or discard.
+  Future<void> _showUnsentActions(MessageModel message) async {
+    final isText = (message.mediaType ?? 'text') == 'text';
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.refresh_rounded, color: AppColors.primary),
+              title: const Text('Try again'),
+              onTap: () => Navigator.pop(sheetContext, 'retry'),
+            ),
+            if (isText)
+              ListTile(
+                leading: const Icon(Icons.copy_rounded, color: AppColors.primary),
+                title: const Text('Copy text'),
+                onTap: () => Navigator.pop(sheetContext, 'copy'),
+              ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline_rounded, color: AppColors.errorRed),
+              title: const Text('Don\'t send', style: TextStyle(color: AppColors.errorRed)),
+              onTap: () => Navigator.pop(sheetContext, 'discard'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    switch (choice) {
+      case 'retry':
+        await _retry(message);
+      case 'copy':
+        await Clipboard.setData(ClipboardData(text: message.content));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied')));
+        }
+      case 'discard':
+        await _controller.discard(message);
+    }
+  }
+
+  /// Back pressed: if some messages are still "Not sent", ask before leaving
+  /// (they are only kept while the chat is open).
+  Future<void> _confirmLeave() async {
+    final unsent = _controller.unsentCount;
+    if (unsent == 0) {
+      Navigator.pop(context);
+      return;
+    }
+    final leave = await showConfirmDialog(
+      context,
+      title: 'Leave this chat?',
+      message: unsent == 1
+          ? '1 message hasn\'t been sent yet. It will be discarded if you leave.'
+          : '$unsent messages haven\'t been sent yet. They will be discarded if you leave.',
+      confirmLabel: 'Leave',
+    );
+    if (leave && mounted) Navigator.pop(context);
+  }
+
   /// Long-press menu on a message: copy (text) and delete (own messages).
   Future<void> _showMessageActions(MessageModel message) async {
     if (message.isDeleted) return;
+    if (_controller.isFailed(message)) return _showUnsentActions(message);
     final isText = (message.mediaType ?? 'text') == 'text';
     final canDelete = _controller.isMine(message) && !_controller.isPending(message);
     if (!isText && !canDelete) return;
@@ -293,124 +376,130 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
+    return PopScope(
+      canPop: false, // [_confirmLeave] decides (asks if messages are unsent)
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _confirmLeave();
+      },
+      child: Scaffold(
         backgroundColor: AppColors.background,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        titleSpacing: 0,
-        title: Row(
-          children: [
-            UserAvatar(user: widget.otherUser, size: 42),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.otherUser.displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textDark,
+        appBar: AppBar(
+          backgroundColor: AppColors.background,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          titleSpacing: 0,
+          title: Row(
+            children: [
+              UserAvatar(user: widget.otherUser, size: 42),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.otherUser.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textDark,
+                      ),
                     ),
-                  ),
-                  Text(
-                    widget.otherUser.roleLabel,
-                    style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
-                  ),
-                ],
+                    Text(
+                      widget.otherUser.roleLabel,
+                      style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                    ),
+                  ],
+                ),
               ),
+            ],
+          ),
+          actions: [
+            ListenableBuilder(
+              listenable: _controller,
+              builder: (context, _) => IconButton(
+                tooltip: _controller.isBlocked ? 'Calls are off in a blocked chat' : 'Voice call',
+                onPressed: _isStartingCall || _controller.isBlocked ? null : _startCall,
+                icon: _isStartingCall
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        Icons.call_rounded,
+                        color: _controller.isBlocked ? AppColors.textMuted : AppColors.teal,
+                      ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Shared photos & files',
+              onPressed: () => showSharedAttachmentsSheet(
+                context,
+                load: _controller.fetchSharedAttachments,
+              ),
+              icon: const Icon(Icons.perm_media_outlined, color: AppColors.primary),
+            ),
+            ListenableBuilder(
+              listenable: _controller,
+              builder: (context, _) {
+                final blockedByMe = _controller.blockState == ChatBlockState.blockedByMe;
+                return PopupMenuButton<String>(
+                  tooltip: 'More',
+                  enabled: !_controller.isChangingBlock,
+                  icon: const Icon(Icons.more_vert_rounded, color: AppColors.textDark),
+                  onSelected: (_) => _toggleBlock(),
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      value: 'block',
+                      child: Row(
+                        children: [
+                          Icon(
+                            blockedByMe ? Icons.lock_open_rounded : Icons.block_rounded,
+                            color: blockedByMe ? AppColors.primary : AppColors.errorRed,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            blockedByMe ? 'Unblock user' : 'Block user',
+                            style: TextStyle(color: blockedByMe ? AppColors.textDark : AppColors.errorRed),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ],
         ),
-        actions: [
-          ListenableBuilder(
-            listenable: _controller,
-            builder: (context, _) => IconButton(
-              tooltip: _controller.isBlocked ? 'Calls are off in a blocked chat' : 'Voice call',
-              onPressed: _isStartingCall || _controller.isBlocked ? null : _startCall,
-              icon: _isStartingCall
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Icon(
-                      Icons.call_rounded,
-                      color: _controller.isBlocked ? AppColors.textMuted : AppColors.teal,
+        body: Column(
+          children: [
+            Expanded(
+              child: ListenableBuilder(
+                listenable: _controller,
+                builder: (context, _) => _buildMessages(),
+              ),
+            ),
+            ListenableBuilder(
+              listenable: Listenable.merge([_controller, _recorder]),
+              builder: (context, _) => _controller.isBlocked
+                  ? _buildBlockedBar()
+                  : ChatComposer(
+                      textController: _textController,
+                      isUploading: _controller.isUploading,
+                      isRecording: _recorder.isRecording,
+                      recordingElapsed: _recorder.elapsed,
+                      onSend: _sendText,
+                      onAttach: _showAttachOptions,
+                      onRecordStart: _startRecording,
+                      onRecordEnd: _stopRecording,
+                      onRecordCancel: _recorder.cancel,
                     ),
             ),
-          ),
-          IconButton(
-            tooltip: 'Shared photos & files',
-            onPressed: () => showSharedAttachmentsSheet(
-              context,
-              load: _controller.fetchSharedAttachments,
-            ),
-            icon: const Icon(Icons.perm_media_outlined, color: AppColors.primary),
-          ),
-          ListenableBuilder(
-            listenable: _controller,
-            builder: (context, _) {
-              final blockedByMe = _controller.blockState == ChatBlockState.blockedByMe;
-              return PopupMenuButton<String>(
-                tooltip: 'More',
-                enabled: !_controller.isChangingBlock,
-                icon: const Icon(Icons.more_vert_rounded, color: AppColors.textDark),
-                onSelected: (_) => _toggleBlock(),
-                itemBuilder: (_) => [
-                  PopupMenuItem(
-                    value: 'block',
-                    child: Row(
-                      children: [
-                        Icon(
-                          blockedByMe ? Icons.lock_open_rounded : Icons.block_rounded,
-                          color: blockedByMe ? AppColors.primary : AppColors.errorRed,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          blockedByMe ? 'Unblock user' : 'Block user',
-                          style: TextStyle(color: blockedByMe ? AppColors.textDark : AppColors.errorRed),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListenableBuilder(
-              listenable: _controller,
-              builder: (context, _) => _buildMessages(),
-            ),
-          ),
-          ListenableBuilder(
-            listenable: Listenable.merge([_controller, _recorder]),
-            builder: (context, _) => _controller.isBlocked
-                ? _buildBlockedBar()
-                : ChatComposer(
-                    textController: _textController,
-                    isUploading: _controller.isUploading,
-                    isRecording: _recorder.isRecording,
-                    recordingElapsed: _recorder.elapsed,
-                    onSend: _sendText,
-                    onAttach: _showAttachOptions,
-                    onRecordStart: _startRecording,
-                    onRecordEnd: _stopRecording,
-                    onRecordCancel: _recorder.cancel,
-                  ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -500,6 +589,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               message: message,
               isMine: _controller.isMine(message),
               isPending: _controller.isPending(message),
+              isFailed: _controller.isFailed(message),
+              onRetry: () => _retry(message),
+              localFile: _controller.localFileOf(message),
               onLongPress: () => _showMessageActions(message),
             ),
           ],
