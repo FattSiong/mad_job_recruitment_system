@@ -4,7 +4,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../models/post_filter.dart';
 import '../controllers/post_list_controller.dart';
 import '../widgets/community_filter_bar.dart';
-import '../widgets/community_state_card.dart';
+import '../../../shared_widgets/state_message_card.dart';
 import '../widgets/create_post_prompt.dart';
 import '../widgets/my_posts_summary.dart';
 import '../widgets/post_list_view.dart';
@@ -149,12 +149,12 @@ class _CommunityHubScreenState extends State<CommunityHubScreen> {
                             onPostsChanged: _mine.load,
                             padding: const EdgeInsets.fromLTRB(20, 8, 20, 96),
                             header: [CreatePostPrompt(onTap: _createPost)],
-                            emptyState: const CommunityStateCard(
+                            emptyState: const StateMessageCard(
                               icon: Icons.forum_outlined,
                               title: 'No posts yet',
                               message: 'Be the first to start a conversation in the community.',
                             ),
-                            filteredEmptyState: CommunityStateCard(
+                            filteredEmptyState: StateMessageCard(
                               icon: Icons.search_off_rounded,
                               title: 'No matching posts',
                               message: 'Try another search or topic, or clear the filters.',
@@ -173,7 +173,7 @@ class _CommunityHubScreenState extends State<CommunityHubScreen> {
                       onPostsChanged: _feed.load,
                       padding: const EdgeInsets.fromLTRB(20, 8, 20, 96),
                       header: [MyPostsSummary(controller: _mine)],
-                      filteredEmptyState: CommunityStateCard(
+                      filteredEmptyState: StateMessageCard(
                         icon: Icons.inbox_outlined,
                         title: 'Nothing here',
                         message: 'None of your posts match this view.',
@@ -182,7 +182,7 @@ class _CommunityHubScreenState extends State<CommunityHubScreen> {
                           child: const Text('Show all my posts'),
                         ),
                       ),
-                      emptyState: CommunityStateCard(
+                      emptyState: StateMessageCard(
                         icon: Icons.edit_note_rounded,
                         title: 'You haven\'t posted yet',
                         message: 'Your posts will appear here so you can edit or delete them.',

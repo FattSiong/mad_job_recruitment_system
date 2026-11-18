@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/job_filter_options.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_button_styles.dart';
+import '../../../core/theme/app_input_decoration.dart';
 
 export '../../../core/constants/job_filter_options.dart';
 
@@ -131,21 +133,10 @@ Widget _sheetFrame(BuildContext context, {required String title, String? subtitl
 }
 
 /// Style of the filled Apply button.
-ButtonStyle _applyButtonStyle() => ElevatedButton.styleFrom(
-      backgroundColor: AppColors.primary,
-      foregroundColor: Colors.white,
-      elevation: 0,
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-    );
+ButtonStyle _applyButtonStyle() => AppButtonStyles.filled();
 
 /// Style of the outlined Clear button.
-ButtonStyle _clearButtonStyle() => OutlinedButton.styleFrom(
-      foregroundColor: AppColors.textDark,
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      side: const BorderSide(color: AppColors.border),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-    );
+ButtonStyle _clearButtonStyle() => AppButtonStyles.neutral();
 
 /// Content of the date posted / job type / salary sheet.
 class _JobFilterSheet extends StatefulWidget {
@@ -240,33 +231,14 @@ class _JobFilterSheetState extends State<_JobFilterSheet> {
               if (_salaryError != null) setState(() => _salaryError = null);
             },
             onSubmitted: (_) => _applyTypedSalary(),
-            decoration: InputDecoration(
-              hintText: 'e.g. 3500',
-              errorText: _salaryError,
-              prefixIcon: const Padding(
+            decoration: filledInputDecoration(hint: 'e.g. 3500', errorText: _salaryError, prefixIcon: const Padding(
                 padding: EdgeInsetsDirectional.only(start: 16, end: 8),
                 child: Align(
                   widthFactor: 1,
                   heightFactor: 1,
                   child: Text('RM', style: TextStyle(color: AppColors.textMuted)),
                 ),
-              ),
-              prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
-              filled: true,
-              fillColor: AppColors.surfaceAlt,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(color: AppColors.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(color: AppColors.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-              ),
-            ),
+              ), prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0)),
           ),
           const SizedBox(height: 14),
           Row(

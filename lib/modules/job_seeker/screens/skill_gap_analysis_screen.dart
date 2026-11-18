@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/data_load_exception.dart';
@@ -15,6 +14,7 @@ import '../../../shared_widgets/confirm_dialog.dart';
 import '../../../shared_widgets/surface_card.dart';
 import '../../../shared_widgets/gradient_page_header.dart';
 import '../widgets/career_tools/career_tool_widgets.dart';
+import '../../../core/utils/app_date_format.dart';
 
 /// Use Case 4.60: choose a target role and run the skill gap analysis.
 class SkillGapAnalysisScreen extends StatefulWidget {
@@ -371,7 +371,7 @@ class _SkillGapAnalysisScreenState extends State<SkillGapAnalysisScreen> {
             scoreColor: AppColors.forScore(h.matchScore),
             scoreFontSize: 13,
             title: h.targetJobRole,
-            subtitle: '${DateFormat('d MMM yyyy').format(h.createdAt)} · '
+            subtitle: '${AppDateFormat.day.format(h.createdAt)} · '
                 '${h.missing.length} skill gap${h.missing.length == 1 ? '' : 's'}',
             onTap: () => Navigator.push(
               context,

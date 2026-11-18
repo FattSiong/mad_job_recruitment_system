@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../controllers/post_list_controller.dart';
-import '../widgets/community_state_card.dart';
+import '../../../shared_widgets/state_message_card.dart';
 import '../widgets/post_list_view.dart';
 
 /// Posts the current user bookmarked.
@@ -46,7 +46,7 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
         top: false,
         child: PostListView(
           controller: _controller,
-          emptyState: const CommunityStateCard(
+          emptyState: const StateMessageCard(
             icon: Icons.bookmark_border_rounded,
             title: 'No saved posts',
             message: 'Tap Save on any post to keep it here for later.',

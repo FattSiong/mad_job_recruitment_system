@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/data_load_exception.dart';
@@ -15,6 +14,7 @@ import '../../../shared_widgets/confirm_dialog.dart';
 import '../../../shared_widgets/surface_card.dart';
 import '../../../shared_widgets/gradient_page_header.dart';
 import '../widgets/career_tools/career_tool_widgets.dart';
+import '../../../core/utils/app_date_format.dart';
 
 /// AI Resume Assistant: pick a resume (uploaded or built in the app), optionally
 /// a target job, and get AI feedback on how to improve it.
@@ -147,7 +147,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
     final confirmed = await showConfirmDialog(
       context,
       title: 'Delete review?',
-      message: 'The review from ${DateFormat('d MMM yyyy').format(item.createdAt)} will be permanently deleted.',
+      message: 'The review from ${AppDateFormat.day.format(item.createdAt)} will be permanently deleted.',
     );
     if (!confirmed) return;
 
@@ -234,7 +234,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
 
     final builtSubtitle = s.hasBuiltResume
         ? s.builtResumeUpdatedAt != null
-            ? 'Last saved ${DateFormat('d MMM yyyy').format(s.builtResumeUpdatedAt!)}'
+            ? 'Last saved ${AppDateFormat.day.format(s.builtResumeUpdatedAt!)}'
             : 'Saved in the app'
         : 'Not built yet – tap to create one in a few steps.';
 
@@ -448,7 +448,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
             score: '${h.overallScore}',
             scoreColor: resumeScoreColor(h.overallScore),
             title: h.roleLabel,
-            subtitle: '${DateFormat('d MMM yyyy').format(h.createdAt)} · ${h.source.label}',
+            subtitle: '${AppDateFormat.day.format(h.createdAt)} · ${h.source.label}',
             onTap: () => _openReview(h),
             onDelete: _isReviewing ? null : () => _confirmDelete(h),
           ),

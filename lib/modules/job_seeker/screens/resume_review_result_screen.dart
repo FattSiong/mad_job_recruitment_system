@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../models/resume_review_model.dart';
@@ -7,6 +6,8 @@ import '../widgets/career_tools/career_tool_widgets.dart';
 import '../widgets/resume_review/resume_review_widgets.dart';
 import 'build_resume_screen.dart';
 import '../../../shared_widgets/gradient_page_header.dart';
+import '../../../core/theme/app_button_styles.dart';
+import '../../../core/utils/app_date_format.dart';
 
 /// AI Resume Assistant: the feedback report for one review.
 class ResumeReviewResultScreen extends StatefulWidget {
@@ -86,7 +87,7 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
   Widget _buildHeader() => GradientPageHeader(
         title: 'Resume Feedback',
         subtitle: '${_review.resumeName.isEmpty ? _review.source.label : _review.resumeName}'
-            ' · ${DateFormat('d MMM yyyy, h:mm a').format(_review.createdAt)}',
+            ' · ${AppDateFormat.dayTime.format(_review.createdAt)}',
         subtitleMaxLines: 2,
       );
 
@@ -373,14 +374,7 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
             onPressed: _openBuilder,
             icon: Icon(isBuilder ? Icons.edit_note_rounded : Icons.auto_fix_high_rounded),
             label: Text(isBuilder ? 'Edit Resume' : 'Improve in Resume Builder'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-            ),
+            style: AppButtonStyles.filled(radius: 18, textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           ),
         ),
       ),

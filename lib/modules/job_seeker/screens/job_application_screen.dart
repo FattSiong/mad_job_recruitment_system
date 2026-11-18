@@ -14,6 +14,9 @@ import '../../../shared_widgets/hero_icon_button.dart';
 import '../../../shared_widgets/surface_card.dart';
 import '../../../shared_widgets/hero_card.dart';
 import '../../../shared_widgets/bottom_action_bar.dart';
+import '../../../core/theme/app_button_styles.dart';
+import '../../../core/theme/app_input_decoration.dart';
+import '../../../shared_widgets/button_spinner.dart';
 
 /// Applying for a job: answer the employer's questions, choose a resume,
 /// then submit.
@@ -117,29 +120,12 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
 
   /// Style of the filled navy buttons (Next, Submit).
   ButtonStyle _primaryButtonStyle() {
-    return ElevatedButton.styleFrom(
-      backgroundColor: AppColors.primary,
-      foregroundColor: Colors.white,
-      elevation: 0,
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 18),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-      ),
-    );
+    return AppButtonStyles.filled(radius: 18);
   }
 
   /// Style of the white outlined buttons (Back, file pickers).
   ButtonStyle _secondaryButtonStyle() {
-    return OutlinedButton.styleFrom(
-      foregroundColor: AppColors.textDark,
-      backgroundColor: Colors.white,
-      elevation: 0,
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
-      side: const BorderSide(color: AppColors.border),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-    );
+    return AppButtonStyles.neutral();
   }
 
   /// One numbered step at the top (done, current or still to come).
@@ -225,23 +211,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
               TextField(
                 onChanged: (val) => _appController.setTextAnswer(questionId, val),
                 maxLines: 4,
-                decoration: InputDecoration(
-                  hintText: 'Enter your answer',
-                  filled: true,
-                  fillColor: AppColors.surfaceAlt,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-                  ),
-                ),
+                decoration: filledInputDecoration(hint: 'Enter your answer'),
               )
             else
               Row(
@@ -754,14 +724,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                                            },
                                      style: _primaryButtonStyle(),
                                      child: _isSubmitting
-                                         ? const SizedBox(
-                                             height: 20,
-                                             width: 20,
-                                             child: CircularProgressIndicator(
-                                               color: Colors.white,
-                                               strokeWidth: 2,
-                                             ),
-                                           )
+                                         ? const ButtonSpinner(size: 20)
                                          : Text(
                                              (hasQuestions && _currentPage == 0)
                                                  ? 'Continue'

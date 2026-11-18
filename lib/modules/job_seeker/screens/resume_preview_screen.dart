@@ -9,6 +9,8 @@ import '../../../core/utils/pdf_file_helper.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../controllers/resume_builder_controller.dart';
 import '../widgets/pdf_preview_frame.dart';
+import '../../../core/theme/app_button_styles.dart';
+import '../../../shared_widgets/button_spinner.dart';
 
 /// PDF preview of the built resume: share, download, open, and optionally
 /// use it as the profile resume for job applications.
@@ -88,11 +90,7 @@ class _ResumePreviewScreenState extends State<ResumePreviewScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              elevation: 0,
-            ),
+            style: AppButtonStyles.filled(),
             child: const Text('Use as resume'),
           ),
         ],
@@ -214,11 +212,7 @@ class _ResumePreviewScreenState extends State<ResumePreviewScreen> {
                 child: ElevatedButton.icon(
                   onPressed: (_setAsResume || _isSettingResume) ? null : _useAsResume,
                   icon: _isSettingResume
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
+                      ? const ButtonSpinner()
                       : Icon(_setAsResume ? Icons.check_circle_rounded : Icons.badge_outlined),
                   label: Text(
                     _setAsResume

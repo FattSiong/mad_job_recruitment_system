@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../job_filters.dart';
+import '../../../../core/theme/app_button_styles.dart';
+import '../../../../core/theme/app_input_decoration.dart';
 
 /// "Search smarter" card on the dashboard: keyword, location, buttons and filter chips.
 /// All state lives in the dashboard; this widget only shows it and reports taps.
@@ -60,9 +62,11 @@ class JobSearchPanel extends StatelessWidget {
             controller: keywordController,
             textInputAction: TextInputAction.search,
             onSubmitted: (_) => onSearch(),
-            decoration: jobSearchInputDecoration(
+            decoration: filledInputDecoration(
               hint: 'Job title, keywords, or company',
               icon: Icons.search,
+              radius: 18,
+              contentPadding: const EdgeInsets.symmetric(vertical: 16),
             ),
           ),
           const SizedBox(height: 12),
@@ -70,10 +74,10 @@ class JobSearchPanel extends StatelessWidget {
             controller: locationController,
             readOnly: true,
             onTap: onOpenLocation,
-            decoration: jobSearchInputDecoration(
+            decoration: filledInputDecoration(
               hint: 'City, state, or postcode',
               icon: Icons.location_on_outlined,
-              suffix: locationController.text.isNotEmpty
+              suffixIcon: locationController.text.isNotEmpty
                   ? IconButton(
                       onPressed: onClearLocation,
                       icon: const Icon(Icons.close, size: 18),
@@ -82,6 +86,8 @@ class JobSearchPanel extends StatelessWidget {
                       onPressed: onOpenLocation,
                       icon: const Icon(Icons.arrow_forward_ios, size: 16),
                     ),
+              radius: 18,
+              contentPadding: const EdgeInsets.symmetric(vertical: 16),
             ),
           ),
           const SizedBox(height: 16),
@@ -92,14 +98,7 @@ class JobSearchPanel extends StatelessWidget {
                   onPressed: onSearch,
                   icon: const Icon(Icons.search),
                   label: const Text('Search Jobs'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
+                  style: AppButtonStyles.filled(),
                 ),
               ),
               const SizedBox(width: 12),
@@ -107,14 +106,7 @@ class JobSearchPanel extends StatelessWidget {
                 onPressed: onReset,
                 icon: const Icon(Icons.restart_alt),
                 label: const Text('Reset'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  side: const BorderSide(color: AppColors.borderActive),
-                ),
+                style: AppButtonStyles.outlined(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15)),
               ),
             ],
           ),
@@ -148,32 +140,4 @@ class JobSearchPanel extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Style of the keyword and location boxes (dashboard and location search).
-InputDecoration jobSearchInputDecoration({
-  required String hint,
-  required IconData icon,
-  Widget? suffix,
-}) {
-  return InputDecoration(
-    hintText: hint,
-    prefixIcon: Icon(icon, color: AppColors.textMuted),
-    suffixIcon: suffix,
-    filled: true,
-    fillColor: AppColors.surfaceAlt,
-    contentPadding: const EdgeInsets.symmetric(vertical: 16),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(18),
-      borderSide: BorderSide(color: Colors.grey.shade300),
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(18),
-      borderSide: BorderSide(color: Colors.grey.shade300),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(18),
-      borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-    ),
-  );
 }

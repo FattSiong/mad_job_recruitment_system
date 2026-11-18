@@ -10,6 +10,8 @@ import '../controllers/location_controller.dart';
 import '../widgets/job_filters.dart';
 import '../widgets/map/nearby_job_card.dart';
 import 'job_details_screen.dart';
+import '../../../core/theme/app_input_decoration.dart';
+import '../../../shared_widgets/button_spinner.dart';
 
 /// "Discover Nearby Jobs": jobs around a point on the map, with a swipeable
 /// list of the results (nearest first) that follows the pins.
@@ -179,16 +181,7 @@ class _JobMapScreenState extends State<JobMapScreen> {
           textInputAction: TextInputAction.search,
           textCapitalization: TextCapitalization.words,
           onSubmitted: (v) => Navigator.pop(dialogContext, v),
-          decoration: InputDecoration(
-            hintText: 'e.g. Cyberjaya, Penang, Bangsar',
-            prefixIcon: const Icon(Icons.place_outlined, color: AppColors.primary),
-            filled: true,
-            fillColor: AppColors.surfaceAlt,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-          ),
+          decoration: filledInputDecoration(hint: 'e.g. Cyberjaya, Penang, Bangsar', icon: Icons.place_outlined, iconColor: AppColors.primary),
         ),
         actions: [
           TextButton(
@@ -416,11 +409,7 @@ class _JobMapScreenState extends State<JobMapScreen> {
                   backgroundColor: AppColors.surface,
                   onPressed: _controller.isLocating ? null : _goToMyLocation,
                   child: _controller.isLocating
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
-                        )
+                      ? const ButtonSpinner(color: AppColors.primary)
                       : const Icon(Icons.my_location_rounded, color: AppColors.primary),
                 ),
               ),
@@ -562,11 +551,7 @@ class _JobMapScreenState extends State<JobMapScreen> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
-            ),
+            const ButtonSpinner(size: 16, color: AppColors.primary),
             const SizedBox(width: 10),
             Text(
               c.isLocating ? 'Finding your location…' : 'Searching…',

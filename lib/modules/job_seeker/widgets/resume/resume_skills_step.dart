@@ -5,6 +5,8 @@ import '../../../../models/skill_model.dart';
 import '../../controllers/resume_builder_controller.dart';
 import '../../../../shared_widgets/empty_hint.dart';
 import '../../../../shared_widgets/action_sheet.dart';
+import '../../../../core/theme/app_button_styles.dart';
+import '../../../../core/theme/app_input_decoration.dart';
 
 /// Skills step: add skills with an optional level; tap a skill to change it.
 class ResumeSkillsStep extends StatefulWidget {
@@ -56,21 +58,7 @@ class _ResumeSkillsStepState extends State<ResumeSkillsStep> {
                 textCapitalization: TextCapitalization.words,
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _add(),
-                decoration: InputDecoration(
-                  hintText: full ? 'Skill limit reached' : 'e.g. Flutter, Customer Service',
-                  errorText: _error,
-                  counterText: '',
-                  filled: true,
-                  fillColor: AppColors.surfaceAlt,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: AppColors.border),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: AppColors.border),
-                  ),
-                ),
+                decoration: filledInputDecoration(hint: full ? 'Skill limit reached' : 'e.g. Flutter, Customer Service', errorText: _error, counterText: '', radius: 14),
               ),
             ),
             const SizedBox(width: 8),
@@ -78,12 +66,7 @@ class _ResumeSkillsStepState extends State<ResumeSkillsStep> {
               height: 56,
               child: ElevatedButton(
                 onPressed: full ? null : _add,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
+                style: AppButtonStyles.filled(radius: 14),
                 child: const Text('Add'),
               ),
             ),

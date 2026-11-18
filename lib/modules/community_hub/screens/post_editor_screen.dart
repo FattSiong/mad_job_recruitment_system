@@ -8,6 +8,7 @@ import '../../../models/post_topic.dart';
 import '../controllers/post_editor_controller.dart';
 import '../widgets/community_chips.dart';
 import '../../../shared_widgets/confirm_dialog.dart';
+import '../../../shared_widgets/button_spinner.dart';
 
 /// Create a post, or edit one (pass [post]). Pops with true when saved.
 class PostEditorScreen extends StatefulWidget {
@@ -130,11 +131,7 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
                   child: _controller.isSaving
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
+                      ? const ButtonSpinner()
                       : Text(_controller.isEditing && !_controller.isEditingDraft ? 'Save' : 'Post'),
                 ),
               ),

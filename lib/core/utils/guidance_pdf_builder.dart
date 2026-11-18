@@ -1,12 +1,12 @@
 import 'dart:typed_data';
 
-import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../../models/mock_interview_model.dart';
 import '../../models/skill_gap_model.dart';
 import 'pdf_text.dart';
+import 'app_date_format.dart';
 
 /// Builds the Guidance Report PDFs (full history, one interview, one skill gap analysis).
 class GuidancePdfBuilder {
@@ -23,8 +23,6 @@ class GuidancePdfBuilder {
   static final PdfColor _amber = PdfColor.fromInt(0xFFC77700);
   static final PdfColor _red = PdfColor.fromInt(0xFFD32F2F);
 
-  static final DateFormat _date = DateFormat('d MMM yyyy');
-  static final DateFormat _dateTime = DateFormat('d MMM yyyy, h:mm a');
 
   /// Shortens [s] to [max] characters, ending with "…".
   static String _cut(String s, int max) => s.length > max ? '${s.substring(0, max)}…' : s;
@@ -59,7 +57,7 @@ class GuidancePdfBuilder {
 
     doc.addPage(_multiPage(
       title: 'Career Guidance Report',
-      subtitle: '${PdfText.clean(applicantName)} · Generated ${_dateTime.format(DateTime.now())}',
+      subtitle: '${PdfText.clean(applicantName)} · Generated ${AppDateFormat.dayTime.format(DateTime.now())}',
       body: [
         ..._overview(interviews, skillGaps),
         if (interviews.isNotEmpty) ..._interviewTable(interviews),
@@ -70,14 +68,14 @@ class GuidancePdfBuilder {
     for (final r in interviews) {
       doc.addPage(_multiPage(
         title: 'Mock Interview Scorecard',
-        subtitle: '${PdfText.clean(r.targetJobRole)} · ${_date.format(r.completedAt ?? r.createdAt)}',
+        subtitle: '${PdfText.clean(r.targetJobRole)} · ${AppDateFormat.day.format(r.completedAt ?? r.createdAt)}',
         body: _interviewDetail(r),
       ));
     }
     for (final a in skillGaps) {
       doc.addPage(_multiPage(
         title: 'Skill Gap Report',
-        subtitle: '${PdfText.clean(a.targetJobRole)} · ${_date.format(a.createdAt)}',
+        subtitle: '${PdfText.clean(a.targetJobRole)} · ${AppDateFormat.day.format(a.createdAt)}',
         body: _skillGapDetail(a),
       ));
     }
@@ -95,7 +93,7 @@ class GuidancePdfBuilder {
       subtitle: [
         if (applicantName != null && applicantName.isNotEmpty) PdfText.clean(applicantName),
         PdfText.clean(r.targetJobRole),
-        _date.format(r.completedAt ?? r.createdAt),
+        AppDateFormat.day.format(r.completedAt ?? r.createdAt),
       ].join(' · '),
       body: _interviewDetail(r),
     ));
@@ -113,7 +111,7 @@ class GuidancePdfBuilder {
       subtitle: [
         if (applicantName != null && applicantName.isNotEmpty) PdfText.clean(applicantName),
         PdfText.clean(a.targetJobRole),
-        _date.format(a.createdAt),
+        AppDateFormat.day.format(a.createdAt),
       ].join(' · '),
       body: _skillGapDetail(a),
     ));
@@ -337,7 +335,7 @@ class GuidancePdfBuilder {
           },
           rows: interviews
               .map((r) => [
-                    _date.format(r.completedAt ?? r.createdAt),
+                    AppDateFormat.day.format(r.completedAt ?? r.createdAt),
                     r.targetJobRole,
                     '${r.overallScore ?? '-'}',
                     '${r.contentScore ?? '-'}',
@@ -361,7 +359,7 @@ class GuidancePdfBuilder {
           },
           rows: skillGaps
               .map((a) => [
-                    _date.format(a.createdAt),
+                    AppDateFormat.day.format(a.createdAt),
                     a.targetJobRole,
                     '${a.matchScore}%',
                     '${a.missing.length}',

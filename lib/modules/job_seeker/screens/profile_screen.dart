@@ -29,6 +29,8 @@ import 'education_screen.dart';
 import 'public_profile_screen.dart';
 import 'work_experience_screen.dart';
 import '../../../shared_widgets/bottom_action_bar.dart';
+import '../../../core/theme/app_button_styles.dart';
+import '../../../shared_widgets/button_spinner.dart';
 
 /// The job seeker's own Profile tab: details, resume, career tools,
 /// work experience, education and skills.
@@ -376,7 +378,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onPressed: _logout,
                     icon: const Icon(Icons.logout_rounded),
                     label: const Text('Logout', style: TextStyle(fontWeight: FontWeight.bold)),
-                    style: ProfileButtonStyles.primary(),
+                    style: AppButtonStyles.filled(radius: 18),
                   ),
                 ),
               ],
@@ -396,7 +398,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                  Expanded(
                    child: OutlinedButton(
                      onPressed: saving ? null : _cancelEditing,
-                     style: ProfileButtonStyles.secondary(),
+                     style: AppButtonStyles.neutral(),
                      child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold)),
                    ),
                  ),
@@ -404,13 +406,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                  Expanded(
                    child: ElevatedButton(
                      onPressed: saving ? null : _save,
-                     style: ProfileButtonStyles.primary(),
+                     style: AppButtonStyles.filled(radius: 18),
                      child: saving
-                         ? const SizedBox(
-                             width: 20,
-                             height: 20,
-                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                           )
+                         ? const ButtonSpinner(size: 20)
                          : const Text('Save Details', style: TextStyle(fontWeight: FontWeight.bold)),
                    ),
                  ),

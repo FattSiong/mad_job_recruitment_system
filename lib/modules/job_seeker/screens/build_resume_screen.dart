@@ -10,6 +10,9 @@ import '../widgets/resume/resume_skills_step.dart';
 import 'resume_preview_screen.dart';
 import '../../../shared_widgets/gradient_page_header.dart';
 import '../../../shared_widgets/bottom_action_bar.dart';
+import '../../../core/theme/app_button_styles.dart';
+import '../../../core/theme/app_input_decoration.dart';
+import '../../../shared_widgets/button_spinner.dart';
 
 /// In-app resume builder:
 /// name -> phone -> address -> education -> work experience -> skills -> more sections,
@@ -182,11 +185,7 @@ class _BuildResumeScreenState extends State<BuildResumeScreen> {
         title: 'Build Resume',
         subtitle: 'Create a professional PDF resume step by step.',
         trailing: _controller.isSaving
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-              )
+            ? const ButtonSpinner()
             : null,
       );
 
@@ -376,25 +375,7 @@ class _BuildResumeScreenState extends State<BuildResumeScreen> {
       maxLines: maxLines,
       keyboardType: keyboard,
       textCapitalization: capitalization,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        prefixIcon: Icon(icon, color: AppColors.textMuted),
-        filled: true,
-        fillColor: AppColors.surfaceAlt,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-        ),
-      ),
+      decoration: filledInputDecoration(label: label, hint: hint, icon: icon),
     );
   }
 
@@ -407,12 +388,7 @@ class _BuildResumeScreenState extends State<BuildResumeScreen> {
                  Expanded(
                    child: OutlinedButton(
                      onPressed: _back,
-                     style: OutlinedButton.styleFrom(
-                       foregroundColor: AppColors.textDark,
-                       padding: const EdgeInsets.symmetric(vertical: 14),
-                       side: const BorderSide(color: AppColors.border),
-                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                     ),
+                     style: AppButtonStyles.neutral(),
                      child: Text(_step == 0 ? 'Cancel' : 'Back'),
                    ),
                  ),
@@ -423,13 +399,7 @@ class _BuildResumeScreenState extends State<BuildResumeScreen> {
                      onPressed: _controller.isSaving ? null : _next,
                      icon: Icon(_isLast ? Icons.picture_as_pdf_outlined : Icons.arrow_forward_rounded),
                      label: Text(_isLast ? 'Preview PDF' : 'Next'),
-                     style: ElevatedButton.styleFrom(
-                       backgroundColor: AppColors.primary,
-                       foregroundColor: Colors.white,
-                       elevation: 0,
-                       padding: const EdgeInsets.symmetric(vertical: 14),
-                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                     ),
+                     style: AppButtonStyles.filled(),
                    ),
                  ),
                ],

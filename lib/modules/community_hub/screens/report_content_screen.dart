@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../controllers/content_report_controller.dart';
+import '../../../core/theme/app_input_decoration.dart';
+import '../../../shared_widgets/button_spinner.dart';
 
 /// Report a community post or comment to the admins.
 class ReportContentScreen extends StatefulWidget {
@@ -167,23 +169,7 @@ class _ReportContentScreenState extends State<ReportContentScreen> {
                 maxLines: 6,
                 maxLength: ContentReportController.maxDetailsLength,
                 textCapitalization: TextCapitalization.sentences,
-                decoration: InputDecoration(
-                  hintText: 'Describe what happened…',
-                  filled: true,
-                  fillColor: AppColors.surfaceAlt,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: AppColors.border),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: AppColors.border),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: AppColors.primary, width: 1.2),
-                  ),
-                ),
+                decoration: filledInputDecoration(hint: 'Describe what happened…'),
               ),
             ),
             const SizedBox(height: 12),
@@ -202,11 +188,7 @@ class _ReportContentScreenState extends State<ReportContentScreen> {
           child: ElevatedButton.icon(
             onPressed: _isSubmitting ? null : _submit,
             icon: _isSubmitting
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
+                ? const ButtonSpinner(size: 20)
                 : const Icon(Icons.flag_rounded),
             label: Text(_isSubmitting ? 'Sending…' : 'Submit Report'),
             style: ElevatedButton.styleFrom(

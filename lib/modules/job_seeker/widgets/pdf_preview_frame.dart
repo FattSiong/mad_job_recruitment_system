@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_button_styles.dart';
 
 /// The white rounded area of a PDF preview screen: the PDF once [bytes]
 /// are ready, a spinner with [loadingText] before, or [error] with
@@ -72,12 +73,7 @@ class PdfPreviewFrame extends StatelessWidget {
               onPressed: onRetry,
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Try Again'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              ),
+              style: AppButtonStyles.filled(),
             ),
           ],
         ),

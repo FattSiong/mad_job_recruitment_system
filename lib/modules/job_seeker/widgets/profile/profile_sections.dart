@@ -3,42 +3,6 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared_widgets/surface_card.dart';
 
-/// Button styles used on the Profile tab.
-class ProfileButtonStyles {
-  ProfileButtonStyles._();
-
-  /// Filled navy button (Save, Logout).
-  static ButtonStyle primary() {
-    return ElevatedButton.styleFrom(
-      backgroundColor: AppColors.primary,
-      foregroundColor: Colors.white,
-      elevation: 0,
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 18),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-    );
-  }
-
-  /// White outlined button (Cancel).
-  static ButtonStyle secondary() {
-    return OutlinedButton.styleFrom(
-      foregroundColor: AppColors.textDark,
-      backgroundColor: Colors.white,
-      elevation: 0,
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
-      side: const BorderSide(color: AppColors.border),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-    );
-  }
-
-  /// White outlined button with navy text and a light blue border.
-  static ButtonStyle outlinedPrimary() {
-    return secondary().copyWith(
-      foregroundColor: WidgetStateProperty.all(AppColors.primary),
-      side: WidgetStateProperty.all(const BorderSide(color: AppColors.borderActive)),
-    );
-  }
-}
-
 /// Section title, with a "Manage" button in edit mode.
 class ProfileSectionHeader extends StatelessWidget {
   final String title;

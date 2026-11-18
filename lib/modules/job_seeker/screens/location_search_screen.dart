@@ -5,7 +5,9 @@ import '../../../core/utils/snackbar_helper.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared_widgets/hero_icon_button.dart';
 import '../../../shared_widgets/hero_card.dart';
-import '../widgets/dashboard/job_search_panel.dart';
+import '../../../core/theme/app_button_styles.dart';
+import '../../../core/theme/app_input_decoration.dart';
+import '../../../shared_widgets/button_spinner.dart';
 
 /// Choose a location for the Home job search (typed, current location or
 /// a popular one). Pops with {'keyword': ..., 'location': ...}.
@@ -200,9 +202,11 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
                           TextField(
                             controller: _keywordController,
                             textInputAction: TextInputAction.next,
-                            decoration: jobSearchInputDecoration(
+                            decoration: filledInputDecoration(
                               hint: 'Job title, keywords, or company',
                               icon: Icons.search,
+                              radius: 18,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 16),
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -216,10 +220,10 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
                               _selectLocation(trimmed);
                             },
                             onChanged: (value) => setState(() {}),
-                            decoration: jobSearchInputDecoration(
+                            decoration: filledInputDecoration(
                               hint: 'Country, city or state',
                               icon: Icons.location_on_outlined,
-                              suffix: _locationController.text.isNotEmpty
+                              suffixIcon: _locationController.text.isNotEmpty
                                   ? IconButton(
                                 icon: const Icon(Icons.close, color: AppColors.textMuted, size: 18),
                                 onPressed: () {
@@ -228,6 +232,8 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
                                 },
                               )
                                   : null,
+                              radius: 18,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 16),
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -236,16 +242,10 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
                             child: ElevatedButton.icon(
                               onPressed: _isLocating ? null : _getCurrentLocation,
                               icon: _isLocating
-                                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                  ? const ButtonSpinner()
                                   : const Icon(Icons.my_location_rounded),
                               label: Text(_isLocating ? 'Locating...' : 'Use Current Location'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primary,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                              ),
+                              style: AppButtonStyles.filled(),
                             ),
                           ),
                         ],

@@ -1,8 +1,14 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/utils/data_load_exception.dart';
-import '../../../models/job_applicant_model.dart';
-import '../../../models/job_model.dart';
+import '../../../core/utils/storage_url_helper.dart';
+import '../../../services/notification_service.dart';
+import '../../../models/applied_job_model.dart';
 import '../../../core/constants/table_constants.dart';
 import '../../../core/utils/session_helper.dart';
 
@@ -20,32 +26,14 @@ class AppliedJobsController {
   static void notifyChanged() => refreshSignal.value++;
 
   /// The user's applications with their jobs, newest first.
-  Future<List<Map<String, dynamic>>> fetchAppliedJobs() async {
+  Future<List<AppliedJob>> fetchAppliedJobs() async {
     try {
       final response = await _supabase
           .from(TableConstants.jobApplicant)
           .select('*, Job (*, Company(name))')
           .eq('seekerID', _currentSeekerID)
           .order('appliedAt', ascending: false);
-
-      return (response as List<dynamic>).map((json) {
-        final row = json as Map<String, dynamic>;
-        final jobJson = row['Job'] as Map<String, dynamic>?;
-        final job = jobJson != null ? JobModel.fromJson(jobJson) : null;
-
-        final jobStatus = job?.status.trim().toLowerCase() ?? 'deleted';
-        final isJobDeleted = job == null || jobStatus == 'deleted';
-        final isJobInactive = jobStatus == 'inactive';
-
-        return {
-          'application': JobApplicantModel.fromJson(row),
-          'raw': row,
-          'job': job,
-          'jobStatus': jobStatus,
-          'isJobDeleted': isJobDeleted,
-          'isJobInactive': isJobInactive,
-        };
-      }).toList();
+      return List<Map<String, dynamic>>.from(response).map(AppliedJob.fromJson).toList();
     } catch (e) {
       debugPrint('Error fetching applied jobs: $e');
       throw DataLoadException(
@@ -68,6 +56,7 @@ class AppliedJobsController {
         params: {'p_applicant_id': applicantId.trim()},
       );
       notifyChanged();
+      unawaited(NotificationService.refreshUnreadCount()); // its notifications are gone
     } on PostgrestException catch (e) {
       final msg = e.message.toLowerCase();
       if (msg.contains('not_pending')) {
@@ -136,6 +125,36 @@ class AppliedJobsController {
       throw DataLoadException(
         'Unable to submit your response right now. Please try again.',
       );
+    }
+  }
+
+  /// The offer letter PDF at [url] as a local file (downloaded once, then
+  /// reused). Throws when it can't be downloaded.
+  Future<File> downloadOfferLetter(String url) async {
+    var fileName = url.split('/').last.split('?').first;
+    if (!fileName.toLowerCase().endsWith('.pdf')) {
+      fileName = 'offer_letter_${DateTime.now().millisecondsSinceEpoch}.pdf';
+    }
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/$fileName');
+    if (await _isSavedPdf(file)) return file;
+
+    final signedUrl = await StorageUrlHelper.resolve(url);
+    final response = await http.get(Uri.parse(signedUrl)).timeout(const Duration(seconds: 30));
+    // Never save an error page as the PDF: it would be reopened every time
+    if (response.statusCode != 200) throw HttpException('HTTP ${response.statusCode}');
+    await file.writeAsBytes(response.bodyBytes, flush: true);
+    return file;
+  }
+
+  /// True when [file] exists and starts like a PDF.
+  static Future<bool> _isSavedPdf(File file) async {
+    try {
+      if (!await file.exists()) return false;
+      final head = await file.openRead(0, 4).first;
+      return String.fromCharCodes(head) == '%PDF';
+    } catch (_) {
+      return false;
     }
   }
 }

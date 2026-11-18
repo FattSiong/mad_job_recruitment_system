@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared_widgets/surface_card.dart';
+import '../../../../shared_widgets/button_spinner.dart';
 
 // Pieces shared by the AI career tools (Resume Assistant, Skill Gap
 // Analysis, Mock Interview): the target-role card, the bottom button and
@@ -149,11 +150,7 @@ class CareerToolRunBar extends StatelessWidget {
               child: ElevatedButton.icon(
                 onPressed: enabled ? onPressed : null,
                 icon: busy
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
+                    ? const ButtonSpinner(size: 20)
                     : Icon(icon),
                 label: Text(busy ? busyLabel : label),
                 style: ElevatedButton.styleFrom(

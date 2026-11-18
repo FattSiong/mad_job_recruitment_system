@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/theme/app_colors.dart';
 import '../../../../shared_widgets/empty_hint.dart';
 import '../../controllers/resume_builder_controller.dart';
 import '../profile/add_education_sheet.dart';
 import '../profile/add_experience_sheet.dart';
 import '../profile/profile_record_card.dart';
+import '../../../../core/theme/app_button_styles.dart';
 
 /// Education step: the resume's own list (edits don't change the profile).
 class ResumeEducationStep extends StatelessWidget {
@@ -96,12 +96,7 @@ class ResumeAddButton extends StatelessWidget {
       onPressed: onPressed,
       icon: const Icon(Icons.add_rounded),
       label: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: AppColors.primary,
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        side: const BorderSide(color: AppColors.borderActive),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      ),
+      style: AppButtonStyles.outlined(),
     );
   }
 }

@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 
-import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -8,6 +7,7 @@ import '../../models/education_model.dart';
 import '../../models/resume_model.dart';
 import '../../models/work_experience_model.dart';
 import 'pdf_text.dart';
+import 'app_date_format.dart';
 
 /// One clean, ATS-friendly A4 resume (single column, real text, no tables).
 class ResumePdfBuilder {
@@ -18,12 +18,11 @@ class ResumePdfBuilder {
   static final PdfColor _muted = PdfColor.fromInt(0xFF5B6678);
   static final PdfColor _rule = PdfColor.fromInt(0xFFD6DEE8);
 
-  static final DateFormat _month = DateFormat('MMM yyyy');
 
   /// "Jan 2024 - Present" (or just the start month when there is no end).
   static String _period(DateTime start, DateTime? end, bool isCurrent) {
-    final from = _month.format(start);
-    final to = isCurrent ? 'Present' : (end != null ? _month.format(end) : '');
+    final from = AppDateFormat.month.format(start);
+    final to = isCurrent ? 'Present' : (end != null ? AppDateFormat.month.format(end) : '');
     return to.isEmpty ? from : '$from - $to';
   }
 

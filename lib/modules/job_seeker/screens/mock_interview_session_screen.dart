@@ -11,6 +11,7 @@ import '../controllers/mock_interview_controller.dart';
 import '../controllers/mock_interview_session_controller.dart';
 import 'mock_interview_result_screen.dart';
 import '../../../shared_widgets/confirm_dialog.dart';
+import '../../../core/theme/app_button_styles.dart';
 
 /// Steps 2-6 of Use Case 4.59: introduction, questions, answers, end.
 class MockInterviewSessionScreen extends StatefulWidget {
@@ -761,12 +762,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
                 onPressed: _startRecording,
                 icon: const Icon(Icons.refresh_rounded),
                 label: const Text('Re-record'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  side: const BorderSide(color: AppColors.borderActive),
-                  padding: const EdgeInsets.symmetric(vertical: 15),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                ),
+                style: AppButtonStyles.outlined(radius: 18),
               ),
             ),
             const SizedBox(width: 12),
@@ -778,14 +774,7 @@ class _MockInterviewSessionScreenState extends State<MockInterviewSessionScreen>
                     : (_isLastQuestion ? _endInterview : _nextQuestion),
                 icon: Icon(_isLastQuestion ? Icons.flag_rounded : Icons.arrow_forward_rounded),
                 label: Text(_isLastQuestion ? 'End Interview' : 'Next Question'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 15),
-                  textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                ),
+                style: AppButtonStyles.filled(radius: 18, textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
               ),
             ),
           ],

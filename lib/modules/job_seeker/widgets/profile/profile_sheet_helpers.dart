@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_input_decoration.dart';
+import '../../../../core/utils/app_date_format.dart';
 
 // Shared bits for the profile bottom sheets and record cards.
 
@@ -33,32 +35,19 @@ Future<DateTime?> pickProfileDate(BuildContext context, DateTime? initialDate) {
 }
 
 /// Style of the text boxes in the profile sheets.
-InputDecoration profileSheetInputDecoration(String label, IconData icon) {
-  return InputDecoration(
-    labelText: label,
-    prefixIcon: Icon(icon, color: Colors.grey.shade600, size: 20),
-    filled: true,
-    fillColor: Colors.grey.shade50,
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: Colors.grey.shade300),
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: Colors.grey.shade300),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: AppColors.primary, width: 2),
-    ),
-  );
-}
+InputDecoration profileSheetInputDecoration(String label, IconData icon) => filledInputDecoration(
+      label: label,
+      prefixIcon: Icon(icon, color: Colors.grey.shade600, size: 20),
+      fillColor: Colors.grey.shade50,
+      borderColor: Colors.grey.shade300,
+      radius: 12,
+    );
 
 /// "Jan 2024 - Present"
 String formatProfileDateRange(DateTime start, DateTime? end, bool isCurrent) {
-  final formatter = DateFormat('MMM yyyy');
-  final startStr = formatter.format(start);
-  final endStr = isCurrent ? 'Present' : (end != null ? formatter.format(end) : 'N/A');
+  final month = AppDateFormat.month;
+  final startStr = month.format(start);
+  final endStr = isCurrent ? 'Present' : (end != null ? month.format(end) : 'N/A');
   return '$startStr - $endStr';
 }
 
@@ -249,11 +238,6 @@ class _DateBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final disabled = disabledText != null;
-    final hasError = error != null;
-    OutlineInputBorder border(Color color, [double width = 1]) => OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: color, width: width),
-        );
 
     return InkWell(
       onTap: disabled
@@ -265,11 +249,7 @@ class _DateBox extends StatelessWidget {
       child: InputDecorator(
         decoration: profileSheetInputDecoration(label, Icons.calendar_today).copyWith(
           fillColor: disabled ? Colors.grey.shade200 : Colors.grey.shade50,
-          errorText: error,
-          enabledBorder: border(hasError ? AppColors.errorRed : Colors.grey.shade300),
-          focusedBorder: border(hasError ? AppColors.errorRed : AppColors.primary, 1.5),
-          errorBorder: border(AppColors.errorRed),
-          focusedErrorBorder: border(AppColors.errorRed, 1.5),
+          errorText: error, // red border and text come with it
         ),
         child: Text(
           disabledText ?? (date == null ? 'Select' : formatProfileDate(date!)),

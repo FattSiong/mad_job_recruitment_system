@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_button_styles.dart';
 
 /// Shown when an applied job has been deleted or made inactive.
 class UnavailableJobNoticeScreen extends StatelessWidget {
@@ -120,14 +121,7 @@ class UnavailableJobNoticeScreen extends StatelessWidget {
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed: () => Navigator.pop(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
+                    style: AppButtonStyles.filled(),
                     child: const Text(
                       'Back',
                       style: TextStyle(fontWeight: FontWeight.bold),

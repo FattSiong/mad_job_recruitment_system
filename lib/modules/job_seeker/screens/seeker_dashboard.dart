@@ -25,6 +25,7 @@ import 'profile_screen.dart';
 import 'qr_scanner_screen.dart';
 import '../../../shared_widgets/hero_card.dart';
 import '../../../shared_widgets/hero_icon_button.dart';
+import '../../../core/theme/app_button_styles.dart';
 
 /// The job seeker's main screen: Home (job search), My Jobs, Messages,
 /// Community and Profile tabs.
@@ -549,15 +550,7 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
               },
               icon: const Icon(Icons.map, size: 18),
               label: const Text('Nearby Jobs'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.primary,
-                padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                side: const BorderSide(color: AppColors.borderActive),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
+              style: AppButtonStyles.outlined(radius: 14, padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12)),
             ),
           ],
         ),

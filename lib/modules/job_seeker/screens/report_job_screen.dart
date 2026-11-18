@@ -6,6 +6,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../../shared_widgets/hero_icon_button.dart';
 import '../../../shared_widgets/hero_card.dart';
 import '../../../shared_widgets/bottom_action_bar.dart';
+import '../../../core/theme/app_button_styles.dart';
+import '../../../core/theme/app_input_decoration.dart';
+import '../../../shared_widgets/button_spinner.dart';
 
 /// Report a job post to the admins (reason + optional details).
 class ReportJobScreen extends StatefulWidget {
@@ -250,23 +253,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
                                   controller: _detailsController,
                                   maxLines: 4,
                                   maxLength: ReportController.maxDetailsLength,
-                                  decoration: InputDecoration(
-                                    hintText: 'Describe your problem below...',
-                                    filled: true,
-                                    fillColor: AppColors.surfaceAlt,
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(16),
-                                      borderSide: BorderSide(color: Colors.grey.shade300),
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(16),
-                                      borderSide: BorderSide(color: Colors.grey.shade300),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(16),
-                                      borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-                                    ),
-                                  ),
+                                  decoration: filledInputDecoration(hint: 'Describe your problem below...'),
                                 ),
                               ],
                             ),
@@ -289,17 +276,9 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
                       ? const SizedBox.shrink()
                       : const Icon(Icons.send_rounded),
                   label: _isSubmitting
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      ? const ButtonSpinner(size: 20)
                       : const Text('Submit Report', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
+                  style: AppButtonStyles.filled(),
                 ),
               ),
             ),

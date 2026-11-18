@@ -8,9 +8,10 @@ import 'package:path_provider/path_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../shared_widgets/hero_icon_button.dart';
-import '../widgets/profile/profile_sections.dart';
 import '../../../shared_widgets/hero_card.dart';
 import '../../../shared_widgets/bottom_action_bar.dart';
+import '../../../core/theme/app_button_styles.dart';
+import '../../../shared_widgets/button_spinner.dart';
 
 /// Opens the crop screen for [source]. Returns a square 512 x 512 PNG of
 /// the area inside the circle, or null if the user cancels.
@@ -363,7 +364,7 @@ class _ProfilePhotoCropScreenState extends State<ProfilePhotoCropScreen> {
                  Expanded(
                    child: OutlinedButton(
                      onPressed: _saving ? null : () => Navigator.pop(context),
-                     style: ProfileButtonStyles.secondary(),
+                     style: AppButtonStyles.neutral(),
                      child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold)),
                    ),
                  ),
@@ -371,14 +372,10 @@ class _ProfilePhotoCropScreenState extends State<ProfilePhotoCropScreen> {
                  Expanded(
                    child: ElevatedButton.icon(
                      onPressed: _image == null || _saving ? null : _usePhoto,
-                     style: ProfileButtonStyles.primary(),
+                     style: AppButtonStyles.filled(radius: 18),
                      icon: _saving ? const SizedBox.shrink() : const Icon(Icons.check_rounded),
                      label: _saving
-                         ? const SizedBox(
-                             width: 20,
-                             height: 20,
-                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                           )
+                         ? const ButtonSpinner(size: 20)
                          : const Text('Use Photo', style: TextStyle(fontWeight: FontWeight.bold)),
                    ),
                  ),

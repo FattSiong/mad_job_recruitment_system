@@ -10,6 +10,8 @@ import '../../../shared_widgets/confirm_dialog.dart';
 import '../../../shared_widgets/empty_hint.dart';
 import '../../../shared_widgets/surface_card.dart';
 import '../../../shared_widgets/gradient_page_header.dart';
+import '../../../core/theme/app_input_decoration.dart';
+import '../../../shared_widgets/button_spinner.dart';
 
 /// Add, update and remove the skills on the job seeker's profile.
 /// Changes are saved straight away; callers should reload skills when this screen closes.
@@ -279,26 +281,7 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
           onSubmitted: (_) {
             if (canAdd) _addSkill();
           },
-          decoration: InputDecoration(
-            hintText: 'e.g. Flutter, Public Speaking',
-            prefixIcon: const Icon(Icons.add_task_rounded, color: AppColors.primary),
-            filled: true,
-            fillColor: AppColors.surfaceAlt,
-            counterText: '',
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: AppColors.primary, width: 1.6),
-            ),
-          ),
+          decoration: filledInputDecoration(hint: 'e.g. Flutter, Public Speaking', icon: Icons.add_task_rounded, iconColor: AppColors.primary, counterText: '', contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16)),
         ),
         const SizedBox(height: 16),
         const Text(
@@ -334,11 +317,7 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
           child: ElevatedButton.icon(
             onPressed: canAdd ? _addSkill : null,
             icon: _isAdding
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
+                ? const ButtonSpinner()
                 : const Icon(Icons.add_rounded),
             label: Text(
               _isAdding ? 'Adding...' : 'Add Skill',
@@ -437,11 +416,7 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
           if (busy)
             const Padding(
               padding: EdgeInsets.all(12),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
-              ),
+              child: ButtonSpinner(size: 20, color: AppColors.primary),
             )
           else ...[
             PopupMenuButton<String>(

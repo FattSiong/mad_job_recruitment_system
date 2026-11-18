@@ -8,6 +8,7 @@ import 'mock_interview_session_screen.dart';
 import '../../../shared_widgets/surface_card.dart';
 import '../../../shared_widgets/gradient_page_header.dart';
 import '../widgets/career_tools/career_tool_widgets.dart';
+import '../../../shared_widgets/confirm_dialog.dart';
 
 /// Step 1 of Use Case 4.59: choose a role / topic and give AI consent.
 class MockInterviewSetupScreen extends StatefulWidget {
@@ -71,30 +72,15 @@ class _MockInterviewSetupScreenState extends State<MockInterviewSetupScreen> {
     if (status.isGranted) return true;
 
     if (!mounted) return false;
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Microphone access needed'),
-        content: const Text(
-          'Microphone access is required to record and analyse your spoken answers. '
+    final openSettings = await showConfirmDialog(
+      context,
+      title: 'Microphone access needed',
+      message: 'Microphone access is required to record and analyse your spoken answers. '
           'Please allow it in your device settings to start the mock interview.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(dialogContext);
-              openAppSettings();
-            },
-            child: const Text('Open Settings'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Open Settings',
+      destructive: false,
     );
+    if (openSettings) await openAppSettings();
     return false;
   }
 

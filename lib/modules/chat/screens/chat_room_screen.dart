@@ -19,6 +19,8 @@ import '../widgets/chat_composer.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/shared_attachments_sheet.dart';
 import '../../../shared_widgets/action_sheet.dart';
+import '../../../shared_widgets/text_edit_dialog.dart';
+import '../../../shared_widgets/button_spinner.dart';
 
 /// One conversation.
 class ChatRoomScreen extends StatefulWidget {
@@ -181,7 +183,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
       case 'copy':
         await Clipboard.setData(ClipboardData(text: message.content));
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied')));
+          SnackBarHelper.showSuccess(context, 'Copied');
         }
       case 'discard':
         await _controller.discard(message);
@@ -209,42 +211,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
 
   /// Edit dialog for one of the user's messages (within 2 minutes of sending).
   Future<void> _editMessage(MessageModel message) async {
-    final editController = TextEditingController(text: message.content);
-    final newText = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Edit message'),
-        content: TextField(
-          controller: editController,
-          autofocus: true,
-          minLines: 1,
-          maxLines: 6,
-          maxLength: 4000,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: InputDecoration(
-            counterText: '',
-            filled: true,
-            fillColor: AppColors.surfaceAlt,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, editController.text),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
+    final newText = await showTextEditDialog(
+      context,
+      title: 'Edit message',
+      initialText: message.content,
+      maxLength: 4000,
+      showCounter: false,
     );
-    // Not disposed here: the dialog's TextField is still on screen while it closes.
     if (newText == null || !mounted) return;
     final error = await _controller.editMessage(message, newText);
     if (error != null) _showError(error);
@@ -280,7 +253,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
     if (choice == 'copy') {
       await Clipboard.setData(ClipboardData(text: message.content));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied')));
+        SnackBarHelper.showSuccess(context, 'Copied');
       }
     } else if (choice == 'edit') {
       await _editMessage(message);
@@ -664,11 +637,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
     return const Padding(
       padding: EdgeInsets.symmetric(vertical: 12),
       child: Center(
-        child: SizedBox(
-          width: 22,
-          height: 22,
-          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
-        ),
+        child: ButtonSpinner(size: 22, color: AppColors.primary),
       ),
     );
   }

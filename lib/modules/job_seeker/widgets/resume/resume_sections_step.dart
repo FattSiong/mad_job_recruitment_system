@@ -8,6 +8,7 @@ import 'resume_record_steps.dart';
 import 'resume_section_item_sheet.dart';
 import '../../../../shared_widgets/confirm_dialog.dart';
 import '../../../../shared_widgets/action_sheet.dart';
+import '../../../../core/theme/app_input_decoration.dart';
 
 /// Last step: optional sections (summary, projects, awards, languages...).
 class ResumeSectionsStep extends StatelessWidget {
@@ -160,21 +161,9 @@ class _SectionCardState extends State<_SectionCard> {
                 maxLines: 8,
                 maxLength: 1200,
                 textCapitalization: TextCapitalization.sentences,
-                decoration: InputDecoration(
-                  hintText: _type == ResumeSectionType.summary
+                decoration: filledInputDecoration(hint: _type == ResumeSectionType.summary
                       ? 'e.g. Final-year IT student with hands-on Flutter experience...'
-                      : 'Anything else an employer should know',
-                  filled: true,
-                  fillColor: AppColors.surface,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: AppColors.border),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: AppColors.border),
-                  ),
-                ),
+                      : 'Anything else an employer should know', fillColor: AppColors.surface, radius: 14),
               ),
             )
           else ...[
