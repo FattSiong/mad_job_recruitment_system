@@ -97,7 +97,10 @@ class ResumeBuilderController extends ChangeNotifier {
       address: profile.location ?? '',
       education: [...profile.education]..sort(_newestEducationFirst),
       experience: [...profile.workExperience]..sort(_newestExperienceFirst),
-      skills: skills.map((s) => ResumeSkill(s.skillName, s.proficiency)).toList(),
+      skills: skills
+          .take(maxSkills)
+          .map((s) => ResumeSkill(s.skillName, s.proficiency))
+          .toList(),
     );
   }
 
@@ -176,9 +179,16 @@ class ResumeBuilderController extends ChangeNotifier {
   void removeExperience(int index) =>
       _update(_resume.copyWith(experience: [..._resume.experience]..removeAt(index)));
 
-  /// Adds a skill with an optional level (no duplicates, up to 50 characters).
-  /// Returns an error message, or null when added.
+  /// Most skills on the resume (same as the profile).
+  static const int maxSkills = SkillController.maxSkills;
+
+  /// True when the resume has [maxSkills] skills.
+  bool get skillsFull => _resume.skills.length >= maxSkills;
+
+  /// Adds a skill with an optional level (no duplicates, up to 50 characters,
+  /// at most [maxSkills]). Returns an error message, or null when added.
   String? addSkill(String name, String? level) {
+    if (skillsFull) return SkillController.limitMessage;
     final clean = name.trim().replaceAll(RegExp(r'\s+'), ' ');
     if (clean.isEmpty) return 'Please enter a skill.';
     if (clean.length > 50) return 'Skill names can be up to 50 characters.';

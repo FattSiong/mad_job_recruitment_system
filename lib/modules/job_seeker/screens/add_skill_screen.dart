@@ -88,9 +88,16 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
     }
   }
 
+  /// True when the profile has the most skills allowed.
+  bool get _atLimit => _skills.length >= SkillController.maxSkills;
+
   /// Adds the typed skill with the chosen level.
   Future<void> _addSkill() async {
     if (_isAdding) return;
+    if (_atLimit) {
+      _showSnack(SkillController.limitMessage, success: false);
+      return;
+    }
     FocusScope.of(context).unfocus();
     setState(() => _isAdding = true);
 
@@ -226,15 +233,45 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
 
   /// Skill name box, level choice, suggestions and the Add button.
   Widget _buildAddCard() {
-    final canAdd = _nameController.text.trim().isNotEmpty && !_isAdding;
-    final suggestions = _suggestedSkills.where((s) => !_alreadyAdded(s)).toList();
+    // Wait for the list before allowing adds, so the limit is known
+    final atLimit = !_isLoading && _loadError == null && _atLimit;
+    final canAdd = _nameController.text.trim().isNotEmpty && !_isAdding && !_isLoading && !atLimit;
+    final suggestions =
+        atLimit ? const <String>[] : _suggestedSkills.where((s) => !_alreadyAdded(s)).toList();
 
     return SurfaceCard(
       children: [
-        SectionTitle('Add a Skill', subtitle: 'Type a skill and choose how well you know it.'),
+        SectionTitle(
+          'Add a Skill',
+          subtitle: 'Type a skill and choose how well you know it. Up to ${SkillController.maxSkills} skills.',
+        ),
+        if (atLimit) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.primarySoft,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.info_outline_rounded, color: AppColors.primary, size: 20),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    SkillController.limitMessage,
+                    style: TextStyle(color: AppColors.textDark, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
         TextField(
           controller: _nameController,
           focusNode: _nameFocus,
+          enabled: !atLimit,
           maxLength: SkillController.maxNameLength,
           textCapitalization: TextCapitalization.words,
           textInputAction: TextInputAction.done,
@@ -380,7 +417,12 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
 
     return SurfaceCard(
       children: [
-        SectionTitle(_isLoading || _loadError != null ? 'Your Skills' : 'Your Skills (${_skills.length})', subtitle: 'Tap the level to change it.'),
+        SectionTitle(
+          _isLoading || _loadError != null
+              ? 'Your Skills'
+              : 'Your Skills (${_skills.length}/${SkillController.maxSkills})',
+          subtitle: 'Tap the level to change it.',
+        ),
         body,
       ],
     );

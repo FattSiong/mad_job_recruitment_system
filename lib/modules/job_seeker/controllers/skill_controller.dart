@@ -20,6 +20,12 @@ class SkillController {
 
   static const int maxNameLength = 50;
 
+  /// Most skills a profile (and a built resume) can have.
+  static const int maxSkills = 20;
+
+  static const String limitMessage =
+      'You can add up to $maxSkills skills. Remove one to add another.';
+
   /// The seeker's skills, oldest first.
   Future<List<SkillModel>> fetchMySkills() async {
     final userId = _supabase.auth.currentUser?.id;
@@ -61,7 +67,8 @@ class SkillController {
   }
 
   /// Adds a skill and returns the saved row.
-  /// Throws [SkillException] for empty, too long or duplicate names.
+  /// Throws [SkillException] for empty, too long or duplicate names, or when
+  /// the profile already has [maxSkills] skills (also checked by the database).
   Future<SkillModel> addSkill(String name, {String? proficiency}) async {
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) throw SkillException('Please log in again.');
@@ -86,6 +93,8 @@ class SkillController {
       debugPrint('Error adding skill: ${e.code} ${e.message}');
       // 23505 = unique index skill_seeker_name_uq (same name, any letter case)
       if (e.code == '23505') throw SkillException('"$cleaned" is already in your skills.');
+      // Raised by the skill_limit trigger
+      if (e.message.contains('skill_limit')) throw SkillException(limitMessage);
       throw SkillException('Failed to add skill. Please try again.');
     } catch (e) {
       debugPrint('Error adding skill: $e');

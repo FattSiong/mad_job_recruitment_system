@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../models/work_experience_model.dart';
@@ -125,7 +124,7 @@ Future<WorkExperienceModel?> showAddExperienceSheet(
                             child: Text(
                               startDate == null
                                   ? 'Select'
-                                  : DateFormat('yMd').format(startDate!),
+                                  : formatProfileDate(startDate!),
                               style: TextStyle(
                                 color: startDate == null
                                     ? Colors.grey.shade600
@@ -194,7 +193,7 @@ Future<WorkExperienceModel?> showAddExperienceSheet(
                                   ? 'Present'
                                   : (endDate == null
                                   ? 'Select'
-                                  : DateFormat('yMd').format(endDate!)),
+                                  : formatProfileDate(endDate!)),
                               style: TextStyle(
                                 color: (endDate == null && !isCurrentRole)
                                     ? Colors.grey.shade600

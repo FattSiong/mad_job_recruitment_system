@@ -39,6 +39,7 @@ class _ResumeSkillsStepState extends State<ResumeSkillsStep> {
   @override
   Widget build(BuildContext context) {
     final skills = widget.controller.resume.skills;
+    final full = widget.controller.skillsFull;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -49,12 +50,13 @@ class _ResumeSkillsStepState extends State<ResumeSkillsStep> {
             Expanded(
               child: TextField(
                 controller: _input,
+                enabled: !full,
                 maxLength: 50,
                 textCapitalization: TextCapitalization.words,
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _add(),
                 decoration: InputDecoration(
-                  hintText: 'e.g. Flutter, Customer Service',
+                  hintText: full ? 'Skill limit reached' : 'e.g. Flutter, Customer Service',
                   errorText: _error,
                   counterText: '',
                   filled: true,
@@ -74,7 +76,7 @@ class _ResumeSkillsStepState extends State<ResumeSkillsStep> {
             SizedBox(
               height: 56,
               child: ElevatedButton(
-                onPressed: _add,
+                onPressed: full ? null : _add,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
@@ -130,9 +132,11 @@ class _ResumeSkillsStepState extends State<ResumeSkillsStep> {
           ),
         if (skills.isNotEmpty) ...[
           const SizedBox(height: 8),
-          const Text(
-            'Tap a skill to change its level.',
-            style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+          Text(
+            full
+                ? '${skills.length}/${ResumeBuilderController.maxSkills} skills. Remove one to add another.'
+                : '${skills.length}/${ResumeBuilderController.maxSkills} skills · Tap a skill to change its level.',
+            style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
           ),
         ],
       ],
