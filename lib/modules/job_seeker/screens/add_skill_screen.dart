@@ -8,6 +8,7 @@ import '../controllers/skill_controller.dart';
 import '../widgets/load_error_view.dart';
 import '../../../shared_widgets/confirm_dialog.dart';
 import '../../../shared_widgets/surface_card.dart';
+import '../../../shared_widgets/gradient_page_header.dart';
 
 /// Add, update and remove the skills on the job seeker's profile.
 /// Changes are saved straight away; callers should reload skills when this screen closes.
@@ -217,47 +218,11 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
   }
 
   /// Gradient header with the title and back button.
-  Widget _buildHeader() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: AppColors.headerGradient,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-          ),
-          const SizedBox(width: 8),
-          const Icon(Icons.psychology_outlined, color: Colors.white, size: 34),
-          const SizedBox(width: 14),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'My Skills',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 25,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 6),
-                Text(
-                  'Skills help employers find you and improve your Skill Gap Analysis.',
-                  style: TextStyle(color: Colors.white70, fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildHeader() => const GradientPageHeader(
+        icon: Icons.psychology_outlined,
+        title: 'My Skills',
+        subtitle: 'Skills help employers find you and improve your Skill Gap Analysis.',
+      );
 
   /// Skill name box, level choice, suggestions and the Add button.
   Widget _buildAddCard() {

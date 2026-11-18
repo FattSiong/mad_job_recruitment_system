@@ -10,6 +10,7 @@ import '../widgets/profile/add_education_sheet.dart';
 import '../widgets/profile/profile_record_card.dart';
 import '../widgets/profile/profile_sheet_helpers.dart';
 import '../../../shared_widgets/confirm_dialog.dart';
+import '../../../shared_widgets/gradient_page_header.dart';
 
 /// Add, edit and remove the job seeker's education.
 /// Changes are saved straight away; callers should reload when this screen closes.
@@ -174,47 +175,11 @@ class _EducationScreenState extends State<EducationScreen> {
   }
 
   /// Gradient header with the title and back button.
-  Widget _buildHeader() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: AppColors.headerGradient,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-          ),
-          const SizedBox(width: 8),
-          const Icon(Icons.school_outlined, color: Colors.white, size: 34),
-          const SizedBox(width: 14),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Education',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 25,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 6),
-                Text(
-                  'Add your schools, qualifications and achievements.',
-                  style: TextStyle(color: Colors.white70, fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildHeader() => const GradientPageHeader(
+        icon: Icons.school_outlined,
+        title: 'Education',
+        subtitle: 'Add your schools, qualifications and achievements.',
+      );
 
   /// "Your Education (3)" (no count while loading or after an error).
   Widget _buildListTitle() {

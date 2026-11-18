@@ -5,6 +5,7 @@ import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/moderation_item_model.dart';
 import '../controllers/admin_community_controller.dart';
 import '../widgets/moderation_card.dart';
+import '../widgets/moderation_list_parts.dart';
 import '../widgets/moderation_note_dialog.dart';
 
 /// Admin > Community: reported (or all) posts and comments, with the
@@ -237,29 +238,13 @@ class _AdminCommunityScreenState extends State<AdminCommunityScreen> {
     );
   }
 
-  Widget _searchBox() {
-    final reported = _controller.view == ModerationView.reported;
-    return TextField(
-      controller: _searchText,
-      onChanged: _controller.setSearch,
-      textInputAction: TextInputAction.search,
-      decoration: InputDecoration(
-        isDense: true,
-        filled: true,
-        fillColor: Colors.white,
-        hintText: reported ? 'Search text, author, reason…' : 'Search text or author',
-        prefixIcon: const Icon(Icons.search_rounded, color: AdminColors.textSecondary),
-        suffixIcon: _controller.isSearching
-            ? IconButton(
-                tooltip: 'Clear',
-                icon: const Icon(Icons.close_rounded, size: 18),
-                onPressed: _clearSearch,
-              )
-            : null,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-      ),
-    );
-  }
+  Widget _searchBox() => ModerationSearchField(
+        controller: _searchText,
+        hint: _controller.view == ModerationView.reported ? 'Search text, author, reason…' : 'Search text or author',
+        hasText: _controller.isSearching,
+        onChanged: _controller.setSearch,
+        onClear: _clearSearch,
+      );
 
   void _clearSearch() {
     _searchText.clear();
@@ -267,46 +252,13 @@ class _AdminCommunityScreenState extends State<AdminCommunityScreen> {
     FocusScope.of(context).unfocus();
   }
 
-  Widget _sortMenu() {
-    return PopupMenuButton<ModerationSort>(
-      tooltip: 'Sort',
-      initialValue: _controller.sort,
-      onSelected: _controller.setSort,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      itemBuilder: (_) => [
-        for (final s in _controller.sortOptions)
-          PopupMenuItem(
-            value: s,
-            child: Row(
-              children: [
-                Icon(
-                  s == _controller.sort ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
-                  size: 18,
-                  color: AdminColors.heroEnd,
-                ),
-                const SizedBox(width: 10),
-                Text(s == ModerationSort.oldest && _controller.view == ModerationView.reported
-                    ? 'Waiting longest'
-                    : s.label),
-              ],
-            ),
-          ),
-      ],
-      child: Container(
-        height: 48,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.sort_rounded, color: AdminColors.heroStart, size: 20),
-            SizedBox(width: 6),
-            Text('Sort', style: TextStyle(fontWeight: FontWeight.w700, color: AdminColors.heroStart)),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _sortMenu() => ModerationSortButton(
+        selected: _controller.sort,
+        options: _controller.sortOptions,
+        onSelected: _controller.setSort,
+        labelFor: (s) =>
+            s == ModerationSort.oldest && _controller.view == ModerationView.reported ? 'Waiting longest' : s.label,
+      );
 
   Widget _pill(String label, int count, bool selected, VoidCallback onTap) {
     return GestureDetector(
@@ -356,7 +308,7 @@ class _AdminCommunityScreenState extends State<AdminCommunityScreen> {
     if (c.error != null && items.isEmpty) {
       return [
         SliverToBoxAdapter(
-          child: _stateCard(
+          child: ModerationStateCard(
             icon: Icons.cloud_off_rounded,
             title: 'Couldn\'t load',
             message: c.error!,
@@ -374,7 +326,7 @@ class _AdminCommunityScreenState extends State<AdminCommunityScreen> {
       return [
         SliverToBoxAdapter(
           child: c.isSearching
-              ? _stateCard(
+              ? ModerationStateCard(
                   icon: Icons.search_off_rounded,
                   title: 'No results for "${c.search.trim()}"',
                   message: c.view == ModerationView.reported
@@ -387,12 +339,12 @@ class _AdminCommunityScreenState extends State<AdminCommunityScreen> {
                   ),
                 )
               : c.view == ModerationView.reported
-              ? _stateCard(
+              ? ModerationStateCard(
                   icon: Icons.verified_user_outlined,
                   title: 'No reported $what',
                   message: 'Everything reported has been handled.',
                 )
-              : _stateCard(
+              : ModerationStateCard(
                   icon: Icons.forum_outlined,
                   title: 'No $what yet',
                   message: 'Published $what will appear here.',
@@ -401,29 +353,7 @@ class _AdminCommunityScreenState extends State<AdminCommunityScreen> {
       ];
     }
     return [
-      if (c.error != null)
-        SliverToBoxAdapter(
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: AdminColors.alertRed.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.cloud_off_rounded, size: 18, color: AdminColors.alertRed),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Couldn\'t refresh. Showing the list from before; pull down to try again.',
-                    style: TextStyle(fontSize: 12.5, color: AdminColors.textPrimary),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+      if (c.error != null) const SliverToBoxAdapter(child: ModerationRefreshFailedBanner()),
       if (c.reportsCapped)
         SliverToBoxAdapter(
           child: Padding(
@@ -455,42 +385,13 @@ class _AdminCommunityScreenState extends State<AdminCommunityScreen> {
       ),
       if (c.isLoadingMore || c.hasMore)
         SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Center(
-              child: c.isLoadingMore
-                  ? const CircularProgressIndicator(color: AdminColors.heroEnd)
-                  : TextButton.icon(
-                      onPressed: () => c.loadMore(retry: true),
-                      icon: Icon(c.loadMoreFailed ? Icons.refresh_rounded : Icons.expand_more_rounded),
-                      label: Text(c.loadMoreFailed ? 'Couldn\'t load more. Try again' : 'Load more'),
-                    ),
-            ),
+          child: ModerationLoadMore(
+            loading: c.isLoadingMore,
+            failed: c.loadMoreFailed,
+            onPressed: () => c.loadMore(retry: true),
           ),
         ),
     ];
-  }
-
-  Widget _stateCard({required IconData icon, required String title, required String message, Widget? action}) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 24, 16, 0),
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22)),
-      child: Column(
-        children: [
-          Icon(icon, size: 40, color: AdminColors.heroEnd),
-          const SizedBox(height: 12),
-          Text(title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AdminColors.textPrimary)),
-          const SizedBox(height: 6),
-          Text(message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 13.5, color: AdminColors.textSecondary, height: 1.4)),
-          if (action != null) ...[const SizedBox(height: 8), action],
-        ],
-      ),
-    );
   }
 
   static String _plural(int n, String word) => '$n $word${n == 1 ? '' : 's'}';

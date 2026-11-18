@@ -10,6 +10,7 @@ import '../widgets/profile/add_experience_sheet.dart';
 import '../widgets/profile/profile_record_card.dart';
 import '../widgets/profile/profile_sheet_helpers.dart';
 import '../../../shared_widgets/confirm_dialog.dart';
+import '../../../shared_widgets/gradient_page_header.dart';
 
 /// Add, edit and remove the job seeker's work experience.
 /// Changes are saved straight away; callers should reload when this screen closes.
@@ -174,47 +175,11 @@ class _WorkExperienceScreenState extends State<WorkExperienceScreen> {
   }
 
   /// Gradient header with the title and back button.
-  Widget _buildHeader() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: AppColors.headerGradient,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-          ),
-          const SizedBox(width: 8),
-          const Icon(Icons.work_history_outlined, color: Colors.white, size: 34),
-          const SizedBox(width: 14),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Work Experience',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 25,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 6),
-                Text(
-                  'Show employers where you have worked and what you did.',
-                  style: TextStyle(color: Colors.white70, fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildHeader() => const GradientPageHeader(
+        icon: Icons.work_history_outlined,
+        title: 'Work Experience',
+        subtitle: 'Show employers where you have worked and what you did.',
+      );
 
   /// "Your Experience (2)" (no count while loading or after an error).
   Widget _buildListTitle() {
