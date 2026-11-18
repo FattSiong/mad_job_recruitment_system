@@ -22,7 +22,7 @@ enum PostListMode {
 }
 
 /// Loads a list of community posts and handles like / save / delete on them.
-/// Used by the Feed tab, the My Posts tab and the Saved Posts screen.
+/// Used by the Community Hub feed, My Posts and Saved Posts.
 class PostListController extends ChangeNotifier with SafeNotifier {
   final PostListMode mode;
   final String currentUserID;
@@ -58,6 +58,7 @@ class PostListController extends ChangeNotifier with SafeNotifier {
   bool _isLoadingMore = false;
   bool _hasMore = false;
   String? _error;
+  ChatParticipant? _currentUser;
   PostFilter _filter = PostFilter.none; // feed only
   MyPostsStatus _status = MyPostsStatus.all; // My Posts only
   int _loadToken = 0; // a newer load makes older results obsolete
@@ -81,6 +82,10 @@ class PostListController extends ChangeNotifier with SafeNotifier {
   bool get isLoadingMore => _isLoadingMore;
   bool get hasMore => _hasMore;
   String? get error => _error;
+
+  /// The signed-in user's name and photo (the My Posts avatar in the hub);
+  /// null until the first load gets it.
+  ChatParticipant? get currentUser => _currentUser;
   bool get isEmpty => posts.isEmpty;
 
   PostFilter get filter => _filter;
@@ -124,6 +129,15 @@ class PostListController extends ChangeNotifier with SafeNotifier {
   // Loading
   // ---------------------------------------------------------------------
 
+  /// Updates [currentUser]. Cached by [UserDirectory], so this only goes to
+  /// the database the first time or after the user changed their profile.
+  Future<void> _refreshCurrentUser() async {
+    final me = await UserDirectory.fetchOne(currentUserID);
+    if (isDisposed) return;
+    _currentUser = me;
+    notifySafely();
+  }
+
   /// Loads the first page again (pull to refresh, new filter, or after a change).
   Future<void> load() async {
     final token = ++_loadToken;
@@ -131,6 +145,7 @@ class PostListController extends ChangeNotifier with SafeNotifier {
     _isLoadingMore = false;
     _error = null;
     notifySafely();
+    _refreshCurrentUser();
     try {
       final page = await _fetch(offset: 0);
       final models = await _toModels(page.rows);

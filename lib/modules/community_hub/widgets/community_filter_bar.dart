@@ -14,7 +14,10 @@ import 'community_filter_sheet.dart';
 class CommunityFilterBar extends StatefulWidget {
   final PostListController controller;
 
-  const CommunityFilterBar({super.key, required this.controller});
+  /// Shown at the left of the search box (e.g. the My Posts avatar).
+  final Widget? leading;
+
+  const CommunityFilterBar({super.key, required this.controller, this.leading});
 
   @override
   State<CommunityFilterBar> createState() => _CommunityFilterBarState();
@@ -98,6 +101,10 @@ class _CommunityFilterBarState extends State<CommunityFilterBar> {
             children: [
               Row(
                 children: [
+                  if (widget.leading != null) ...[
+                    widget.leading!,
+                    const SizedBox(width: 10),
+                  ],
                   Expanded(child: _buildSearchField()),
                   const SizedBox(width: 10),
                   _buildFilterButton(filter.sheetCount),
