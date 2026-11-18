@@ -1,20 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
+import '../../../core/constants/job_filter_options.dart';
+import '../../../core/theme/app_button_styles.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/data_load_exception.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/nearby_job_model.dart';
+import '../../../shared_widgets/button_spinner.dart';
+import '../../../shared_widgets/state_message_card.dart';
 import '../controllers/job_map_controller.dart';
 import '../controllers/location_controller.dart';
-import '../widgets/job_filters.dart';
+import '../widgets/dashboard/job_search_sheet.dart';
+import '../widgets/load_error_view.dart';
 import '../widgets/map/nearby_job_card.dart';
 import 'job_details_screen.dart';
-import '../../../core/theme/app_input_decoration.dart';
-import '../../../shared_widgets/button_spinner.dart';
 
-/// "Discover Nearby Jobs": jobs around a point on the map, with a swipeable
-/// list of the results (nearest first) that follows the pins.
+/// Nearby Jobs: a full-screen map of jobs around a point, with a search
+/// pill on top (opens the same search as Home, plus distance) and a
+/// drag-up list of the results, nearest first. Tapping a pin lists only the
+/// jobs at that pin, with "Show all" to go back to every job.
 class JobMapScreen extends StatefulWidget {
   const JobMapScreen({super.key});
 
@@ -23,61 +30,83 @@ class JobMapScreen extends StatefulWidget {
 }
 
 class _JobMapScreenState extends State<JobMapScreen> {
-  // Space taken by the search bar + filters at the top, and the job list at the bottom.
-  static const double _topOverlay = 136;
-  static const double _listHeight = 136;
+  static const double _barHeight = 56; // back button and search pill
+  static const double _peekHeight = 84; // list header when the list is closed
+  static const double _halfSize = 0.42; // list half open (how it starts)
 
   final JobMapController _controller = JobMapController();
-  final TextEditingController _keywordController = TextEditingController();
-  final PageController _pageController = PageController(viewportFraction: 0.88);
+  final DraggableScrollableController _sheet = DraggableScrollableController();
 
+  /// Scrolls the job list (given by the drag-up sheet).
+  ScrollController? _listScroll;
   GoogleMapController? _map;
   LatLng _cameraTarget = JobMapController.fallbackCenter;
 
   /// True while the app (not the user) is moving the camera.
   bool _programmaticMove = false;
 
+  // Built once per change instead of every frame (the map rebuilds while
+  // the list is dragged, the camera moves or the status changes).
+  Set<Marker> _markerCache = const {};
+  Map<String, List<NearbyJob>>? _markerSpots;
+  String? _markerOpenSpot;
+  Widget? _sheetContent;
+  ScrollController? _sheetScroll;
+
   @override
   void initState() {
     super.initState();
-    _keywordController.addListener(() => setState(() {}));
     _start();
   }
 
   @override
   void dispose() {
-    _keywordController.dispose();
-    _pageController.dispose();
+    _sheet.dispose();
     _controller.dispose();
     super.dispose();
   }
 
   // ---------------------------------------------------------------------
-  // Start-up: find the user, then search straight away
+  // Start-up and location
   // ---------------------------------------------------------------------
 
-  /// Finds where to start (the phone's location or Kuala Lumpur) and searches there.
+  /// Searches around the phone, or Kuala Lumpur when its location isn't available.
   Future<void> _start() async {
     final start = await _controller.findStartLocation();
     if (!mounted) return;
-    _showLocationIssue(start.issue);
-    // The user already searched (a keyword or a place) while the phone was
-    // being located: keep their search instead of replacing it.
+    _showLocationIssue(start.issue, showingFallback: true);
+    // The user already searched while the phone was being located: keep it.
     if (_controller.searchCenter != null) return;
     _cameraTarget = start.position;
-    await _searchAt(start.position);
+    await _searchAt(
+      start.position,
+      location: start.issue == null ? JobFilterOptions.currentLocation : 'Kuala Lumpur',
+    );
+  }
+
+  /// Searches around the phone's location. False if it isn't available
+  /// (the reason is shown).
+  Future<bool> _searchNearMe() async {
+    final start = await _controller.findStartLocation();
+    if (!mounted) return false;
+    _showLocationIssue(start.issue);
+    if (start.issue != null) return false;
+    _cameraTarget = start.position;
+    await _searchAt(start.position, location: JobFilterOptions.currentLocation);
+    return true;
   }
 
   /// Explains why the phone's location isn't used, with a button to fix it
   /// (turn on location / open settings).
-  void _showLocationIssue(LocationIssue? issue) {
+  void _showLocationIssue(LocationIssue? issue, {bool showingFallback = false}) {
     if (issue == null) return;
+    final fallback = showingFallback ? ' Showing Kuala Lumpur instead.' : '';
     String message;
     String? label;
     Future<bool> Function()? action;
     switch (issue) {
       case LocationIssue.serviceOff:
-        message = 'Location is turned off. Showing Kuala Lumpur instead.';
+        message = 'Location is turned off.$fallback';
         label = 'Turn On';
         action = Geolocator.openLocationSettings;
       case LocationIssue.blocked:
@@ -85,9 +114,9 @@ class _JobMapScreenState extends State<JobMapScreen> {
         label = 'Settings';
         action = Geolocator.openAppSettings;
       case LocationIssue.denied:
-        message = 'Showing Kuala Lumpur. Move the map or search a place to look elsewhere.';
+        message = 'Location permission was denied.$fallback';
       case LocationIssue.failed:
-        message = 'Couldn\'t find your location. Showing Kuala Lumpur instead.';
+        message = 'Couldn\'t find your location.$fallback';
     }
     final onAction = action;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -101,120 +130,79 @@ class _JobMapScreenState extends State<JobMapScreen> {
     );
   }
 
-  /// "My location" button: searches around the phone's location again.
-  Future<void> _goToMyLocation() async {
-    final start = await _controller.findStartLocation();
-    if (!mounted) return;
-    _showLocationIssue(start.issue);
-    if (start.issue == null) await _searchAt(start.position);
-  }
-
   // ---------------------------------------------------------------------
   // Searching
   // ---------------------------------------------------------------------
 
-  /// Searches around [center] and zooms the map to the search circle.
-  Future<void> _searchAt(LatLng center) async {
-    FocusScope.of(context).unfocus();
-    _controller.setKeyword(_keywordController.text);
-    _fitToArea(center); // zoom so the whole search circle is visible
+  /// Searches around [center] ([location] says what it is, see
+  /// [JobMapController.filters]) and zooms the map to the search circle.
+  Future<void> _searchAt(LatLng center, {required String location}) async {
+    _controller.setFilters(_controller.filters.copyWith(location: location));
+    _fitToArea(center);
     await _controller.search(center);
-    if (!mounted) return;
-    // The job list changes the map's bottom padding; re-fit once it's on screen.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _controller.searchCenter == center) _fitToArea(center);
-    });
-    if (_controller.error != null) {
-      SnackBarHelper.showError(context, _controller.error!, duration: const Duration(seconds: 3));
-    }
-    if (_pageController.hasClients && _controller.hasResults) {
-      _pageController.jumpToPage(0);
-    }
+    if (mounted) _scrollListToTop();
   }
 
-  /// Search again around the same point (after a filter or radius change).
-  Future<void> _searchAgain() => _searchAt(_controller.searchCenter ?? _cameraTarget);
+  /// Searches the same area again (after a filter or radius change).
+  Future<void> _searchAgain() =>
+      _searchAt(_controller.searchCenter ?? _cameraTarget, location: _controller.filters.location);
 
-  /// "Widen search": doubles the radius and searches again.
+  /// Opens the search; searches with what the user chose.
+  Future<void> _openSearch() async {
+    final previous = _controller.filters;
+    final filters = await showJobSearchSheet(context, initial: previous, forMap: true);
+    if (filters == null || !mounted) return;
+    _controller.setFilters(filters);
+
+    final location = filters.location.trim();
+    final sameArea = location.isEmpty ||
+        (location == previous.location.trim() && _controller.searchCenter != null);
+
+    if (location == JobFilterOptions.currentLocation && !sameArea) {
+      if (!await _searchNearMe()) await _keepArea(previous.location);
+      return;
+    }
+    if (sameArea) {
+      await _searchAgain();
+      return;
+    }
+
+    final place = await _controller.findPlace(location);
+    if (!mounted) return;
+    if (place == null) {
+      SnackBarHelper.showStyled(
+        context,
+        message: 'Couldn\'t find "$location". Try a town or area name.',
+        icon: Icons.location_off_outlined,
+        accentColor: AppColors.warning,
+        duration: const Duration(seconds: 3),
+      );
+      await _keepArea(previous.location);
+      return;
+    }
+    _cameraTarget = place;
+    await _searchAt(place, location: location);
+  }
+
+  /// The new area couldn't be used: search the old area with the new filters.
+  Future<void> _keepArea(String location) {
+    _controller.setFilters(_controller.filters.copyWith(location: location));
+    return _searchAgain();
+  }
+
+  /// "Search 20 km" on an empty result.
   Future<void> _widenRadius() async {
     if (_controller.widenRadius()) await _searchAgain();
   }
 
   /// Clears the keyword and filters and searches again.
   Future<void> _clearFilters() async {
-    _keywordController.clear();
     _controller.clearFilters();
     await _searchAgain();
   }
 
-  /// Opens one filter's sheet; searches again when the value changed.
-  Future<void> _pickFilter(String filterType) async {
-    final value = await showJobFilterSheet(
-      context,
-      filterType: filterType,
-      currentValue: _controller.filterValue(filterType),
-    );
-    if (value == null || !mounted || value == _controller.filterValue(filterType)) return;
-    _controller.setFilter(filterType, value);
-    await _searchAgain();
-  }
-
-  /// Opens the radius sheet; searches again when the radius changed.
-  Future<void> _pickRadius() async {
-    final km = await showRadiusFilterSheet(context, currentKm: _controller.radiusKm);
-    if (km == null || !mounted || km == _controller.radiusKm) return;
-    _controller.setRadius(km);
-    await _searchAgain();
-  }
-
-  /// Asks for a place name, then searches around it.
-  Future<void> _searchPlace() async {
-    final input = TextEditingController();
-    final query = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Search a place'),
-        content: TextField(
-          controller: input,
-          autofocus: true,
-          textInputAction: TextInputAction.search,
-          textCapitalization: TextCapitalization.words,
-          onSubmitted: (v) => Navigator.pop(dialogContext, v),
-          decoration: filledInputDecoration(hint: 'e.g. Cyberjaya, Penang, Bangsar', icon: Icons.place_outlined, iconColor: AppColors.primary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, input.text),
-            child: const Text('Go'),
-          ),
-        ],
-      ),
-    );
-    if (query == null || query.trim().isEmpty || !mounted) return;
-
-    final place = await _controller.findPlace(query);
-    if (!mounted) return;
-    if (place == null) {
-      SnackBarHelper.showStyled(
-        context,
-        message: 'Couldn\'t find "${query.trim()}". Try a town or area name.',
-        icon: Icons.location_off_outlined,
-        accentColor: AppColors.warning,
-        duration: const Duration(seconds: 3),
-      );
-      return;
-    }
-    _cameraTarget = place;
-    await _searchAt(place);
-  }
-
   // ---------------------------------------------------------------------
-  // Camera
+  // Camera, pins and the list
   // ---------------------------------------------------------------------
 
   /// Moves the map camera; marks the move as the app's own, not the user's.
@@ -254,41 +242,62 @@ class _JobMapScreenState extends State<JobMapScreen> {
     _controller.cameraSettled(_cameraTarget);
   }
 
-  /// A job card was swiped into view: highlight its pin and centre on it.
-  void _onPageChanged(int index) {
-    _controller.select(index);
-    final item = index < _controller.jobs.length ? _controller.jobs[index] : null;
-    if (item != null) _animate(CameraUpdate.newLatLng(LatLng(item.latitude, item.longitude)));
-  }
+  /// A pin was tapped: list only its jobs, centre on it and open the list
+  /// if it is closed.
+  Future<void> _onSpotTapped(String spotKey) async {
+    final jobsHere = _controller.spots[spotKey];
+    if (jobsHere == null || jobsHere.isEmpty) return;
+    _controller.openSpot(spotKey);
+    _scrollListToTop();
+    final first = jobsHere.first;
+    _animate(CameraUpdate.newLatLng(LatLng(first.latitude, first.longitude)));
 
-  /// A pin was tapped: show its (first) job in the list.
-  void _onSpotTapped(String spotKey) {
-    final index = _controller.indexOfSpot(spotKey);
-    if (index < 0) return;
-    final current = _pageController.hasClients ? _pageController.page?.round() : null;
-    if (current != null && current != index) {
-      _pageController.jumpToPage(index); // _onPageChanged selects it and moves the map
-    } else {
-      _onPageChanged(index);
+    if (_sheet.isAttached && _sheet.size < _halfSize - 0.01) {
+      await _sheet.animateTo(
+        _halfSize,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
     }
   }
 
-  /// Opens the job's details.
-  void _openJob(NearbyJob item) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => JobDetailsScreen(job: item.job)),
-    );
+  /// "Show all" (or a tap on the map away from the pins): every job again.
+  void _showAllJobs() {
+    if (_controller.openedSpot == null) return;
+    _controller.showAllJobs();
+    _scrollListToTop();
   }
 
-  // ---------------------------------------------------------------------
-  // Map layers
-  // ---------------------------------------------------------------------
+  void _scrollListToTop() {
+    final list = _listScroll;
+    if (list != null && list.hasClients) list.jumpTo(0);
+  }
+
+  /// Opens the job's details.
+  /// (The search leaves out descriptions, so the whole job is loaded first.)
+  Future<void> _openJob(NearbyJob item) async {
+    if (_controller.openingJobID != null) return;
+    try {
+      final job = await _controller.loadFullJob(item);
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => JobDetailsScreen(job: job)),
+      );
+    } on DataLoadException catch (e) {
+      if (mounted) SnackBarHelper.showError(context, e.message, duration: const Duration(seconds: 3));
+    }
+  }
 
   /// One pin per spot (the number of jobs there when more than one).
+  /// Rebuilt only when the results or the opened pin change.
   Set<Marker> _markers() {
-    final selectedKey = _controller.selectedJob?.spotKey;
-    return _controller.spots.entries.map((entry) {
+    final spots = _controller.spots;
+    final selectedKey = _controller.openedSpot;
+    if (identical(spots, _markerSpots) && selectedKey == _markerOpenSpot) return _markerCache;
+    _markerSpots = spots;
+    _markerOpenSpot = selectedKey;
+    return _markerCache = spots.entries.map((entry) {
       final first = entry.value.first;
       final count = entry.value.length;
       final isSelected = entry.key == selectedKey;
@@ -331,350 +340,416 @@ class _JobMapScreenState extends State<JobMapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text(
-          'Discover Nearby Jobs',
-          style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.bold, fontSize: 22),
-        ),
+    final safe = MediaQuery.paddingOf(context);
+    final barTop = safe.top + 12;
+    final mapTop = barTop + _barHeight + 8;
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark, // dark status bar icons over the map
+      child: Scaffold(
         backgroundColor: AppColors.background,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        iconTheme: const IconThemeData(color: AppColors.textDark),
-      ),
-      body: ListenableBuilder(
-        listenable: _controller,
-        builder: (context, _) {
-          final showList = _controller.hasResults && !_controller.isLoading;
-          final bottomInset = showList ? _listHeight + 16 : 0.0;
-          final showCenterPin = _controller.areaMoved || !_controller.hasSearched;
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            final height = constraints.maxHeight;
+            final mapBottom = height * _halfSize;
+            final minSize = ((_peekHeight + safe.bottom) / height).clamp(0.08, _halfSize - 0.05);
+            final maxSize = (1 - (mapTop + 4) / height).clamp(_halfSize + 0.05, 1.0);
 
-          return Stack(
-            children: [
-              GoogleMap(
-                initialCameraPosition: const CameraPosition(
-                  target: JobMapController.fallbackCenter,
-                  zoom: 11,
-                ),
-                padding: EdgeInsets.only(top: _topOverlay, bottom: bottomInset),
-                onMapCreated: (map) {
-                  _map = map;
-                  final center = _controller.searchCenter;
-                  if (center != null) _fitToArea(center);
-                },
-                onCameraMove: (position) => _cameraTarget = position.target,
-                onCameraIdle: _onCameraIdle,
-                markers: _markers(),
-                circles: _circles(),
-                myLocationEnabled: true,
-                myLocationButtonEnabled: false,
-                zoomControlsEnabled: false,
-                mapToolbarEnabled: false,
-              ),
-
-              // Pin marking the centre of the next search (the map's padded centre).
-              if (showCenterPin)
-                Positioned(
-                  top: _topOverlay,
-                  bottom: bottomInset,
-                  left: 0,
-                  right: 0,
-                  child: const IgnorePointer(
-                    child: Center(
-                      child: Padding(
-                        padding: EdgeInsets.only(bottom: 36),
-                        child: Icon(Icons.location_on, size: 40, color: AppColors.coral),
+            return ListenableBuilder(
+              listenable: _controller,
+              builder: (context, _) {
+                final c = _controller;
+                final showCenterPin = c.areaMoved || !c.hasSearched;
+                _sheetContent = null; // something changed: build the list again
+                return Stack(
+                  children: [
+                    GoogleMap(
+                      initialCameraPosition: const CameraPosition(
+                        target: JobMapController.fallbackCenter,
+                        zoom: 11,
                       ),
+                      padding: EdgeInsets.only(top: mapTop, bottom: mapBottom),
+                      onMapCreated: (map) {
+                        _map = map;
+                        final center = c.searchCenter;
+                        if (center != null) _fitToArea(center);
+                      },
+                      onCameraMove: (position) => _cameraTarget = position.target,
+                      onCameraIdle: _onCameraIdle,
+                      onTap: (_) => _showAllJobs(),
+                      markers: _markers(),
+                      circles: _circles(),
+                      myLocationEnabled: true,
+                      myLocationButtonEnabled: false,
+                      zoomControlsEnabled: false,
+                      mapToolbarEnabled: false,
                     ),
-                  ),
-                ),
 
-              Positioned(top: 12, left: 16, right: 16, child: _buildSearchPanel()),
+                    // Pin marking the centre of the next search (the map's padded centre).
+                    if (showCenterPin)
+                      Positioned(
+                        top: mapTop,
+                        bottom: mapBottom,
+                        left: 0,
+                        right: 0,
+                        child: const IgnorePointer(
+                          child: Center(
+                            child: Padding(
+                              padding: EdgeInsets.only(bottom: 36),
+                              child: Icon(Icons.location_on, size: 40, color: AppColors.coral),
+                            ),
+                          ),
+                        ),
+                      ),
 
-              Positioned(
-                top: _topOverlay - 8,
-                left: 16,
-                right: 16,
-                child: Center(child: _buildStatusPill()),
-              ),
+                    Positioned(top: barTop, left: 16, right: 16, child: _buildTopBar()),
 
-              Positioned(
-                right: 16,
-                bottom: bottomInset + 16,
-                child: FloatingActionButton.small(
-                  heroTag: 'job-map-my-location',
-                  tooltip: 'My location',
-                  elevation: 3,
-                  backgroundColor: AppColors.surface,
-                  onPressed: _controller.isLocating ? null : _goToMyLocation,
-                  child: _controller.isLocating
-                      ? const ButtonSpinner(color: AppColors.primary)
-                      : const Icon(Icons.my_location_rounded, color: AppColors.primary),
-                ),
-              ),
+                    if (c.areaMoved && !c.isLoading)
+                      Positioned(
+                        top: mapTop + 4,
+                        left: 0,
+                        right: 0,
+                        child: Center(child: _buildSearchAreaButton()),
+                      ),
 
-              if (showList)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 16,
-                  height: _listHeight,
-                  child: _buildJobList(),
-                ),
-            ],
-          );
-        },
+                    Positioned(top: mapTop + 4, right: 16, child: _buildMyLocationButton()),
+
+                    DraggableScrollableSheet(
+                      controller: _sheet,
+                      initialChildSize: _halfSize,
+                      minChildSize: minSize,
+                      maxChildSize: maxSize,
+                      snap: true,
+                      snapSizes: const [_halfSize],
+                      builder: (context, scroll) {
+                        _listScroll = scroll;
+                        // Dragging rebuilds this every frame; reuse the list
+                        // until the results change.
+                        if (_sheetContent == null || !identical(scroll, _sheetScroll)) {
+                          _sheetScroll = scroll;
+                          _sheetContent = _buildJobSheet(scroll, safe.bottom);
+                        }
+                        return _sheetContent!;
+                      },
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }
 
-  /// Keyword box, place search and the filter chips.
-  Widget _buildSearchPanel() {
+  /// Back button and the search pill (what is searched, where, how far).
+  Widget _buildTopBar() {
     final c = _controller;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final query = c.filters.query.trim();
+    final filterCount = c.filters.filterCount;
+    final details = [
+      c.areaLabel,
+      'within ${c.radiusKm.toInt()} km',
+      if (filterCount > 0) '$filterCount filter${filterCount == 1 ? '' : 's'}',
+    ].join(' · ');
+
+    return Row(
       children: [
-        Container(
-          height: 54,
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppColors.border),
-            boxShadow: const [
-              BoxShadow(color: AppColors.shadow, blurRadius: 16, offset: Offset(0, 8)),
-            ],
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _keywordController,
-                  textInputAction: TextInputAction.search,
-                  onSubmitted: (_) => _searchAt(_cameraTarget),
-                  decoration: InputDecoration(
-                    hintText: 'Job title, company, keyword…',
-                    hintStyle: const TextStyle(color: AppColors.textMuted),
-                    prefixIcon: const Icon(Icons.search, color: AppColors.textMuted),
-                    suffixIcon: _keywordController.text.isEmpty
-                        ? null
-                        : IconButton(
-                            tooltip: 'Clear',
-                            icon: const Icon(Icons.close_rounded, color: AppColors.textMuted, size: 20),
-                            onPressed: () {
-                              _keywordController.clear();
-                              _searchAgain();
-                            },
-                          ),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 15),
-                  ),
-                ),
-              ),
-              IconButton(
-                tooltip: 'Search a place',
-                onPressed: _searchPlace,
-                icon: const Icon(Icons.place_outlined, color: AppColors.primary),
-              ),
-              Container(width: 1, height: 30, color: AppColors.border),
-              InkWell(
-                onTap: _pickRadius,
-                borderRadius: const BorderRadius.horizontal(right: Radius.circular(18)),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.radar_rounded, color: AppColors.primary, size: 20),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${c.radiusKm.toInt()} km',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+        _floating(
+          width: _barHeight,
+          child: IconButton(
+            tooltip: 'Back',
+            onPressed: () => Navigator.maybePop(context),
+            icon: const Icon(Icons.arrow_back_rounded, color: AppColors.primary),
           ),
         ),
-        const SizedBox(height: 10),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              JobFilterChip(
-                label: JobFilterOptions.datePosted,
-                value: c.datePosted,
-                defaultValue: JobFilterOptions.anyDate,
-                onTap: () => _pickFilter(JobFilterOptions.datePosted),
-              ),
-              JobFilterChip(
-                label: JobFilterOptions.jobType,
-                value: c.jobType,
-                defaultValue: JobFilterOptions.anyJobType,
-                onTap: () => _pickFilter(JobFilterOptions.jobType),
-              ),
-              JobFilterChip(
-                label: JobFilterOptions.salary,
-                value: c.salary,
-                defaultValue: JobFilterOptions.anySalary,
-                onTap: () => _pickFilter(JobFilterOptions.salary),
-              ),
-              if (c.hasActiveFilters)
-                ActionChip(
-                  avatar: const Icon(Icons.filter_alt_off_outlined, size: 18, color: AppColors.danger),
-                  label: const Text('Clear'),
-                  onPressed: _clearFilters,
-                  backgroundColor: AppColors.surface,
-                  labelStyle: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.w700),
-                  side: const BorderSide(color: AppColors.border),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _floating(
+            child: InkWell(
+              onTap: _openSearch,
+              borderRadius: BorderRadius.circular(18),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    const Icon(Icons.search_rounded, color: AppColors.textMuted),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            query.isEmpty ? 'Search nearby jobs' : query,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: query.isEmpty ? AppColors.textMuted : AppColors.textDark,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            details,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-            ],
+              ),
+            ),
           ),
         ),
       ],
     );
   }
 
-  /// Top-centre pill: searching… / "Search this area" / result count.
-  Widget _buildStatusPill() {
-    final c = _controller;
+  /// White rounded box with a shadow, [_barHeight] tall, floating on the map.
+  Widget _floating({required Widget child, double? width}) {
+    return Material(
+      color: AppColors.surface,
+      elevation: 3,
+      shadowColor: AppColors.shadow,
+      borderRadius: BorderRadius.circular(18),
+      child: SizedBox(height: _barHeight, width: width, child: child),
+    );
+  }
 
-    if (c.isLocating || c.isLoading) {
-      return _pill(
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const ButtonSpinner(size: 16, color: AppColors.primary),
-            const SizedBox(width: 10),
-            Text(
-              c.isLocating ? 'Finding your location…' : 'Searching…',
-              style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.textDark),
-            ),
-          ],
+  /// "Search this area" after the user moved the map.
+  Widget _buildSearchAreaButton() {
+    return Material(
+      color: AppColors.primary,
+      borderRadius: BorderRadius.circular(999),
+      elevation: 3,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: () => _searchAt(_cameraTarget, location: ''),
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
+              SizedBox(width: 8),
+              Text('Search this area', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+            ],
+          ),
         ),
-      );
+      ),
+    );
+  }
+
+  /// Searches around the phone again.
+  Widget _buildMyLocationButton() {
+    final locating = _controller.isLocating;
+    return FloatingActionButton.small(
+      heroTag: 'job-map-my-location',
+      tooltip: 'My location',
+      elevation: 3,
+      backgroundColor: AppColors.surface,
+      onPressed: locating ? null : _searchNearMe,
+      child: locating
+          ? const ButtonSpinner(color: AppColors.primary)
+          : const Icon(Icons.my_location_rounded, color: AppColors.primary),
+    );
+  }
+
+  // ---------------------------------------------------------------------
+  // Drag-up job list
+  // ---------------------------------------------------------------------
+
+  Widget _buildJobSheet(ScrollController scroll, double bottomSafe) {
+    final c = _controller;
+    final listed = c.listedJobs;
+    final pinOpen = c.openedSpot != null;
+    return Material(
+      color: AppColors.surface,
+      elevation: 8,
+      shadowColor: AppColors.shadow,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      clipBehavior: Clip.antiAlias,
+      child: CustomScrollView(
+        controller: scroll,
+        slivers: [
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: _FixedHeader(height: _peekHeight, child: _buildSheetHeader()),
+          ),
+          if (c.error != null && !c.isLoading)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: LoadErrorView(message: c.error!, onRetry: _searchAgain),
+              ),
+            )
+          else if (c.hasSearched && !c.hasResults && !c.isLoading)
+            SliverToBoxAdapter(child: _buildNoJobs())
+          else if (c.hasResults)
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(16, 4, 16, 16 + bottomSafe),
+              sliver: SliverFixedExtentList(
+                itemExtent: NearbyJobCard.height,
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final item = listed[index];
+                    return NearbyJobCard(
+                      item: item,
+                      // Already said in the header when one pin is open.
+                      jobsHere: pinOpen ? 1 : c.jobsAtSameSpot(item).length,
+                      loading: c.openingJobID != null && c.openingJobID == item.job.jobID,
+                      onTap: () => _openJob(item),
+                    );
+                  },
+                  childCount: listed.length,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Drag handle, "12 jobs within 10 km" and the area, or the open pin's
+  /// jobs with "Show all".
+  Widget _buildSheetHeader() {
+    final c = _controller;
+    final busy = c.isLocating || c.isLoading;
+    final pinJobs = c.openedSpot == null || busy ? null : c.listedJobs;
+    final String title;
+    String subtitle = c.capped ? '${c.areaLabel} · zoom in or add filters to see more' : c.areaLabel;
+    if (pinJobs != null && pinJobs.isNotEmpty) {
+      final first = pinJobs.first;
+      final place = (first.job.locationName ?? first.job.companyName ?? '').trim();
+      title = '${pinJobs.length} job${pinJobs.length == 1 ? '' : 's'} at this pin';
+      subtitle = [if (place.isNotEmpty) place, '${first.distanceLabel} away'].join(' · ');
+    } else if (c.isLocating) {
+      title = 'Finding your location…';
+    } else if (c.isLoading) {
+      title = 'Searching…';
+    } else if (c.error != null) {
+      title = 'Couldn\'t load jobs';
+    } else if (!c.hasSearched) {
+      title = 'Nearby jobs';
+    } else {
+      title = c.summary;
     }
 
-    if (c.areaMoved || (!c.hasSearched && !c.isLocating)) {
-      return Material(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.circular(999),
-        elevation: 3,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(999),
-          onTap: () => _searchAt(_cameraTarget),
-          child: const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+    return ColoredBox(
+      color: AppColors.surface,
+      child: Column(
+        children: [
+          const SizedBox(height: 10),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
-              mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
-                SizedBox(width: 8),
-                Text('Search this area', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                if (busy) ...[
+                  const ButtonSpinner(size: 16, color: AppColors.primary),
+                  const SizedBox(width: 10),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textDark,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13, color: AppColors.textMuted),
+                      ),
+                    ],
+                  ),
+                ),
+                if (pinJobs != null)
+                  TextButton.icon(
+                    onPressed: _showAllJobs,
+                    icon: const Icon(Icons.format_list_bulleted_rounded, size: 18),
+                    label: Text('Show all ${c.jobs.length}'),
+                  ),
               ],
             ),
           ),
-        ),
-      );
-    }
+        ],
+      ),
+    );
+  }
 
-    if (!c.hasSearched || c.error != null) return const SizedBox.shrink();
-
-    if (!c.hasResults) {
-      final canWiden = c.radiusKm < 100;
-      return _pill(
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+  /// No jobs in the area: offer a bigger distance or clearing the filters.
+  Widget _buildNoJobs() {
+    final c = _controller;
+    final next = c.nextRadiusKm;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+      child: StateMessageCard(
+        boxed: false,
+        icon: Icons.search_off_rounded,
+        title: 'No jobs here',
+        message: 'Try a bigger distance, another area or fewer filters.',
+        action: Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          alignment: WrapAlignment.center,
           children: [
-            const Icon(Icons.search_off_rounded, size: 18, color: AppColors.textMuted),
-            const SizedBox(width: 8),
-            Text(c.summary, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.textDark)),
-            if (canWiden) ...[
-              const SizedBox(width: 6),
-              GestureDetector(
-                onTap: _widenRadius,
-                child: Text(
-                  'Search ${(c.radiusKm * 2).clamp(5, 100).toInt()} km',
-                  style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.primary),
-                ),
+            if (next != null)
+              ElevatedButton(
+                onPressed: _widenRadius,
+                style: AppButtonStyles.filled(padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12)),
+                child: Text('Search ${next.toInt()} km'),
               ),
-            ] else if (c.hasActiveFilters) ...[
-              const SizedBox(width: 6),
-              GestureDetector(
-                onTap: _clearFilters,
-                child: const Text(
-                  'Clear filters',
-                  style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.primary),
-                ),
+            if (c.hasActiveFilters)
+              OutlinedButton(
+                onPressed: _clearFilters,
+                style: AppButtonStyles.outlined(padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12)),
+                child: const Text('Clear filters'),
               ),
-            ],
           ],
         ),
-      );
-    }
-
-    return _pill(
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.work_outline_rounded, size: 18, color: AppColors.primary),
-          const SizedBox(width: 8),
-          Text(c.summary, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.textDark)),
-          if (c.capped)
-            const Padding(
-              padding: EdgeInsets.only(left: 6),
-              child: Tooltip(
-                message: 'There are more jobs in this area. Zoom in, use a smaller radius or add filters.',
-                child: Icon(Icons.info_outline_rounded, size: 16, color: AppColors.textMuted),
-              ),
-            ),
-        ],
       ),
     );
   }
+}
 
-  /// White rounded pill with a shadow (status at the top of the map).
-  Widget _pill({required Widget child}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: const [
-          BoxShadow(color: AppColors.shadow, blurRadius: 12, offset: Offset(0, 6)),
-        ],
-      ),
-      child: child,
-    );
-  }
+/// Keeps the list header ([child]) at the top of the drag-up sheet.
+class _FixedHeader extends SliverPersistentHeaderDelegate {
+  final double height;
+  final Widget child;
 
-  /// Swipeable cards of the results at the bottom of the map.
-  Widget _buildJobList() {
-    final jobs = _controller.jobs;
-    return PageView.builder(
-      controller: _pageController,
-      itemCount: jobs.length,
-      onPageChanged: _onPageChanged,
-      itemBuilder: (context, index) {
-        final item = jobs[index];
-        final sameSpot = _controller.jobsAtSameSpot(item);
-        final label = sameSpot.length > 1
-            ? '${sameSpot.indexOf(item) + 1} of ${sameSpot.length} jobs at this location'
-            : null;
-        return NearbyJobCard(
-          item: item,
-          selected: index == _controller.selectedIndex,
-          sameSpotLabel: label,
-          onTap: () => _openJob(item),
-        );
-      },
-    );
-  }
+  const _FixedHeader({required this.height, required this.child});
+
+  @override
+  double get minExtent => height;
+
+  @override
+  double get maxExtent => height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) => child;
+
+  @override
+  bool shouldRebuild(_FixedHeader oldDelegate) => true;
 }

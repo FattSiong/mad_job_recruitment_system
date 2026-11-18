@@ -3,6 +3,7 @@ import 'dart:math' show asin, cos, sqrt, pi;
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/constants/job_filter_options.dart';
 import '../../../core/constants/table_constants.dart';
 import '../../../core/utils/data_load_exception.dart';
 import '../../../core/utils/job_search_helper.dart';
@@ -19,6 +20,14 @@ class LocationController {
 
   /// Most pins the map shows at once (keeps the map smooth in busy areas).
   static const int maxResults = 200;
+
+  /// Everything the map and its list need, without the (long) description.
+  /// Up to 400 rows come back per search, so this keeps searches fast.
+  /// [fetchJob] loads the full job when one is opened.
+  static const String _mapColumns =
+      'jobID, companyID, employerID, title, latitude, longitude, salaryRange, status, '
+      'createdAt, jobType, minExperienceYears, locationName, expiresAt, workplaceType, '
+      'workingPeriod, qualification, vacancies, Company(name)';
 
   /// Straight-line distance in metres (haversine, Earth radius 6371 km).
   static double distanceMeters(double lat1, double lon1, double lat2, double lon2) {
@@ -47,8 +56,8 @@ class LocationController {
   }
 
   /// Active, non-expired jobs within [radiusInMeters] of the centre, nearest
-  /// first. Uses the same keyword / date / job type / salary rules as the Home
-  /// search (see [JobSearchHelper]).
+  /// first. Uses the same keyword / date / job type / salary / workplace rules
+  /// as the Home search (see [JobSearchHelper]).
   Future<NearbyJobsResult> getNearbyJobs(
     double centerLat,
     double centerLng,
@@ -57,6 +66,7 @@ class LocationController {
     String? jobType,
     String? salary,
     String? datePosted,
+    String? workplaceType,
   }) async {
     try {
       final keyword = JobSearchHelper.sanitizeKeyword(query);
@@ -65,7 +75,7 @@ class LocationController {
 
       var request = _supabase
           .from(TableConstants.job)
-          .select('*, Company(name)')
+          .select(_mapColumns)
           .eq('status', 'active')
           .or(JobSearchHelper.notExpiredAndKeyword(keyword, companyIds))
           .not('latitude', 'is', null)
@@ -77,6 +87,9 @@ class LocationController {
 
       if (JobSearchHelper.isJobTypeFilter(jobType)) {
         request = request.eq('jobType', jobType!);
+      }
+      if (workplaceType != null && workplaceType != JobFilterOptions.anyWorkplace) {
+        request = request.eq('workplaceType', workplaceType);
       }
       final since = JobSearchHelper.postedSinceUtc(datePosted);
       if (since != null) {
@@ -110,6 +123,21 @@ class LocationController {
       throw DataLoadException(
         'Unable to load nearby jobs. Please check your connection and try again.',
       );
+    }
+  }
+
+  /// The whole job (with its description), for its details screen.
+  Future<JobModel> fetchJob(String jobID) async {
+    try {
+      final row = await _supabase
+          .from(TableConstants.job)
+          .select('*, Company(name)')
+          .eq('jobID', jobID)
+          .single();
+      return JobModel.fromJson(row);
+    } catch (e) {
+      debugPrint('Error fetching job $jobID: $e');
+      throw DataLoadException('Unable to open this job. Please try again.');
     }
   }
 }

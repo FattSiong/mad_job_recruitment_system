@@ -12,10 +12,15 @@ import '../../controllers/job_discovery_controller.dart';
 /// Full-screen sheet for a job search: job title / keyword, location
 /// (typed, a quick pick, or the phone's location) and the job type, salary,
 /// workplace type and date posted filters.
+///
+/// With [forMap] (Nearby Jobs) it also has a Distance filter, and "Use my
+/// current location" means around the phone ([JobFilterOptions.currentLocation])
+/// instead of filling in the city; an empty location means the area on the map.
 /// Returns the search, or null if it was closed without searching.
 Future<JobSearchFilters?> showJobSearchSheet(
   BuildContext context, {
   JobSearchFilters initial = const JobSearchFilters(),
+  bool forMap = false,
 }) {
   return showModalBottomSheet<JobSearchFilters>(
     context: context,
@@ -25,20 +30,24 @@ Future<JobSearchFilters?> showJobSearchSheet(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
-    builder: (_) => _JobSearchSheet(initial: initial),
+    builder: (_) => _JobSearchSheet(initial: initial, forMap: forMap),
   );
 }
 
 class _JobSearchSheet extends StatefulWidget {
   final JobSearchFilters initial;
+  final bool forMap;
 
-  const _JobSearchSheet({required this.initial});
+  const _JobSearchSheet({required this.initial, required this.forMap});
 
   @override
   State<_JobSearchSheet> createState() => _JobSearchSheetState();
 }
 
 class _JobSearchSheetState extends State<_JobSearchSheet> {
+  static const double _minRadiusKm = 5;
+  static const double _maxRadiusKm = 100;
+
   late final TextEditingController _keyword = TextEditingController(text: widget.initial.query);
   late final TextEditingController _location = TextEditingController(text: widget.initial.location);
 
@@ -46,6 +55,7 @@ class _JobSearchSheetState extends State<_JobSearchSheet> {
   late String _salary = widget.initial.salary ?? JobFilterOptions.anySalary;
   late String _workplaceType = widget.initial.workplaceType ?? JobFilterOptions.anyWorkplace;
   late String _datePosted = widget.initial.datePosted ?? JobFilterOptions.anyDate;
+  late double _radiusKm = widget.initial.radiusKm ?? JobFilterOptions.defaultRadiusKm;
 
   /// The filter section that is open (one at a time), or null.
   String? _openFilter;
@@ -59,7 +69,18 @@ class _JobSearchSheetState extends State<_JobSearchSheet> {
         salary: _salary,
         workplaceType: _workplaceType,
         datePosted: _datePosted,
+        radiusKm: widget.forMap ? _radiusKm : null,
       );
+
+  /// The location "Clear all" goes back to.
+  String get _defaultLocation => widget.forMap ? JobFilterOptions.currentLocation : '';
+
+  /// True when there is nothing for "Clear all" to clear.
+  bool get _isCleared =>
+      _keyword.text.trim().isEmpty &&
+      _location.text.trim() == _defaultLocation &&
+      _current.filterCount == 0 &&
+      _radiusKm == JobFilterOptions.defaultRadiusKm;
 
   @override
   void dispose() {
@@ -72,7 +93,8 @@ class _JobSearchSheetState extends State<_JobSearchSheet> {
   void _clearAll() {
     setState(() {
       _keyword.clear();
-      _location.clear();
+      _location.text = _defaultLocation;
+      _radiusKm = JobFilterOptions.defaultRadiusKm;
       _jobType = JobFilterOptions.anyJobType;
       _salary = JobFilterOptions.anySalary;
       _workplaceType = JobFilterOptions.anyWorkplace;
@@ -88,9 +110,14 @@ class _JobSearchSheetState extends State<_JobSearchSheet> {
     });
   }
 
-  /// Fills the location box with the city the phone is in.
+  /// Fills the location box with the city the phone is in
+  /// (on the map: searches around the phone).
   Future<void> _useCurrentLocation() async {
     FocusScope.of(context).unfocus();
+    if (widget.forMap) {
+      _setLocation(JobFilterOptions.currentLocation);
+      return;
+    }
     setState(() {
       _isLocating = true;
       _locationError = null;
@@ -123,7 +150,7 @@ class _JobSearchSheetState extends State<_JobSearchSheet> {
                 _sectionLabel('What'),
                 TextField(
                   controller: _keyword,
-                  autofocus: widget.initial.isEmpty,
+                  autofocus: widget.initial.isEmpty && !widget.forMap,
                   textInputAction: TextInputAction.search,
                   onChanged: (_) => setState(() {}), // Clear all on / off
                   onSubmitted: (_) => _search(),
@@ -139,6 +166,7 @@ class _JobSearchSheetState extends State<_JobSearchSheet> {
                 _buildLocation(),
                 const SizedBox(height: 24),
                 _sectionLabel('Filters'),
+                if (widget.forMap) _buildDistance(),
                 _filter(
                   title: JobFilterOptions.jobType,
                   icon: Icons.work_outline_rounded,
@@ -211,14 +239,14 @@ class _JobSearchSheetState extends State<_JobSearchSheet> {
                 onPressed: () => Navigator.maybePop(context),
                 icon: const Icon(Icons.close_rounded, color: AppColors.textDark),
               ),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Search jobs',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textDark),
+                  widget.forMap ? 'Search nearby jobs' : 'Search jobs',
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textDark),
                 ),
               ),
               TextButton(
-                onPressed: _current.isEmpty ? null : _clearAll,
+                onPressed: _isCleared ? null : _clearAll,
                 child: const Text('Clear all'),
               ),
             ],
@@ -240,7 +268,7 @@ class _JobSearchSheetState extends State<_JobSearchSheet> {
           onChanged: (_) => setState(() => _locationError = null),
           onSubmitted: (_) => _search(),
           decoration: filledInputDecoration(
-            hint: 'City or state',
+            hint: widget.forMap ? 'Area shown on the map' : 'City or state',
             icon: Icons.location_on_outlined,
             suffixIcon: _clearButton(_location),
             errorText: _locationError,
@@ -270,6 +298,54 @@ class _JobSearchSheetState extends State<_JobSearchSheet> {
           ],
         ),
       ],
+    );
+  }
+
+  /// Distance filter of the map: a slider for how far around the area to
+  /// search (5 to 100 km, in steps of 5).
+  Widget _buildDistance() {
+    final km = '${_radiusKm.toInt()} km';
+    return _FilterDropdown(
+      title: JobFilterOptions.distance,
+      icon: Icons.radar_rounded,
+      valueLabel: 'Within $km',
+      isSet: _radiusKm != JobFilterOptions.defaultRadiusKm,
+      isOpen: _openFilter == JobFilterOptions.distance,
+      onToggle: () => setState(() => _openFilter =
+          _openFilter == JobFilterOptions.distance ? null : JobFilterOptions.distance),
+      child: Column(
+        children: [
+          Text(
+            km,
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.primary),
+          ),
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              activeTrackColor: AppColors.primary,
+              inactiveTrackColor: AppColors.progressTrack,
+              thumbColor: AppColors.primary,
+              overlayColor: AppColors.primary.withValues(alpha: 0.12),
+              valueIndicatorColor: AppColors.primary,
+              trackHeight: 6,
+            ),
+            child: Slider(
+              value: _radiusKm.clamp(_minRadiusKm, _maxRadiusKm),
+              min: _minRadiusKm,
+              max: _maxRadiusKm,
+              divisions: (_maxRadiusKm - _minRadiusKm) ~/ 5,
+              label: km,
+              onChanged: (value) => setState(() => _radiusKm = value.roundToDouble()),
+            ),
+          ),
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('5 km', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+              Text('100 km', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+            ],
+          ),
+        ],
+      ),
     );
   }
 

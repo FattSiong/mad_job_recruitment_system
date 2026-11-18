@@ -19,6 +19,9 @@ class JobSearchFilters {
   final String? salary;
   final String? workplaceType;
 
+  /// Search radius in km. Only used by the Nearby Jobs map.
+  final double? radiusKm;
+
   const JobSearchFilters({
     this.query = '',
     this.location = '',
@@ -26,7 +29,18 @@ class JobSearchFilters {
     this.datePosted,
     this.salary,
     this.workplaceType,
+    this.radiusKm,
   });
+
+  JobSearchFilters copyWith({String? location, double? radiusKm}) => JobSearchFilters(
+        query: query,
+        location: location ?? this.location,
+        jobType: jobType,
+        datePosted: datePosted,
+        salary: salary,
+        workplaceType: workplaceType,
+        radiusKm: radiusKm ?? this.radiusKm,
+      );
 
   bool get hasJobType => JobSearchHelper.isJobTypeFilter(jobType);
   bool get hasDatePosted => datePosted != null && datePosted != JobFilterOptions.anyDate;
