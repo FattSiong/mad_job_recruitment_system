@@ -2,30 +2,24 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_button_styles.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/utils/data_load_exception.dart';
 import '../../../core/utils/session_helper.dart';
-import '../../../models/job_model.dart';
 import '../../../shared_widgets/login_screen.dart';
-import '../../../shared_widgets/notification_bell_button.dart';
+import '../../../shared_widgets/state_message_card.dart';
 import '../../chat/screens/chat_inbox_screen.dart';
 import '../../community_hub/screens/community_hub_screen.dart';
 import '../controllers/applied_jobs_controller.dart';
-import '../controllers/job_discovery_controller.dart';
+import '../controllers/job_list_controller.dart';
 import '../controllers/profile_controller.dart';
-import '../widgets/dashboard/job_search_panel.dart';
-import '../widgets/job_card.dart';
-import '../widgets/job_filters.dart';
-import '../widgets/load_error_view.dart';
-import 'job_details_screen.dart';
+import '../widgets/dashboard/home_header.dart';
+import '../widgets/dashboard/job_search_sheet.dart';
+import '../widgets/job_list_view.dart';
 import 'job_map_screen.dart';
-import 'location_search_screen.dart';
+import 'job_search_results_screen.dart';
 import 'my_jobs_screen.dart';
 import 'profile_screen.dart';
 import 'qr_scanner_screen.dart';
-import '../../../shared_widgets/hero_card.dart';
-import '../../../shared_widgets/hero_icon_button.dart';
-import '../../../core/theme/app_button_styles.dart';
 
 /// The job seeker's main screen: Home (job search), My Jobs, Messages,
 /// Community and Profile tabs.
@@ -37,45 +31,23 @@ class SeekerDashboard extends StatefulWidget {
 }
 
 class _SeekerDashboardState extends State<SeekerDashboard> {
-  final TextEditingController _keywordController = TextEditingController();
-  final TextEditingController _locationController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
-  final JobDiscoveryController _controller = JobDiscoveryController();
+  static const int _homeTab = 0;
+  static const int _myJobsTab = 1;
+  static const int _profileTab = 4;
 
-  static const int _pageSize = 10;
+  /// "Recommended Jobs" on Home: every active job, newest first.
+  final JobListController _homeJobs = JobListController()..load();
 
-  List<JobModel> _jobs = [];
-  bool _isLoading = true;
-  String? _loadError; // shown instead of "No jobs" when loading fails
+  int _currentIndex = _homeTab;
   String? _fullName;
-  bool _isFetchingMore = false;
-  bool _loadMoreFailed = false;
-  int _currentIndex = 0;
-
-  // Real pagination: only one page is downloaded at a time
-  JobSearchFilters _activeFilters = const JobSearchFilters();
-  int _nextOffset = 0;
-  bool _hasMoreJobs = false;
-  int _requestId = 0; // ignores results from an older search that finishes late
-
-  String _selectedJobType = JobFilterOptions.anyJobType;
-  String _selectedDatePosted = JobFilterOptions.anyDate;
-  String _selectedSalary = JobFilterOptions.anySalary;
+  String? _photoUrl;
 
   String? get _currentUserId => SessionHelper.currentUserId;
 
   StreamSubscription<Object>? _authSubscription;
 
-  bool get _hasActiveFilters =>
-      _keywordController.text.isNotEmpty ||
-          _locationController.text.isNotEmpty ||
-          _selectedJobType != JobFilterOptions.anyJobType ||
-          _selectedDatePosted != JobFilterOptions.anyDate ||
-          _selectedSalary != JobFilterOptions.anySalary;
-
-  List<JobModel> get _visibleJobs => _jobs;
-
-  String get _firstName {
+  /// "Hi, Aisyah": the first word of the user's name, or their email name.
+  String get _greetingName {
     final name = _fullName?.trim() ?? '';
     if (name.isNotEmpty) return name.split(RegExp(r'\s+')).first;
 
@@ -89,9 +61,14 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     super.initState();
     SessionHelper.consumeManualSignOut(); // fresh login: clear any old flag
     _authSubscription = SessionHelper.onSessionEnded(_handleSignedOut);
-    _scrollController.addListener(_handleScroll);
-    _loadJobs();
-    _loadName();
+    _loadGreeting();
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    _homeJobs.dispose();
+    super.dispose();
   }
 
   /// The session ended on its own (expired, or signed out on another device):
@@ -110,494 +87,102 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     );
   }
 
-  /// Loads the first name for the greeting (the greeting works without it).
-  Future<void> _loadName() async {
-    final name = await ProfileController().fetchFullName();
-    if (mounted && name != null) setState(() => _fullName = name);
+  /// Name and photo for the greeting (the greeting works without them).
+  Future<void> _loadGreeting() async {
+    final profile = await ProfileController().fetchGreeting();
+    if (!mounted || profile == null) return;
+    setState(() {
+      _fullName = profile.fullName;
+      _photoUrl = profile.photoUrl;
+    });
   }
 
-  @override
-  void dispose() {
-    _authSubscription?.cancel();
-    _scrollController.removeListener(_handleScroll);
-    _scrollController.dispose();
-    _keywordController.dispose();
-    _locationController.dispose();
-    super.dispose();
-  }
-
-  /// Switches tab; opening My Jobs reloads its tabs.
+  /// Switches tab. Opening My Jobs reloads its tabs; coming back to Home
+  /// picks up a new name or photo from the Profile tab.
   void _onTabTapped(int index) {
     setState(() => _currentIndex = index);
-    // My Jobs tab: reload Applied + Interviews so statuses are up to date
-    if (index == 1) AppliedJobsController.notifyChanged();
+    if (index == _myJobsTab) AppliedJobsController.notifyChanged();
+    if (index == _homeTab) _loadGreeting();
   }
 
-  /// Loads the next page when the list is scrolled near the end.
-  void _handleScroll() {
-    if (!_scrollController.hasClients || _isLoading || _isFetchingMore || !_hasMoreJobs) return;
-
-    const threshold = 200.0;
-    final position = _scrollController.position;
-
-    if (position.pixels >= position.maxScrollExtent - threshold) {
-      _loadMoreJobs();
-    }
-  }
-
-  /// Loads the next page from the database (no artificial delay).
-  Future<void> _loadMoreJobs() async {
-    if (!_hasMoreJobs || _isFetchingMore || _isLoading || _loadMoreFailed) return;
-
-    final requestId = _requestId;
-    setState(() => _isFetchingMore = true);
-
-    try {
-      final page = await _controller.fetchJobsPage(
-        filters: _activeFilters,
-        offset: _nextOffset,
-        pageSize: _pageSize,
-      );
-      if (!mounted || requestId != _requestId) return;
-      // A job posted while scrolling shifts the pages by one: skip repeats.
-      final shown = _jobs.map((j) => j.jobID).toSet();
-      setState(() {
-        _jobs = [..._jobs, ...page.jobs.where((j) => !shown.contains(j.jobID))];
-        _nextOffset = page.nextOffset;
-        _hasMoreJobs = page.hasMore;
-        _isFetchingMore = false;
-      });
-    } on DataLoadException {
-      if (!mounted || requestId != _requestId) return;
-      setState(() {
-        _isFetchingMore = false;
-        _loadMoreFailed = true; // footer shows "Tap to retry"
-      });
-    }
-  }
-
-  /// "Tap to retry" after loading more jobs failed.
-  void _retryLoadMore() {
-    setState(() => _loadMoreFailed = false);
-    _loadMoreJobs();
-  }
-
-  /// Starts a new list (first page) for [filters].
-  Future<void> _startNewList(JobSearchFilters filters) async {
-    final requestId = ++_requestId;
-    setState(() {
-      _isLoading = true;
-      _loadError = null;
-      _loadMoreFailed = false;
-      _isFetchingMore = false;
-      _activeFilters = filters;
-    });
-
-    try {
-      final page = await _controller.fetchJobsPage(filters: filters, pageSize: _pageSize);
-      if (!mounted || requestId != _requestId) return;
-      setState(() {
-        _jobs = page.jobs;
-        _nextOffset = page.nextOffset;
-        _hasMoreJobs = page.hasMore;
-        _isLoading = false;
-      });
-    } on DataLoadException catch (e) {
-      if (!mounted || requestId != _requestId) return;
-      setState(() {
-        _jobs = [];
-        _hasMoreJobs = false;
-        _loadError = e.message;
-        _isLoading = false;
-      });
-    }
-  }
-
-  /// All jobs, no filters (first page).
-  Future<void> _loadJobs() => _startNewList(const JobSearchFilters());
-
-  /// Searches with the keyword, location and filters (first page).
-  Future<void> _performSearch() async {
-    FocusScope.of(context).unfocus();
-    await _startNewList(JobSearchFilters(
-      query: _keywordController.text.trim(),
-      location: _locationController.text.trim(),
-      jobType: _selectedJobType,
-      datePosted: _selectedDatePosted,
-      salary: _selectedSalary,
-    ));
-  }
-
-  /// Pull to refresh: reloads with the current search.
-  Future<void> _refreshJobs() async {
-    if (_hasActiveFilters) {
-      await _performSearch();
-    } else {
-      await _loadJobs();
-    }
-  }
-
-  /// Clears the search and every filter, then reloads.
-  Future<void> _resetFilters() async {
-    setState(() {
-      _selectedJobType = JobFilterOptions.anyJobType;
-      _selectedDatePosted = JobFilterOptions.anyDate;
-      _selectedSalary = JobFilterOptions.anySalary;
-      _keywordController.clear();
-      _locationController.clear();
-    });
-
-    await _loadJobs();
-  }
-
-  /// Opens the location screen; searches with what it returns.
-  Future<void> _openLocationSearch() async {
-    final result = await Navigator.push(
+  /// Opens the job search; shows the results of what the user searched.
+  Future<void> _openSearch() async {
+    final filters = await showJobSearchSheet(context);
+    if (filters == null || !mounted) return;
+    Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => LocationSearchScreen(
-          initialKeyword: _keywordController.text,
-          initialLocation: _locationController.text,
-        ),
-      ),
+      MaterialPageRoute(builder: (_) => JobSearchResultsScreen(filters: filters)),
     );
-
-    if (!mounted) return;
-    if (result != null && result is Map<String, String>) {
-      setState(() {
-        _keywordController.text = result['keyword'] ?? '';
-        _locationController.text = result['location'] ?? '';
-      });
-      _performSearch();
-    }
   }
 
-  /// The current value of one filter chip.
-  String _currentFilterValue(String filterType) {
-    switch (filterType) {
-      case JobFilterOptions.datePosted:
-        return _selectedDatePosted;
-      case JobFilterOptions.jobType:
-        return _selectedJobType;
-      default:
-        return _selectedSalary;
-    }
-  }
-
-  /// Opens one filter's sheet and searches with the new value.
-  Future<void> _showFilterOptions(String filterType) async {
-    final value = await showJobFilterSheet(
+  void _openScanner() {
+    Navigator.push(
       context,
-      filterType: filterType,
-      currentValue: _currentFilterValue(filterType),
+      MaterialPageRoute(builder: (_) => const QRScannerScreen()),
     );
-    if (value == null || !mounted) return;
-
-    setState(() {
-      switch (filterType) {
-        case JobFilterOptions.datePosted:
-          _selectedDatePosted = value;
-        case JobFilterOptions.jobType:
-          _selectedJobType = value;
-        default:
-          _selectedSalary = value;
-      }
-    });
-    _performSearch();
   }
 
-  /// Home tab: header, search panel and the job list.
+  /// Home tab: greeting and search bar, then the recommended jobs.
   Widget _buildHomeTab() {
     return SafeArea(
-      child: RefreshIndicator(
-        onRefresh: _refreshJobs,
-        color: AppColors.primary,
-        child: CustomScrollView(
-          controller: _scrollController,
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate(
-                  [
-                    _buildHeroHeader(),
-                    const SizedBox(height: 24),
-                    JobSearchPanel(
-                      keywordController: _keywordController,
-                      locationController: _locationController,
-                      selectedDatePosted: _selectedDatePosted,
-                      selectedJobType: _selectedJobType,
-                      selectedSalary: _selectedSalary,
-                      onSearch: _performSearch,
-                      onReset: _resetFilters,
-                      onOpenLocation: _openLocationSearch,
-                      onClearLocation: () {
-                        _locationController.clear();
-                        _performSearch();
-                      },
-                      onFilterTap: _showFilterOptions,
-                    ),
-                    const SizedBox(height: 24),
-                    _buildResultsHeader(),
-                    const SizedBox(height: 12),
-                  ],
-                ),
-              ),
-            ),
-            if (_isLoading)
-              const SliverFillRemaining(
-                hasScrollBody: false,
-                child: Center(
-                  child: CircularProgressIndicator(color: AppColors.primary),
-                ),
-              )
-            else if (_loadError != null)
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: LoadErrorView(message: _loadError!, onRetry: _refreshJobs),
-              )
-            else if (_jobs.isEmpty)
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.search_off_rounded,
-                          size: 72,
-                          color: Colors.grey.shade400,
-                        ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'No jobs match your search yet.',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textDark,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Try a broader keyword, a different location, or clear a filter to see more roles.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 14,
-                            height: 1.45,
-                            color: AppColors.textMuted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              )
-            else
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(4, 0, 4, 100),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                      // Last slot: "load more" error, spinner or end-of-list text
-                      if (index == _visibleJobs.length) {
-                        if (_loadMoreFailed) {
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            child: Center(
-                              child: TextButton.icon(
-                                onPressed: _retryLoadMore,
-                                icon: const Icon(Icons.refresh_rounded),
-                                label: const Text("Couldn't load more jobs. Tap to retry"),
-                              ),
-                            ),
-                          );
-                        }
-                        if (_hasMoreJobs) {
-                          // The footer is visible, so fetch the next page
-                          // (also covers short lists that can't be scrolled)
-                          WidgetsBinding.instance.addPostFrameCallback((_) => _loadMoreJobs());
-                          return const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 20),
-                            child: Center(
-                              child: CircularProgressIndicator(
-                                color: AppColors.primary,
-                              ),
-                            ),
-                          );
-                        } else {
-                          // No more jobs
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 20, bottom: 40),
-                            child: Center(
-                              child: Text(
-                                "You've reached the end of the list!",
-                                style: TextStyle(
-                                  color: Colors.grey.shade500,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          );
-                        }
-                      }
-
-                      // Otherwise, build the standard job card
-                      final job = _visibleJobs[index];
-
-                      return JobCard(
-                        job: job,
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => JobDetailsScreen(job: job),
-                            ),
-                          );
-                        },
-                      );
-                    },
-                    // + 1 for the slot at the bottom
-                    childCount: _visibleJobs.length + 1,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Gradient header with the greeting and the Scan QR button.
-  Widget _buildHeroHeader() {
-    return HeroCard(child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const HeroPill(icon: Icons.travel_explore, label: 'Job Seeker Workspace'),
-              const Spacer(),
-              NotificationBellButton(
-                onReturned: () => AppliedJobsController.notifyChanged(),
-              ),
-              const SizedBox(width: 10),
-              HeroIconButton(
-                icon: Icons.qr_code_scanner,
-                tooltip: 'Scan QR',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const QRScannerScreen(),
-                    ),
-                  );
-                },
-              ),
-            ],
+      child: JobListView(
+        controller: _homeJobs,
+        header: [
+          HomeHeader(
+            name: _greetingName,
+            photoUrl: _photoUrl,
+            onAvatarTap: () => _onTabTapped(_profileTab),
+            onSearchTap: _openSearch,
+            onScanTap: _openScanner,
+            onNotificationsReturned: AppliedJobsController.notifyChanged,
           ),
           const SizedBox(height: 24),
-          Text(
-            'Welcome back, $_firstName',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              height: 1.1,
-            ),
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            'Search roles, filter faster, and keep your applications moving.',
-            style: TextStyle(
-              color: Colors.white70,
-              fontSize: 15,
-              height: 1.4,
-            ),
-          ),
+          _buildRecommendedHeader(),
+          const SizedBox(height: 12),
         ],
+        emptyState: const StateMessageCard(
+          boxed: false,
+          icon: Icons.work_off_outlined,
+          title: 'No jobs yet',
+          message: 'New openings will show up here. Pull down to check again.',
+        ),
       ),
     );
   }
 
-  /// "Recommended Jobs" title, the Nearby Jobs button and the result count.
-  Widget _buildResultsHeader() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  /// "Recommended Jobs" title and the Nearby Jobs button.
+  Widget _buildRecommendedHeader() {
+    return Row(
       children: [
-        Row(
-          children: [
-            const Expanded(
-              child: Text(
-                'Recommended Jobs',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textDark,
-                ),
-              ),
-            ),
-            OutlinedButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const JobMapScreen(),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.map, size: 18),
-              label: const Text('Nearby Jobs'),
-              style: AppButtonStyles.outlined(radius: 14, padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12)),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        Text(
-          _hasActiveFilters
-              ? 'Showing filtered roles based on your current search.'
-              : 'Fresh opportunities selected from active postings.',
-          style: const TextStyle(fontSize: 14, color: AppColors.textMuted),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Row(
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: AppColors.primarySoft,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.work_outline_rounded,
-                  color: AppColors.primary,
-                  size: 20,
-                ),
+              Text(
+                'Recommended Jobs',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textDark),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  _isLoading
-                      ? 'Searching opportunities for you...'
-                      : '${_jobs.length}${_hasMoreJobs ? '+' : ''} jobs available',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textDark,
-                  ),
-                ),
+              SizedBox(height: 4),
+              Text(
+                'Fresh openings from active postings.',
+                style: TextStyle(fontSize: 14, color: AppColors.textMuted),
               ),
             ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        OutlinedButton.icon(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const JobMapScreen()),
+            );
+          },
+          icon: const Icon(Icons.map, size: 18),
+          label: const Text('Nearby Jobs'),
+          style: AppButtonStyles.outlined(
+            radius: 14,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           ),
         ),
       ],

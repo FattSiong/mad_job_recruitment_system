@@ -5,10 +5,12 @@ class JobFilterOptions {
   static const String datePosted = 'Date posted';
   static const String jobType = 'Job type';
   static const String salary = 'Salary';
+  static const String workplaceType = 'Workplace type';
 
   static const String anyDate = 'All time';
   static const String anyJobType = 'All';
   static const String anySalary = 'Any';
+  static const String anyWorkplace = 'Any';
   static const double defaultRadiusKm = 10.0;
 
   static const List<String> datePostedOptions = [
@@ -26,5 +28,18 @@ class JobFilterOptions {
     'RM3000',
     'RM4000',
     'RM5000',
+  ];
+  static const List<String> workplaceTypeOptions = [anyWorkplace, 'On-site', 'Remote', 'Hybrid'];
+
+  /// Quick picks under the location box of the job search.
+  static const List<String> popularLocations = [
+    'Kuala Lumpur',
+    'Selangor',
+    'Petaling Jaya',
+    'Shah Alam',
+    'Penang',
+    'Johor Bahru',
+    'Melaka',
+    'Ipoh',
   ];
 }
