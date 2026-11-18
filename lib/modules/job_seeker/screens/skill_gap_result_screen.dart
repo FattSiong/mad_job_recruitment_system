@@ -7,6 +7,7 @@ import '../../../models/skill_gap_model.dart';
 import '../controllers/guidance_report_controller.dart';
 import 'guidance_pdf_viewer_screen.dart';
 import '../../../shared_widgets/surface_card.dart';
+import '../../../shared_widgets/gradient_page_header.dart';
 
 /// Skill Gap Report (end of Use Case 4.60). Also reusable from Guidance Reports.
 class SkillGapResultScreen extends StatelessWidget {
@@ -142,45 +143,10 @@ class SkillGapResultScreen extends StatelessWidget {
   }
 
   /// Gradient header with the role, the date and a back button.
-  Widget _buildHeader(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.primary, AppColors.primaryLight],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Skill Gap Report',
-                  style: TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '${analysis.targetJobRole} · ${DateFormat('d MMM yyyy').format(analysis.createdAt)}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildHeader(BuildContext context) => GradientPageHeader(
+        title: 'Skill Gap Report',
+        subtitle: '${analysis.targetJobRole} · ${DateFormat('d MMM yyyy').format(analysis.createdAt)}',
+      );
 
   /// Match % ring, what it was based on, and skill counts.
   Widget _buildScoreCard() {

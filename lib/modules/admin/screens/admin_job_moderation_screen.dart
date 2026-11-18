@@ -139,54 +139,14 @@ class _AdminJobModerationScreenState extends State<AdminJobModerationScreen> {
 
   Widget _hero() {
     final waiting = _controller.reportedJobs;
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AdminColors.heroStart, AdminColors.heroEnd],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.shield_outlined, color: Colors.white, size: 16),
-                  SizedBox(width: 8),
-                  Text('Security & Moderation', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                ]),
-              ),
-              const Spacer(),
-              IconButton(
-                tooltip: 'Refresh',
-                onPressed: _controller.isLoading ? null : () => _refresh.currentState?.show(),
-                icon: const Icon(Icons.refresh_rounded, color: Colors.white),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Text('Manage Job Listings',
-              style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          Text(
-            waiting == 0
-                ? 'No reported jobs waiting. Pull down to check again.'
-                : '$waiting reported ${waiting == 1 ? 'job is' : 'jobs are'} waiting for review.',
-            style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.35),
-          ),
-        ],
-      ),
+    return ModerationHero(
+      labelIcon: Icons.shield_outlined,
+      label: 'Security & Moderation',
+      title: 'Manage Job Listings',
+      subtitle: waiting == 0
+          ? 'No reported jobs waiting. Pull down to check again.'
+          : '$waiting reported ${waiting == 1 ? 'job is' : 'jobs are'} waiting for review.',
+      onRefresh: _controller.isLoading ? null : () => _refresh.currentState?.show(),
     );
   }
 

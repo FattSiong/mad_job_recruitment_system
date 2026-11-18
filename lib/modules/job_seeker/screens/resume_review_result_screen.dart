@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../models/resume_review_model.dart';
 import '../widgets/resume_review/resume_review_widgets.dart';
 import 'build_resume_screen.dart';
+import '../../../shared_widgets/gradient_page_header.dart';
 
 /// AI Resume Assistant: the feedback report for one review.
 class ResumeReviewResultScreen extends StatefulWidget {
@@ -81,48 +82,12 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
   // ---------------------------------------------------------------------
 
   /// Gradient header with the title and back button.
-  Widget _buildHeader() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.primary, AppColors.primaryLight],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Resume Feedback',
-                  style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '${_review.resumeName.isEmpty ? _review.source.label : _review.resumeName}'
-                  ' · ${DateFormat('d MMM yyyy, h:mm a').format(_review.createdAt)}',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white70, fontSize: 13),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildHeader() => GradientPageHeader(
+        title: 'Resume Feedback',
+        subtitle: '${_review.resumeName.isEmpty ? _review.source.label : _review.resumeName}'
+            ' · ${DateFormat('d MMM yyyy, h:mm a').format(_review.createdAt)}',
+        subtitleMaxLines: 2,
+      );
 
   /// White rounded card.
   Widget _card({required List<Widget> children}) {

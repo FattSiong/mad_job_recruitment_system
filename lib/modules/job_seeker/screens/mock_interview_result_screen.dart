@@ -11,6 +11,7 @@ import '../controllers/mock_interview_controller.dart';
 import 'guidance_pdf_viewer_screen.dart';
 import 'mock_interview_setup_screen.dart';
 import '../../../shared_widgets/surface_card.dart';
+import '../../../shared_widgets/gradient_page_header.dart';
 
 /// Interview scorecard (end of Use Case 4.59). Also reusable from Guidance Reports.
 class MockInterviewResultScreen extends StatefulWidget {
@@ -126,49 +127,12 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
   /// Gradient header with the role and date.
   Widget _buildHeader(MockInterviewRecordModel? record) {
     final date = record?.completedAt ?? record?.createdAt;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.primary, AppColors.primaryLight],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Interview Scorecard',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 25,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  [
-                    if (record != null) record.targetJobRole,
-                    if (date != null) DateFormat('d MMM yyyy').format(date),
-                  ].join(' · '),
-                  style: const TextStyle(color: Colors.white70, fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+    return GradientPageHeader(
+      title: 'Interview Scorecard',
+      subtitle: [
+        if (record != null) record.targetJobRole,
+        if (date != null) DateFormat('d MMM yyyy').format(date),
+      ].join(' · '),
     );
   }
 

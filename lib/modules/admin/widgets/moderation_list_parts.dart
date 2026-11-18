@@ -191,3 +191,71 @@ class ModerationLoadMore extends StatelessWidget {
     );
   }
 }
+
+/// The dark green banner at the top of an admin moderation screen: a
+/// small label, a refresh button, the title and how many reports wait.
+class ModerationHero extends StatelessWidget {
+  final IconData labelIcon;
+  final String label;
+  final String title;
+  final String subtitle;
+
+  /// null while loading (the button is then disabled).
+  final VoidCallback? onRefresh;
+
+  const ModerationHero({
+    super.key,
+    required this.labelIcon,
+    required this.label,
+    required this.title,
+    required this.subtitle,
+    this.onRefresh,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [AdminColors.heroStart, AdminColors.heroEnd],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(labelIcon, color: Colors.white, size: 16),
+                  const SizedBox(width: 8),
+                  Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                ]),
+              ),
+              const Spacer(),
+              IconButton(
+                tooltip: 'Refresh',
+                onPressed: onRefresh,
+                icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(title, style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text(subtitle, style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.35)),
+        ],
+      ),
+    );
+  }
+}

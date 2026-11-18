@@ -8,6 +8,7 @@ import '../widgets/resume/resume_record_steps.dart';
 import '../widgets/resume/resume_sections_step.dart';
 import '../widgets/resume/resume_skills_step.dart';
 import 'resume_preview_screen.dart';
+import '../../../shared_widgets/gradient_page_header.dart';
 
 /// In-app resume builder:
 /// name -> phone -> address -> education -> work experience -> skills -> more sections,
@@ -176,46 +177,17 @@ class _BuildResumeScreenState extends State<BuildResumeScreen> {
   }
 
   /// Gradient header with the title and back button.
-  Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        gradient: AppColors.headerGradient,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-          ),
-          const SizedBox(width: 6),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Build Resume',
-                  style: TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.bold),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'Create a professional PDF resume step by step.',
-                  style: TextStyle(color: Colors.white70, fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-          if (_controller.isSaving)
-            const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-            ),
-        ],
-      ),
-    );
-  }
+  Widget _buildHeader() => GradientPageHeader(
+        title: 'Build Resume',
+        subtitle: 'Create a professional PDF resume step by step.',
+        trailing: _controller.isSaving
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              )
+            : null,
+      );
 
   /// "Step 3 of 7" with a progress bar.
   Widget _buildProgress() {

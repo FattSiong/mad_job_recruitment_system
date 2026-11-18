@@ -7,6 +7,7 @@ import '../../../core/constants/table_constants.dart';
 import '../../../models/chat_room_model.dart';
 import '../../../models/moderation_item_model.dart';
 import '../../../services/user_directory.dart';
+import 'moderation_query_utils.dart';
 
 /// Which items Admin > Community lists.
 enum ModerationView {
@@ -257,7 +258,7 @@ class AdminCommunityController extends ChangeNotifier {
   /// arriving can't make the next page skip or repeat any).
   Future<_Page> _loadPage(ModerationKind kind, {DateTime? before}) async {
     final oldestFirst = _sort == ModerationSort.oldest;
-    final search = _cleanSearch(_search);
+    final search = cleanModerationSearch(_search);
     PostgrestFilterBuilder<PostgrestList> query;
     if (kind == ModerationKind.post) {
       query = _supabase
@@ -293,7 +294,7 @@ class AdminCommunityController extends ChangeNotifier {
     final target = _targetColumn(kind);
     final ids = rows.map((r) => r[target].toString()).toList();
     final reportRows = <Map<String, dynamic>>[];
-    for (final chunk in _chunks(ids)) {
+    for (final chunk in chunkIds(ids)) {
       reportRows.addAll(List<Map<String, dynamic>>.from(await _supabase
           .from(_reportTable(kind))
           .select(_reportColumns(kind))
@@ -315,7 +316,7 @@ class AdminCommunityController extends ChangeNotifier {
   /// or left by the old admin screen), so those reports can be closed.
   Future<List<Map<String, dynamic>>> _fetchTargets(ModerationKind kind, List<String> ids) async {
     final rows = <Map<String, dynamic>>[];
-    for (final chunk in _chunks(ids)) {
+    for (final chunk in chunkIds(ids)) {
       final result = kind == ModerationKind.post
           ? await _supabase.from(TableConstants.communityPost).select(_postColumns).inFilter('postID', chunk)
           : await _supabase
@@ -393,18 +394,6 @@ class AdminCommunityController extends ChangeNotifier {
     return result;
   }
 
-  /// Search text that is safe inside the database filter (characters that
-  /// mean something there are turned into spaces).
-  static String _cleanSearch(String text) =>
-      text.replaceAll(RegExp(r'[,()*%\\"\x27:]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
-
-  /// Splits IDs into groups so the request address stays short.
-  static Iterable<List<String>> _chunks(List<String> ids, [int size = 100]) sync* {
-    for (var i = 0; i < ids.length; i += size) {
-      yield ids.sublist(i, i + size > ids.length ? ids.length : i + size);
-    }
-  }
-
   // ---------------------------------------------------------------------
   // Actions
   // ---------------------------------------------------------------------
@@ -418,7 +407,7 @@ class AdminCommunityController extends ChangeNotifier {
       final closed = await _supabase.rpc('admin_dismiss_reports', params: {
         'p_kind': item.isPost ? 'post' : 'comment',
         'p_id': item.id,
-        'p_note': _cleanNote(note),
+        'p_note': cleanModerationNote(note),
       });
       _afterReportsClosed(item, removed: false);
       if ((closed as num? ?? 0) == 0) {
@@ -445,7 +434,7 @@ class AdminCommunityController extends ChangeNotifier {
         item.isPost ? 'admin_remove_post' : 'admin_remove_comment',
         params: {
           (item.isPost ? 'p_post_id' : 'p_comment_id'): item.id,
-          'p_note': _cleanNote(note),
+          'p_note': cleanModerationNote(note),
           'p_notify': notifyAuthor,
         },
       );
@@ -481,11 +470,6 @@ class AdminCommunityController extends ChangeNotifier {
       _items = [for (final i in _items) i.id == item.id ? i.withoutReports() : i];
     }
     _loadCounts();
-  }
-
-  String? _cleanNote(String? note) {
-    final text = note?.trim() ?? '';
-    return text.isEmpty ? null : text;
   }
 
   /// A message to show for a failed action.

@@ -142,51 +142,14 @@ class _AdminCommunityScreenState extends State<AdminCommunityScreen> {
   Widget _hero() {
     final posts = _controller.reportedPosts;
     final comments = _controller.reportedComments;
-    final waiting = posts + comments;
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [AdminColors.heroStart, AdminColors.heroEnd]),
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.forum_outlined, color: Colors.white, size: 16),
-                  SizedBox(width: 8),
-                  Text('Community Moderation', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                ]),
-              ),
-              const Spacer(),
-              IconButton(
-                tooltip: 'Refresh',
-                onPressed: _controller.isLoading ? null : () => _refresh.currentState?.show(),
-                icon: const Icon(Icons.refresh_rounded, color: Colors.white),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Text('Manage Interaction',
-              style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          Text(
-            waiting == 0
-                ? 'No reports waiting. Pull down to check again.'
-                : '${_plural(posts, 'post')} and ${_plural(comments, 'comment')} reported and waiting for review.',
-            style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.35),
-          ),
-        ],
-      ),
+    return ModerationHero(
+      labelIcon: Icons.forum_outlined,
+      label: 'Community Moderation',
+      title: 'Manage Interaction',
+      subtitle: posts + comments == 0
+          ? 'No reports waiting. Pull down to check again.'
+          : '${_plural(posts, 'post')} and ${_plural(comments, 'comment')} reported and waiting for review.',
+      onRefresh: _controller.isLoading ? null : () => _refresh.currentState?.show(),
     );
   }
 

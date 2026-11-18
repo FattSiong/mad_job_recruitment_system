@@ -179,23 +179,15 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
 
       final result = await OpenFilex.open(savePath);
       if (result.type != ResultType.done && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Could not open PDF. Please ensure a PDF viewer is installed.',
-            ),
-            backgroundColor: Colors.orange,
-          ),
+        SnackBarHelper.showError(
+          context,
+          'Could not open the PDF. Please make sure a PDF viewer is installed.',
+          duration: const Duration(seconds: 3),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Unable to download Offer Letter PDF.'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        SnackBarHelper.showError(context, 'Unable to download the offer letter PDF.');
       }
     } finally {
       if (mounted) {

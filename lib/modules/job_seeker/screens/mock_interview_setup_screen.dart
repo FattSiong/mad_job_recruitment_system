@@ -6,6 +6,8 @@ import '../../../core/utils/snackbar_helper.dart';
 import '../controllers/mock_interview_controller.dart';
 import 'mock_interview_session_screen.dart';
 import '../../../shared_widgets/surface_card.dart';
+import '../../../shared_widgets/gradient_page_header.dart';
+import '../widgets/career_tools/career_tool_widgets.dart';
 
 /// Step 1 of Use Case 4.59: choose a role / topic and give AI consent.
 class MockInterviewSetupScreen extends StatefulWidget {
@@ -164,113 +166,25 @@ class _MockInterviewSetupScreenState extends State<MockInterviewSetupScreen> {
   }
 
   /// Gradient header with the title and back button.
-  Widget _buildHeader() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.primary, AppColors.primaryLight],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-          ),
-          const SizedBox(width: 8),
-          const Icon(Icons.record_voice_over_outlined, color: Colors.white, size: 34),
-          const SizedBox(width: 14),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Mock Interview',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 25,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 6),
-                Text(
-                  'Practise speaking and get AI feedback on content and delivery.',
-                  style: TextStyle(color: Colors.white70, fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildHeader() => const GradientPageHeader(
+        icon: Icons.record_voice_over_outlined,
+        title: 'Mock Interview',
+        subtitle: 'Practise speaking and get AI feedback on content and delivery.',
+      );
 
   /// Job role or topic box with suggested roles.
-  Widget _buildRoleCard() {
-    return SurfaceCard(
-      children: [
-        SectionTitle('Job Role or Topic', subtitle: 'Questions will be tailored to this role.'),
-        TextField(
-          controller: _roleController,
-          enabled: !_isStarting,
-          maxLength: 100,
-          textCapitalization: TextCapitalization.words,
-          decoration: InputDecoration(
-            hintText: 'e.g. Junior Flutter Developer',
-            counterText: '',
-            prefixIcon: const Icon(Icons.work_outline, color: AppColors.primary),
-            filled: true,
-            fillColor: AppColors.surfaceAlt,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: AppColors.primary, width: 1.2),
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _suggestedRoles.map((role) {
-            final selected = _roleController.text.trim() == role;
-            return ChoiceChip(
-              label: Text(role),
-              selected: selected,
-              onSelected: _isStarting
-                  ? null
-                  : (_) {
-                      _roleController.text = role;
-                      _roleController.selection =
-                          TextSelection.collapsed(offset: role.length);
-                    },
-              selectedColor: AppColors.primarySoft,
-              backgroundColor: AppColors.surfaceAlt,
-              side: BorderSide(color: selected ? AppColors.primary : AppColors.border),
-              labelStyle: TextStyle(
-                color: selected ? AppColors.primary : AppColors.textDark,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              ),
-              showCheckmark: false,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
+  Widget _buildRoleCard() => TargetRoleField(
+        title: 'Job Role or Topic',
+        subtitle: 'Questions will be tailored to this role.',
+        hint: 'e.g. Junior Flutter Developer',
+        controller: _roleController,
+        enabled: !_isStarting,
+        suggestions: _suggestedRoles,
+        onSuggestionTap: (role) {
+          _roleController.text = role;
+          _roleController.selection = TextSelection.collapsed(offset: role.length);
+        },
+      );
 
   /// Experience level and number of questions.
   Widget _buildOptionsCard() {
@@ -505,36 +419,12 @@ class _MockInterviewSetupScreenState extends State<MockInterviewSetupScreen> {
   }
 
   /// Start Interview button (enabled after the role and consent are given).
-  Widget _buildBottomButton() {
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-        child: SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: _canStart ? _start : null,
-            icon: _isStarting
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Icon(Icons.play_arrow_rounded),
-            label: Text(_isStarting ? 'Starting…' : 'Start Mock Interview'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              disabledBackgroundColor: AppColors.disabled,
-              disabledForegroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  Widget _buildBottomButton() => CareerToolRunBar(
+        busy: _isStarting,
+        enabled: _canStart,
+        onPressed: _start,
+        icon: Icons.play_arrow_rounded,
+        label: 'Start Mock Interview',
+        busyLabel: 'Starting…',
+      );
 }

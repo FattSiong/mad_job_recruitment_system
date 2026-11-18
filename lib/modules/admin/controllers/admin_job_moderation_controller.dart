@@ -7,6 +7,7 @@ import '../../../core/constants/table_constants.dart';
 import '../../../models/chat_room_model.dart';
 import '../../../models/job_moderation_item_model.dart';
 import '../../../services/user_directory.dart';
+import 'moderation_query_utils.dart';
 
 /// Which jobs Admin > Jobs lists.
 enum JobModerationView {
@@ -225,7 +226,7 @@ class AdminJobModerationController extends ChangeNotifier {
     if (ids.isEmpty) return _Page(const [], hasMore: false, capped: capped, cursor: null);
 
     final jobRows = <Map<String, dynamic>>[];
-    for (final chunk in _chunks(ids)) {
+    for (final chunk in chunkIds(ids)) {
       jobRows.addAll(List<Map<String, dynamic>>.from(
           await _supabase.from(TableConstants.job).select(_jobColumns).inFilter('jobID', chunk)));
     }
@@ -238,7 +239,7 @@ class AdminJobModerationController extends ChangeNotifier {
   /// first), older / newer than [before].
   Future<_Page> _loadPage({DateTime? before}) async {
     final oldestFirst = _sort == ModerationSort.oldest;
-    final search = _cleanSearch(_search);
+    final search = cleanModerationSearch(_search);
     PostgrestFilterBuilder<PostgrestList> query =
         _supabase.from(TableConstants.job).select(_jobColumns).neq('status', 'deleted');
 
@@ -264,7 +265,7 @@ class AdminJobModerationController extends ChangeNotifier {
 
     final ids = rows.map((r) => r['jobID'].toString()).toList();
     final reportRows = <Map<String, dynamic>>[];
-    for (final chunk in _chunks(ids)) {
+    for (final chunk in chunkIds(ids)) {
       reportRows.addAll(List<Map<String, dynamic>>.from(await _supabase
           .from(TableConstants.reportedJob)
           .select(_reportColumns)
@@ -343,18 +344,6 @@ class AdminJobModerationController extends ChangeNotifier {
     return result;
   }
 
-  /// Search text that is safe inside the database filter (characters that
-  /// mean something there are turned into spaces).
-  static String _cleanSearch(String text) =>
-      text.replaceAll(RegExp(r'[,()*%\\"\x27:]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
-
-  /// Splits IDs into groups so the request address stays short.
-  static Iterable<List<String>> _chunks(List<String> ids, [int size = 100]) sync* {
-    for (var i = 0; i < ids.length; i += size) {
-      yield ids.sublist(i, i + size > ids.length ? ids.length : i + size);
-    }
-  }
-
   // ---------------------------------------------------------------------
   // Actions
   // ---------------------------------------------------------------------
@@ -367,7 +356,7 @@ class AdminJobModerationController extends ChangeNotifier {
     try {
       final closed = await _supabase.rpc('admin_dismiss_job_reports', params: {
         'p_job_id': item.id,
-        'p_note': _cleanNote(note),
+        'p_note': cleanModerationNote(note),
       });
       _afterAction(item, removed: false);
       if ((closed as num? ?? 0) == 0) return 'These reports were already handled by another admin.';
@@ -390,7 +379,7 @@ class AdminJobModerationController extends ChangeNotifier {
     try {
       await _supabase.rpc('admin_remove_job', params: {
         'p_job_id': item.id,
-        'p_note': _cleanNote(note),
+        'p_note': cleanModerationNote(note),
         'p_notify': notifyPeople,
       });
       _afterAction(item, removed: true);
@@ -411,11 +400,6 @@ class AdminJobModerationController extends ChangeNotifier {
       _items = [for (final i in _items) i.id == item.id ? i.withoutReports() : i];
     }
     _loadCount();
-  }
-
-  String? _cleanNote(String? note) {
-    final text = note?.trim() ?? '';
-    return text.isEmpty ? null : text;
   }
 
   /// A message to show for a failed action.
