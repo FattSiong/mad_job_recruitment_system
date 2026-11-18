@@ -402,6 +402,30 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   _NotificationTypeStyle _styleForType(String type) {
     switch (type) {
+      case 'company_registered_admin':
+        return const _NotificationTypeStyle(
+          icon: Icons.domain_verification_rounded,
+          color: Color(0xFF1D6F6A),
+          stageLabel: 'ADMIN · VERIFY COMPANY',
+        );
+      case 'company_submitted':
+        return const _NotificationTypeStyle(
+          icon: Icons.business_rounded,
+          color: Color(0xFFC28A22),
+          stageLabel: 'COMPANY · PENDING REVIEW',
+        );
+      case 'company_verified':
+        return const _NotificationTypeStyle(
+          icon: Icons.verified_rounded,
+          color: Color(0xFF15803D),
+          stageLabel: 'COMPANY · VERIFIED',
+        );
+      case 'company_rejected':
+        return const _NotificationTypeStyle(
+          icon: Icons.gpp_bad_rounded,
+          color: Color(0xFFB91C1C),
+          stageLabel: 'COMPANY · REJECTED',
+        );
       case 'new_application':
         return const _NotificationTypeStyle(
           icon: Icons.person_add_alt_1_rounded,
