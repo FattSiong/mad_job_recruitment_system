@@ -40,7 +40,7 @@ class AdvisorMessageBubble extends StatelessWidget {
                   Icon(Icons.smart_toy_outlined, size: 14, color: AppColors.primary),
                   SizedBox(width: 6),
                   Text(
-                    'AI Advisor',
+                    'Career Buddy',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -128,7 +128,7 @@ class AdvisorTypingBubble extends StatelessWidget {
             ButtonSpinner(size: 16, color: AppColors.primary),
             SizedBox(width: 10),
             Text(
-              'Advisor is thinking…',
+              'Career Buddy is thinking…',
               style: TextStyle(color: AppColors.textMuted, fontSize: 14),
             ),
           ],

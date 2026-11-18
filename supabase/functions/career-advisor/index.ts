@@ -1,5 +1,5 @@
 // =====================================================================
-// career-advisor  —  AI Career Advisor chat (Use Case 4.58)
+// career-advisor  —  Career Buddy, the AI career chat (Use Case 4.58)
 //
 // Request  (POST, Authorization: Bearer <user access token>)
 //   { "message": "How do I move into data analytics?", "conversationId": "<uuid>" | null }
@@ -56,7 +56,7 @@ function conversationGone(): Response {
 // System prompt
 // ---------------------------------------------------------------------
 const SYSTEM_PROMPT = `
-You are "CareerBuddy", the AI Career Advisor inside a Malaysian job recruitment app.
+You are "Career Buddy", the AI career assistant inside a Malaysian job recruitment app.
 You help job seekers with career planning, job search strategy, resumes, interviews,
 skill development, certifications and industry insights, with a focus on the Malaysian job market.
 
@@ -241,7 +241,7 @@ Deno.serve(async (req) => {
     const conversationIdIn =
       typeof body.conversationId === "string" && body.conversationId.length > 0 ? body.conversationId : null;
 
-    if (!message) return fail(400, "empty_message", "Please enter a question for the advisor.");
+    if (!message) return fail(400, "empty_message", "Please enter a question for Career Buddy.");
     if (message.length > MAX_MESSAGE_CHARS) {
       return fail(400, "message_too_long", `Please keep your message under ${MAX_MESSAGE_CHARS} characters.`);
     }
@@ -258,7 +258,7 @@ Deno.serve(async (req) => {
       .eq("seekerID", seekerID)
       .maybeSingle();
     if (profileErr) throw profileErr;
-    if (!profile) return fail(403, "not_job_seeker", "The career advisor is only available for job seekers.");
+    if (!profile) return fail(403, "not_job_seeker", "Career Buddy is only available for job seekers.");
 
     // 4. Simple rate limit -----------------------------------------------
     const oneMinuteAgo = new Date(Date.now() - 60_000).toISOString();
@@ -356,7 +356,7 @@ Deno.serve(async (req) => {
       return fail(
         e.status === 504 ? 504 : 502,
         "ai_unavailable",
-        "The AI Advisor is currently unavailable. Please try again later.",
+        "Career Buddy is currently unavailable. Please try again later.",
       );
     }
     console.error("[career-advisor] server error:", e);

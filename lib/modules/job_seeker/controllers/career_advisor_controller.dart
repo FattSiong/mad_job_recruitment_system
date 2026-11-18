@@ -64,7 +64,7 @@ class CareerAdvisorController extends ChangeNotifier with SafeNotifier {
   Future<String?> openConversation(String conversationID, {String? title}) async {
     // While a reply is on its way it belongs to the open conversation: switching
     // now would put that reply (and the next question) in the wrong chat.
-    if (_isSending) return 'Please wait for the advisor to reply first.';
+    if (_isSending) return 'Please wait for Career Buddy to reply first.';
     final request = ++_historyRequest;
     _isLoadingHistory = true;
     _conversationID = conversationID;
@@ -107,7 +107,7 @@ class CareerAdvisorController extends ChangeNotifier with SafeNotifier {
     if (_isSending || _isLoadingHistory) return;
     final question = text.trim();
     if (question.isEmpty) {
-      throw AdvisorException('empty_message', 'Please enter a question for the advisor.');
+      throw AdvisorException('empty_message', 'Please enter a question for Career Buddy.');
     }
 
     final pending = AdvisorMessageModel.pending(question);
@@ -152,7 +152,7 @@ class CareerAdvisorController extends ChangeNotifier with SafeNotifier {
     if (text.isEmpty) {
       throw AdvisorException(
         'empty_message',
-        'Please enter a question for the advisor.',
+        'Please enter a question for Career Buddy.',
       );
     }
     if (text.length > maxMessageLength) {
@@ -199,7 +199,7 @@ class CareerAdvisorController extends ChangeNotifier with SafeNotifier {
   }
 
   static const String _unavailableMessage =
-      'The AI Advisor is currently unavailable. Please try again later.';
+      'Career Buddy is currently unavailable. Please try again later.';
 
   /// Past conversations, newest first. Throws [DataLoadException].
   Future<List<AdvisorConversationModel>> fetchConversations() async {

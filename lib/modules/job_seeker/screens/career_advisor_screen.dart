@@ -101,7 +101,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
     if (text.isEmpty) {
       SnackBarHelper.showStyled(
         context,
-        message: 'Please enter a question for the advisor.',
+        message: 'Please enter a question for Career Buddy.',
         icon: Icons.info_outline_rounded,
         accentColor: AppColors.primary,
       );
@@ -237,7 +237,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'AI Career Advisor',
+                  'Career Buddy',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -357,7 +357,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
             ),
             const SizedBox(height: 18),
             const Text(
-              'Hi! I\'m your AI Career Advisor',
+              'Hi! I\'m Career Buddy',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 22,
@@ -458,7 +458,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
                     textCapitalization: TextCapitalization.sentences,
                     decoration: InputDecoration(
                       hintText: _isSending
-                          ? 'Advisor is replying…'
+                          ? 'Career Buddy is replying…'
                           : 'Ask your career question…',
                       hintStyle: const TextStyle(color: AppColors.textHint),
                       contentPadding: const EdgeInsets.symmetric(
