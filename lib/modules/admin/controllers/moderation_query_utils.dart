@@ -1,5 +1,5 @@
 // Small helpers shared by the admin moderation controllers
-// (AdminCommunityController, AdminJobModerationController).
+// (ModerationListController and its subclasses).
 
 /// Search text that is safe inside a database filter: characters that mean
 /// something in PostgREST filters (, ( ) * % \ " ' :) become spaces.
@@ -10,6 +10,16 @@ String cleanModerationSearch(String text) =>
 String? cleanModerationNote(String? note) {
   final text = note?.trim() ?? '';
   return text.isEmpty ? null : text;
+}
+
+/// The [column] values of [rows], each once, in their first order
+/// (reports newest first -> items in order of their newest report).
+List<String> uniqueIdsInOrder(Iterable<Map<String, dynamic>> rows, String column) {
+  final seen = <String>{};
+  return [
+    for (final r in rows)
+      if (seen.add(r[column].toString())) r[column].toString(),
+  ];
 }
 
 /// Splits IDs into groups so an "in (...)" request address stays short.

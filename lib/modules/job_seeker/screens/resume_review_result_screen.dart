@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../models/resume_review_model.dart';
+import '../widgets/career_tools/career_tool_widgets.dart';
 import '../widgets/resume_review/resume_review_widgets.dart';
 import 'build_resume_screen.dart';
 import '../../../shared_widgets/gradient_page_header.dart';
@@ -133,7 +134,11 @@ class _ResumeReviewResultScreenState extends State<ResumeReviewResultScreen> {
       children: [
         Row(
           children: [
-            ResumeScoreRing(score: _review.overallScore),
+            ScoreRing(
+              score: _review.overallScore,
+              color: resumeScoreColor(_review.overallScore),
+              size: 96,
+            ),
             const SizedBox(width: 18),
             Expanded(
               child: Column(

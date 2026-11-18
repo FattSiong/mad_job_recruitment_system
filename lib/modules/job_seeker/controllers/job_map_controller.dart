@@ -7,6 +7,7 @@ import '../../../core/utils/data_load_exception.dart';
 import '../../../models/nearby_job_model.dart';
 import '../../../core/constants/job_filter_options.dart';
 import 'location_controller.dart';
+import '../../../core/utils/safe_notifier.dart';
 
 /// Why the map couldn't use the phone's location.
 enum LocationIssue { serviceOff, denied, blocked, failed }
@@ -21,7 +22,7 @@ class StartLocation {
 
 /// State of the "Discover Nearby Jobs" map: filters, results, the selected
 /// job, and whether the user has moved away from the searched area.
-class JobMapController extends ChangeNotifier {
+class JobMapController extends ChangeNotifier with SafeNotifier {
   final LocationController _locations = LocationController();
 
   /// Kuala Lumpur city centre, used when the phone's location isn't available.
@@ -65,7 +66,6 @@ class JobMapController extends ChangeNotifier {
   int _selectedIndex = 0;
   bool _areaMoved = false;
   int _searchId = 0;
-  bool _disposed = false;
 
   List<NearbyJob> get jobs => List.unmodifiable(_jobs);
   bool get capped => _capped;
@@ -110,7 +110,7 @@ class JobMapController extends ChangeNotifier {
   /// one, otherwise a fresh fix (gives up after 8 seconds).
   Future<StartLocation> findStartLocation() async {
     _isLocating = true;
-    _notify();
+    notifySafely();
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
         return const StartLocation(fallbackCenter, LocationIssue.serviceOff);
@@ -145,7 +145,7 @@ class JobMapController extends ChangeNotifier {
       return const StartLocation(fallbackCenter, LocationIssue.failed);
     } finally {
       _isLocating = false;
-      _notify();
+      notifySafely();
     }
   }
 
@@ -178,7 +178,7 @@ class JobMapController extends ChangeNotifier {
     _isLoading = true;
     _areaMoved = false;
     _error = null;
-    _notify();
+    notifySafely();
 
     try {
       final result = await _locations.getNearbyJobs(
@@ -203,7 +203,7 @@ class JobMapController extends ChangeNotifier {
       if (id == _searchId) {
         _isLoading = false;
         _hasSearched = true;
-        _notify();
+        notifySafely();
       }
     }
   }
@@ -223,7 +223,7 @@ class JobMapController extends ChangeNotifier {
     final moved = movedKm > (_radiusKm * 0.2).clamp(0.5, 10.0);
     if (moved != _areaMoved) {
       _areaMoved = moved;
-      _notify();
+      notifySafely();
     }
   }
 
@@ -231,7 +231,7 @@ class JobMapController extends ChangeNotifier {
   void select(int index) {
     if (index < 0 || index >= _jobs.length || index == _selectedIndex) return;
     _selectedIndex = index;
-    _notify();
+    notifySafely();
   }
 
   /// Index of the first job at [spotKey] (for a tapped pin).
@@ -254,13 +254,13 @@ class JobMapController extends ChangeNotifier {
       default:
         _salary = value;
     }
-    _notify();
+    notifySafely();
   }
 
   /// Sets the search radius (5 to 100 km).
   void setRadius(double km) {
     _radiusKm = km.clamp(5.0, 100.0);
-    _notify();
+    notifySafely();
   }
 
   /// Doubles the radius (up to 100 km). Returns false if already at the max.
@@ -277,17 +277,6 @@ class JobMapController extends ChangeNotifier {
     _datePosted = JobFilterOptions.anyDate;
     _salary = JobFilterOptions.anySalary;
     _radiusKm = JobFilterOptions.defaultRadiusKm;
-    _notify();
-  }
-
-  /// notifyListeners, unless the controller was already disposed.
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
+    notifySafely();
   }
 }

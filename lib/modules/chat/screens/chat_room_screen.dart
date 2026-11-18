@@ -18,6 +18,7 @@ import '../../../shared_widgets/user_avatar.dart';
 import '../widgets/chat_composer.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/shared_attachments_sheet.dart';
+import '../../../shared_widgets/action_sheet.dart';
 
 /// One conversation.
 class ChatRoomScreen extends StatefulWidget {
@@ -97,35 +98,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
 
   /// Photo / camera / document sheet, then sends the chosen file.
   Future<void> _showAttachOptions() async {
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined, color: AppColors.primary),
-              title: const Text('Photo from library'),
-              onTap: () => Navigator.pop(sheetContext, 'gallery'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_camera_outlined, color: AppColors.primary),
-              title: const Text('Take a photo'),
-              onTap: () => Navigator.pop(sheetContext, 'camera'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.description_outlined, color: AppColors.primary),
-              title: const Text('Document (PDF, Word)'),
-              onTap: () => Navigator.pop(sheetContext, 'document'),
-            ),
-          ],
-        ),
-      ),
+    final choice = await showActionSheet<String>(
+      context,
+      actions: const [
+        SheetAction('gallery', 'Photo from library', icon: Icons.photo_library_outlined),
+        SheetAction('camera', 'Take a photo', icon: Icons.photo_camera_outlined),
+        SheetAction('document', 'Document (PDF, Word)', icon: Icons.description_outlined),
+      ],
     );
     if (choice == null || !mounted) return;
 
@@ -187,36 +166,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
   /// Long-press menu on a "Not sent" message: retry, copy (text) or discard.
   Future<void> _showUnsentActions(MessageModel message) async {
     final isText = (message.mediaType ?? 'text') == 'text';
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            ListTile(
-              leading: const Icon(Icons.refresh_rounded, color: AppColors.primary),
-              title: const Text('Try again'),
-              onTap: () => Navigator.pop(sheetContext, 'retry'),
-            ),
-            if (isText)
-              ListTile(
-                leading: const Icon(Icons.copy_rounded, color: AppColors.primary),
-                title: const Text('Copy text'),
-                onTap: () => Navigator.pop(sheetContext, 'copy'),
-              ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline_rounded, color: AppColors.errorRed),
-              title: const Text('Don\'t send', style: TextStyle(color: AppColors.errorRed)),
-              onTap: () => Navigator.pop(sheetContext, 'discard'),
-            ),
-          ],
-        ),
-      ),
+    final choice = await showActionSheet<String>(
+      context,
+      actions: [
+        const SheetAction('retry', 'Try again', icon: Icons.refresh_rounded),
+        if (isText) const SheetAction('copy', 'Copy text', icon: Icons.copy_rounded),
+        const SheetAction('discard', 'Don\'t send', icon: Icons.delete_outline_rounded, destructive: true),
+      ],
     );
     if (!mounted || choice == null) return;
     switch (choice) {
@@ -304,39 +260,20 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
     final canDelete = _controller.isMine(message) && !_controller.isPending(message);
     if (!isText && !canDelete) return;
 
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            if (isText)
-              ListTile(
-                leading: const Icon(Icons.copy_rounded, color: AppColors.primary),
-                title: const Text('Copy text'),
-                onTap: () => Navigator.pop(sheetContext, 'copy'),
-              ),
-            if (canEdit)
-              ListTile(
-                leading: const Icon(Icons.edit_outlined, color: AppColors.primary),
-                title: const Text('Edit'),
-                subtitle: const Text('Possible for 2 minutes after sending'),
-                onTap: () => Navigator.pop(sheetContext, 'edit'),
-              ),
-            if (canDelete)
-              ListTile(
-                leading: const Icon(Icons.delete_outline_rounded, color: AppColors.errorRed),
-                title: const Text('Delete for everyone', style: TextStyle(color: AppColors.errorRed)),
-                onTap: () => Navigator.pop(sheetContext, 'delete'),
-              ),
-          ],
-        ),
-      ),
+    final choice = await showActionSheet<String>(
+      context,
+      actions: [
+        if (isText) const SheetAction('copy', 'Copy text', icon: Icons.copy_rounded),
+        if (canEdit)
+          const SheetAction(
+            'edit',
+            'Edit',
+            icon: Icons.edit_outlined,
+            subtitle: 'Possible for 2 minutes after sending',
+          ),
+        if (canDelete)
+          const SheetAction('delete', 'Delete for everyone', icon: Icons.delete_outline_rounded, destructive: true),
+      ],
     );
     if (!mounted || choice == null) return;
 

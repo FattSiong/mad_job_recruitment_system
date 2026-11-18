@@ -23,6 +23,8 @@ import 'location_search_screen.dart';
 import 'my_jobs_screen.dart';
 import 'profile_screen.dart';
 import 'qr_scanner_screen.dart';
+import '../../../shared_widgets/hero_card.dart';
+import '../../../shared_widgets/hero_icon_button.dart';
 
 /// The job seeker's main screen: Home (job search), My Jobs, Messages,
 /// Community and Profile tabs.
@@ -470,48 +472,18 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
 
   /// Gradient header with the greeting and the Scan QR button.
   Widget _buildHeroHeader() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.primary, AppColors.primaryLight],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Column(
+    return HeroCard(child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.travel_explore, size: 16, color: Colors.white),
-                    SizedBox(width: 8),
-                    Text(
-                      'Job Seeker Workspace',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              const HeroPill(icon: Icons.travel_explore, label: 'Job Seeker Workspace'),
               const Spacer(),
               NotificationBellButton(
                 onReturned: () => AppliedJobsController.notifyChanged(),
               ),
               const SizedBox(width: 10),
-              _buildHeaderIconButton(
+              HeroIconButton(
                 icon: Icons.qr_code_scanner,
                 tooltip: 'Scan QR',
                 onTap: () {
@@ -646,30 +618,6 @@ class _SeekerDashboardState extends State<SeekerDashboard> {
     }
 
     return const ChatInboxScreen();
-  }
-
-  /// See-through round button in the header.
-  Widget _buildHeaderIconButton({
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback onTap,
-  }) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.white.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: SizedBox(
-            width: 42,
-            height: 42,
-            child: Icon(icon, color: Colors.white, size: 20),
-          ),
-        ),
-      ),
-    );
   }
 
   @override

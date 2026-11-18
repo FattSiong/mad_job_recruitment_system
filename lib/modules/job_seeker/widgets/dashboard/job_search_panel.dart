@@ -60,7 +60,7 @@ class JobSearchPanel extends StatelessWidget {
             controller: keywordController,
             textInputAction: TextInputAction.search,
             onSubmitted: (_) => onSearch(),
-            decoration: _inputDecoration(
+            decoration: jobSearchInputDecoration(
               hint: 'Job title, keywords, or company',
               icon: Icons.search,
             ),
@@ -70,7 +70,7 @@ class JobSearchPanel extends StatelessWidget {
             controller: locationController,
             readOnly: true,
             onTap: onOpenLocation,
-            decoration: _inputDecoration(
+            decoration: jobSearchInputDecoration(
               hint: 'City, state, or postcode',
               icon: Icons.location_on_outlined,
               suffix: locationController.text.isNotEmpty
@@ -148,32 +148,32 @@ class JobSearchPanel extends StatelessWidget {
       ),
     );
   }
+}
 
-  /// Style of the keyword and location boxes.
-  InputDecoration _inputDecoration({
-    required String hint,
-    required IconData icon,
-    Widget? suffix,
-  }) {
-    return InputDecoration(
-      hintText: hint,
-      prefixIcon: Icon(icon, color: AppColors.textMuted),
-      suffixIcon: suffix,
-      filled: true,
-      fillColor: AppColors.surfaceAlt,
-      contentPadding: const EdgeInsets.symmetric(vertical: 16),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: BorderSide(color: Colors.grey.shade300),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: BorderSide(color: Colors.grey.shade300),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-      ),
-    );
-  }
+/// Style of the keyword and location boxes (dashboard and location search).
+InputDecoration jobSearchInputDecoration({
+  required String hint,
+  required IconData icon,
+  Widget? suffix,
+}) {
+  return InputDecoration(
+    hintText: hint,
+    prefixIcon: Icon(icon, color: AppColors.textMuted),
+    suffixIcon: suffix,
+    filled: true,
+    fillColor: AppColors.surfaceAlt,
+    contentPadding: const EdgeInsets.symmetric(vertical: 16),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(18),
+      borderSide: BorderSide(color: Colors.grey.shade300),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(18),
+      borderSide: BorderSide(color: Colors.grey.shade300),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(18),
+      borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+    ),
+  );
 }

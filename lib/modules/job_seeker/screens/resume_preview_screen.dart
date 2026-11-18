@@ -3,14 +3,12 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:open_filex/open_filex.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/pdf_file_helper.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../controllers/resume_builder_controller.dart';
+import '../widgets/pdf_preview_frame.dart';
 
 /// PDF preview of the built resume: share, download, open, and optionally
 /// use it as the profile resume for job applications.
@@ -46,9 +44,7 @@ class _ResumePreviewScreenState extends State<ResumePreviewScreen> {
     });
     try {
       final bytes = await _controller.buildPdf();
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/${_controller.pdfFileName}');
-      await file.writeAsBytes(bytes, flush: true);
+      final file = await PdfFileHelper.saveTemp(bytes, _controller.pdfFileName);
       if (!mounted) return;
       setState(() {
         _bytes = bytes;
@@ -125,13 +121,7 @@ class _ResumePreviewScreenState extends State<ResumePreviewScreen> {
   /// Opens the phone's share sheet with the PDF.
   Future<void> _share() async {
     final file = _file;
-    if (file == null) return;
-    await SharePlus.instance.share(
-      ShareParams(
-        files: [XFile(file.path, mimeType: 'application/pdf')],
-        subject: 'My Resume',
-      ),
-    );
+    if (file != null) await PdfFileHelper.share(file, subject: 'My Resume');
   }
 
   /// Lets the user save the PDF where they choose.
@@ -157,13 +147,8 @@ class _ResumePreviewScreenState extends State<ResumePreviewScreen> {
   Future<void> _openExternally() async {
     final file = _file;
     if (file == null) return;
-    final result = await OpenFilex.open(file.path, type: 'application/pdf');
-    if (result.type != ResultType.done) {
-      _toast(
-        result.type == ResultType.noAppToOpen ? 'No PDF app found on this device.' : 'Unable to open the PDF.',
-        success: false,
-      );
-    }
+    final error = await PdfFileHelper.openExternally(file);
+    if (error != null) _toast(error, success: false);
   }
 
   // ---------------------------------------------------------------------
@@ -215,27 +200,11 @@ class _ResumePreviewScreenState extends State<ResumePreviewScreen> {
           const SizedBox(width: 4),
         ],
       ),
-      body: Container(
-        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: _error != null
-            ? _buildError()
-            : !ready
-                ? const Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CircularProgressIndicator(color: AppColors.primary),
-                        SizedBox(height: 16),
-                        Text('Creating your resume…', style: TextStyle(color: AppColors.textMuted)),
-                      ],
-                    ),
-                  )
-                : SfPdfViewer.memory(_bytes!, canShowScrollHead: true, pageSpacing: 6),
+      body: PdfPreviewFrame(
+        bytes: _bytes,
+        error: _error,
+        loadingText: 'Creating your resume…',
+        onRetry: _generate,
       ),
       bottomNavigationBar: ready
           ? SafeArea(
@@ -269,34 +238,6 @@ class _ResumePreviewScreenState extends State<ResumePreviewScreen> {
               ),
             )
           : null,
-    );
-  }
-
-  /// Shown when the PDF couldn't be made, with Try Again.
-  Widget _buildError() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.picture_as_pdf_outlined, size: 44, color: AppColors.errorRed),
-            const SizedBox(height: 12),
-            Text(_error!, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: _generate,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Try Again'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                elevation: 0,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

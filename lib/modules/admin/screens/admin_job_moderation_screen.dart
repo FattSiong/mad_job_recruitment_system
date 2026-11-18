@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/admin_colors.dart';
-import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/job_moderation_item_model.dart';
 import '../controllers/admin_job_moderation_controller.dart';
+import '../controllers/moderation_list_controller.dart';
 import '../widgets/job_moderation_card.dart';
+import '../widgets/moderation_list_page.dart';
 import '../widgets/moderation_list_parts.dart';
 import '../widgets/moderation_note_dialog.dart';
 
@@ -19,64 +20,34 @@ class AdminJobModerationScreen extends StatefulWidget {
 
 class _AdminJobModerationScreenState extends State<AdminJobModerationScreen> {
   final AdminJobModerationController _controller = AdminJobModerationController();
-  final ScrollController _scroll = ScrollController();
-  final GlobalKey<RefreshIndicatorState> _refresh = GlobalKey<RefreshIndicatorState>();
-  final TextEditingController _searchText = TextEditingController();
-
-  /// Reloads when the admin comes back to the app (new reports may be in).
-  late final AppLifecycleListener _lifecycle;
-
-  @override
-  void initState() {
-    super.initState();
-    _scroll.addListener(_onScroll);
-    _lifecycle = AppLifecycleListener(onResume: _controller.load);
-    _controller.load();
-  }
 
   @override
   void dispose() {
-    _lifecycle.dispose();
-    _searchText.dispose();
-    _scroll.removeListener(_onScroll);
-    _scroll.dispose();
     _controller.dispose();
     super.dispose();
-  }
-
-  /// Loads the next page of the All list near the bottom.
-  void _onScroll() {
-    if (_scroll.hasClients && _scroll.position.extentAfter < 400) _controller.loadMore();
   }
 
   // ---------------------------------------------------------------------
   // Actions
   // ---------------------------------------------------------------------
 
-  Future<void> _dismiss(JobModerationItem item) async {
-    final decision = await showDialog<ModerationDecision>(
-      context: context,
-      builder: (_) => const ModerationNoteDialog(
-        title: 'Dismiss reports?',
-        message: 'The reports are closed and the job stays as it is.',
-        confirmLabel: 'Dismiss',
-        confirmColor: AdminColors.heroEnd,
-      ),
-    );
-    if (decision == null || !mounted) return;
-    final error = await _controller.dismiss(item, note: decision.note);
-    if (!mounted) return;
-    if (error != null) {
-      SnackBarHelper.showError(context, error, duration: const Duration(seconds: 3));
-    } else {
-      SnackBarHelper.showSuccess(context, 'Reports dismissed');
-    }
-  }
+  Future<void> _dismiss(JobModerationItem item) => confirmModerationAction(
+        context,
+        dialog: const ModerationNoteDialog(
+          title: 'Dismiss reports?',
+          message: 'The reports are closed and the job stays as it is.',
+          confirmLabel: 'Dismiss',
+          confirmColor: AdminColors.heroEnd,
+        ),
+        action: (d) => _controller.dismiss(item, note: d.note),
+        successMessage: (_) => 'Reports dismissed',
+      );
 
-  Future<void> _remove(JobModerationItem item) async {
-    final decision = await showDialog<ModerationDecision>(
-      context: context,
-      builder: (_) => ModerationNoteDialog(
+  Future<void> _remove(JobModerationItem item) {
+    final done = item.isRemoved ? 'Reports closed' : 'Job removed';
+    return confirmModerationAction(
+      context,
+      dialog: ModerationNoteDialog(
         title: item.isRemoved ? 'Close these reports?' : 'Remove "${item.title}"?',
         message: item.isRemoved
             ? 'This job was already removed. Its remaining reports are closed as handled.'
@@ -90,22 +61,9 @@ class _AdminJobModerationScreenState extends State<AdminJobModerationScreen> {
         notifySubtitle: 'The employer gets the report reasons; people who applied are told the job is no '
             'longer available. Your note is not shown.',
       ),
+      action: (d) => _controller.remove(item, note: d.note, notify: d.notifyAuthor),
+      successMessage: (d) => d.notifyAuthor ? '$done · employer told' : done,
     );
-    if (decision == null || !mounted) return;
-    final error = await _controller.remove(item, note: decision.note, notifyPeople: decision.notifyAuthor);
-    if (!mounted) return;
-    if (error != null) {
-      SnackBarHelper.showError(context, error, duration: const Duration(seconds: 3));
-    } else {
-      final done = item.isRemoved ? 'Reports closed' : 'Job removed';
-      SnackBarHelper.showSuccess(context, decision.notifyAuthor ? '$done · employer told' : done);
-    }
-  }
-
-  void _clearSearch() {
-    _searchText.clear();
-    _controller.setSearch('');
-    FocusScope.of(context).unfocus();
   }
 
   // ---------------------------------------------------------------------
@@ -114,30 +72,42 @@ class _AdminJobModerationScreenState extends State<AdminJobModerationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AdminColors.background,
-      body: ListenableBuilder(
-        listenable: _controller,
-        builder: (context, _) => RefreshIndicator(
-          key: _refresh,
-          color: AdminColors.heroEnd,
-          onRefresh: _controller.load,
-          child: CustomScrollView(
-            controller: _scroll,
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              SliverToBoxAdapter(child: _hero()),
-              SliverToBoxAdapter(child: _filters()),
-              ..._body(),
-              const SliverToBoxAdapter(child: SizedBox(height: 100)),
-            ],
-          ),
-        ),
+    final c = _controller;
+    return ModerationListPage<JobModerationItem>(
+      controller: c,
+      heroBuilder: _hero,
+      allLabel: 'All jobs',
+      reportedCount: () => c.reportedJobs,
+      reportedSearchHint: 'Search job, company, reason…',
+      allSearchHint: 'Search job, company or employer',
+      emptyBuilder: (clearSearch) {
+        final reported = c.view == ModerationView.reported;
+        return ModerationEmptyState(
+          isSearching: c.isSearching,
+          search: c.search,
+          reported: reported,
+          onClearSearch: clearSearch,
+          noResultsMessage: reported
+              ? 'No reported jobs match. Try another word, or search in All jobs.'
+              : 'No jobs match. Try another word, a company or an employer name.',
+          reportedEmptyTitle: 'No reported jobs',
+          allEmptyIcon: Icons.work_outline_rounded,
+          allEmptyTitle: 'No job posts yet',
+          allEmptyMessage: 'Jobs posted by employers will appear here.',
+        );
+      },
+      itemBuilder: (item) => JobModerationCard(
+        key: ValueKey(item.id),
+        item: item,
+        busy: c.isBusy(item),
+        onRemove: () => _remove(item),
+        // Already removed: only "Close reports" (Remove) is offered
+        onDismiss: item.isReported && !item.isRemoved ? () => _dismiss(item) : null,
       ),
     );
   }
 
-  Widget _hero() {
+  Widget _hero(VoidCallback? refresh) {
     final waiting = _controller.reportedJobs;
     return ModerationHero(
       labelIcon: Icons.shield_outlined,
@@ -146,170 +116,7 @@ class _AdminJobModerationScreenState extends State<AdminJobModerationScreen> {
       subtitle: waiting == 0
           ? 'No reported jobs waiting. Pull down to check again.'
           : '$waiting reported ${waiting == 1 ? 'job is' : 'jobs are'} waiting for review.',
-      onRefresh: _controller.isLoading ? null : () => _refresh.currentState?.show(),
+      onRefresh: refresh,
     );
-  }
-
-  Widget _filters() {
-    final c = _controller;
-    final reported = c.view == JobModerationView.reported;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SegmentedButton<JobModerationView>(
-            showSelectedIcon: false,
-            style: SegmentedButton.styleFrom(
-              selectedBackgroundColor: AdminColors.selectedBg,
-              selectedForegroundColor: AdminColors.heroStart,
-              foregroundColor: AdminColors.textSecondary,
-            ),
-            segments: [
-              ButtonSegment(
-                value: JobModerationView.reported,
-                icon: const Icon(Icons.flag_outlined, size: 18),
-                label: Text(c.reportedJobs > 0 ? 'Reported (${c.reportedJobs > 99 ? '99+' : c.reportedJobs})' : 'Reported'),
-              ),
-              const ButtonSegment(
-                value: JobModerationView.all,
-                icon: Icon(Icons.list_alt_rounded, size: 18),
-                label: Text('All jobs'),
-              ),
-            ],
-            selected: {c.view},
-            onSelectionChanged: (s) => c.setView(s.first),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: ModerationSearchField(
-                  controller: _searchText,
-                  hint: reported ? 'Search job, company, reason…' : 'Search job, company or employer',
-                  hasText: c.isSearching,
-                  onChanged: c.setSearch,
-                  onClear: _clearSearch,
-                ),
-              ),
-              const SizedBox(width: 10),
-              ModerationSortButton(
-                selected: c.sort,
-                options: c.sortOptions,
-                onSelected: c.setSort,
-                labelFor: (s) => s == ModerationSort.oldest && reported ? 'Waiting longest' : s.label,
-              ),
-            ],
-          ),
-          if (c.isRefreshing)
-            const Padding(
-              padding: EdgeInsets.only(top: 10),
-              child: LinearProgressIndicator(minHeight: 2, color: AdminColors.heroEnd),
-            ),
-        ],
-      ),
-    );
-  }
-
-  List<Widget> _body() {
-    final c = _controller;
-    final items = c.items; // searched and sorted once per build
-    if (c.isLoading) {
-      return const [
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: EdgeInsets.only(top: 60),
-            child: Center(child: CircularProgressIndicator(color: AdminColors.heroEnd)),
-          ),
-        ),
-      ];
-    }
-    if (c.error != null && items.isEmpty) {
-      return [
-        SliverToBoxAdapter(
-          child: ModerationStateCard(
-            icon: Icons.cloud_off_rounded,
-            title: 'Couldn\'t load',
-            message: c.error!,
-            action: TextButton.icon(
-              onPressed: c.load,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Try again'),
-            ),
-          ),
-        ),
-      ];
-    }
-    if (items.isEmpty) {
-      final reported = c.view == JobModerationView.reported;
-      return [
-        SliverToBoxAdapter(
-          child: c.isSearching
-              ? ModerationStateCard(
-                  icon: Icons.search_off_rounded,
-                  title: 'No results for "${c.search.trim()}"',
-                  message: reported
-                      ? 'No reported jobs match. Try another word, or search in All jobs.'
-                      : 'No jobs match. Try another word, a company or an employer name.',
-                  action: TextButton.icon(
-                    onPressed: _clearSearch,
-                    icon: const Icon(Icons.close_rounded),
-                    label: const Text('Clear search'),
-                  ),
-                )
-              : reported
-                  ? const ModerationStateCard(
-                      icon: Icons.verified_user_outlined,
-                      title: 'No reported jobs',
-                      message: 'Everything reported has been handled.',
-                    )
-                  : const ModerationStateCard(
-                      icon: Icons.work_outline_rounded,
-                      title: 'No job posts yet',
-                      message: 'Jobs posted by employers will appear here.',
-                    ),
-        ),
-      ];
-    }
-    return [
-      if (c.error != null) const SliverToBoxAdapter(child: ModerationRefreshFailedBanner()),
-      if (c.reportsCapped)
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
-            child: Text(
-              'Showing the newest ${AdminJobModerationController.maxReports} reports. Handle some, then refresh for more.',
-              style: const TextStyle(fontSize: 12.5, color: AdminColors.textSecondary),
-            ),
-          ),
-        ),
-      SliverPadding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-        sliver: SliverList(
-          delegate: SliverChildBuilderDelegate(
-            (context, i) {
-              final item = items[i];
-              return JobModerationCard(
-                key: ValueKey(item.id),
-                item: item,
-                busy: c.isBusy(item),
-                onRemove: () => _remove(item),
-                // Already removed: only "Close reports" (Remove) is offered
-                onDismiss: item.isReported && !item.isRemoved ? () => _dismiss(item) : null,
-              );
-            },
-            childCount: items.length,
-          ),
-        ),
-      ),
-      if (c.isLoadingMore || c.hasMore)
-        SliverToBoxAdapter(
-          child: ModerationLoadMore(
-            loading: c.isLoadingMore,
-            failed: c.loadMoreFailed,
-            onPressed: () => c.loadMore(retry: true),
-          ),
-        ),
-    ];
   }
 }

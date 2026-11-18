@@ -350,6 +350,44 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (sheetContext, setSheetState) {
+            /// Accepts or declines the offer (spinner meanwhile; errors stay in the sheet).
+            Future<void> respond({required bool accept, String? declineReason}) async {
+              setSheetState(() {
+                isSubmitting = true;
+                errorText = null;
+              });
+              try {
+                await _appliedController.respondToJobOffer(
+                  applicantId: applicantId,
+                  accept: accept,
+                  declineReason: declineReason,
+                );
+                if (sheetContext.mounted) Navigator.pop(sheetContext);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(accept
+                          ? 'Congratulations! You have accepted the job offer.'
+                          : 'You have declined the job offer.'),
+                      backgroundColor: accept ? AppColors.statusAccepted : AppColors.warning,
+                    ),
+                  );
+                }
+              } on DataLoadException catch (e) {
+                if (!sheetContext.mounted) return; // sheet closed meanwhile
+                setSheetState(() {
+                  isSubmitting = false;
+                  errorText = e.message;
+                });
+              } catch (_) {
+                if (!sheetContext.mounted) return; // sheet closed meanwhile
+                setSheetState(() {
+                  isSubmitting = false;
+                  errorText = 'Failed to ${accept ? 'accept' : 'decline'} offer. Please try again.';
+                });
+              }
+            }
+
             return Container(
               constraints: BoxConstraints(
                 maxHeight: MediaQuery.of(sheetContext).size.height * 0.88,
@@ -569,51 +607,8 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
                               onPressed: isSubmitting
                                   ? null
                                   : () async {
-                                      final reason =
-                                          await _promptDeclineReasonDialog();
-                                      if (reason == null) return;
-
-                                      setSheetState(() {
-                                        isSubmitting = true;
-                                        errorText = null;
-                                      });
-
-                                      try {
-                                        await _appliedController
-                                            .respondToJobOffer(
-                                          applicantId: applicantId,
-                                          accept: false,
-                                          declineReason: reason,
-                                        );
-                                        if (sheetContext.mounted) {
-                                          Navigator.pop(sheetContext);
-                                        }
-                                        if (mounted) {
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(
-                                            const SnackBar(
-                                              content: Text(
-                                                'You have declined the job offer.',
-                                              ),
-                                              backgroundColor:
-                                                  AppColors.warning,
-                                            ),
-                                          );
-                                        }
-                                      } on DataLoadException catch (e) {
-                                        if (!sheetContext.mounted) return; // sheet closed meanwhile
-                                        setSheetState(() {
-                                          isSubmitting = false;
-                                          errorText = e.message;
-                                        });
-                                      } catch (_) {
-                                        if (!sheetContext.mounted) return; // sheet closed meanwhile
-                                        setSheetState(() {
-                                          isSubmitting = false;
-                                          errorText =
-                                              'Failed to decline offer. Please try again.';
-                                        });
-                                      }
+                                      final reason = await _promptDeclineReasonDialog();
+                                      if (reason != null) await respond(accept: false, declineReason: reason);
                                     },
                               icon: const Icon(Icons.close_rounded, size: 18),
                               label: const Text(
@@ -637,48 +632,7 @@ class _AppliedJobsTabState extends State<AppliedJobsTab> {
                             child: ElevatedButton.icon(
                               onPressed: isSubmitting
                                   ? null
-                                  : () async {
-                                      setSheetState(() {
-                                        isSubmitting = true;
-                                        errorText = null;
-                                      });
-
-                                      try {
-                                        await _appliedController
-                                            .respondToJobOffer(
-                                          applicantId: applicantId,
-                                          accept: true,
-                                        );
-                                        if (sheetContext.mounted) {
-                                          Navigator.pop(sheetContext);
-                                        }
-                                        if (mounted) {
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(
-                                            const SnackBar(
-                                              content: Text(
-                                                'Congratulations! You have accepted the job offer.',
-                                              ),
-                                              backgroundColor:
-                                                  AppColors.statusAccepted,
-                                            ),
-                                          );
-                                        }
-                                      } on DataLoadException catch (e) {
-                                        if (!sheetContext.mounted) return; // sheet closed meanwhile
-                                        setSheetState(() {
-                                          isSubmitting = false;
-                                          errorText = e.message;
-                                        });
-                                      } catch (_) {
-                                        if (!sheetContext.mounted) return; // sheet closed meanwhile
-                                        setSheetState(() {
-                                          isSubmitting = false;
-                                          errorText =
-                                              'Failed to accept offer. Please try again.';
-                                        });
-                                      }
-                                    },
+                                  : () => respond(accept: true),
                               icon: isSubmitting
                                   ? const SizedBox(
                                       width: 16,

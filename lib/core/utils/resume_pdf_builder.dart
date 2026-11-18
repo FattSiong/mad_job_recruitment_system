@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -8,6 +7,7 @@ import 'package:pdf/widgets.dart' as pw;
 import '../../models/education_model.dart';
 import '../../models/resume_model.dart';
 import '../../models/work_experience_model.dart';
+import 'pdf_text.dart';
 
 /// One clean, ATS-friendly A4 resume (single column, real text, no tables).
 class ResumePdfBuilder {
@@ -19,26 +19,6 @@ class ResumePdfBuilder {
   static final PdfColor _rule = PdfColor.fromInt(0xFFD6DEE8);
 
   static final DateFormat _month = DateFormat('MMM yyyy');
-
-  static pw.ThemeData? _theme;
-
-  /// Loads the Poppins fonts once and reuses them for every PDF.
-  static Future<pw.ThemeData> _loadTheme() async {
-    if (_theme != null) return _theme!;
-    final regular = await rootBundle.load('assets/fonts/Poppins-Regular.ttf');
-    final bold = await rootBundle.load('assets/fonts/Poppins-Bold.ttf');
-    _theme = pw.ThemeData.withFont(base: pw.Font.ttf(regular), bold: pw.Font.ttf(bold));
-    return _theme!;
-  }
-
-  /// Removes characters the font can't draw (emoji, symbols).
-  static String _clean(String? s) {
-    if (s == null) return '';
-    return s
-        .replaceAll('→', '->')
-        .replaceAll(RegExp(r'[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE0F}]', unicode: true), '')
-        .trim();
-  }
 
   /// "Jan 2024 - Present" (or just the start month when there is no end).
   static String _period(DateTime start, DateTime? end, bool isCurrent) {
@@ -52,11 +32,11 @@ class ResumePdfBuilder {
   // =====================================================================
 
   static Future<Uint8List> build(ResumeModel r) async {
-    final theme = await _loadTheme();
+    final theme = await PdfText.theme();
     final doc = pw.Document(
       theme: theme,
-      title: '${_clean(r.fullName)} - Resume',
-      author: _clean(r.fullName),
+      title: '${PdfText.clean(r.fullName)} - Resume',
+      author: PdfText.clean(r.fullName),
     );
 
     final summary = r.sections.where((s) => s.type == ResumeSectionType.summary && !s.isEmpty);
@@ -96,7 +76,7 @@ class ResumePdfBuilder {
 
   static pw.Widget _header(ResumeModel r) {
     final contact = [r.phone, r.email, r.address]
-        .map(_clean)
+        .map(PdfText.clean)
         .where((s) => s.isNotEmpty)
         .join('   |   ');
 
@@ -104,7 +84,7 @@ class ResumePdfBuilder {
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         pw.Text(
-          _clean(r.fullName).toUpperCase(),
+          PdfText.clean(r.fullName).toUpperCase(),
           style: pw.TextStyle(
             fontSize: 22,
             fontWeight: pw.FontWeight.bold,
@@ -152,26 +132,26 @@ class ResumePdfBuilder {
     String? period,
     String? description,
   }) {
-    final desc = _clean(description);
+    final desc = PdfText.clean(description);
     return [
       pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.Expanded(
             child: pw.Text(
-              _clean(title),
+              PdfText.clean(title),
               style: pw.TextStyle(fontSize: 10.5, fontWeight: pw.FontWeight.bold, color: _text),
             ),
           ),
           if (period != null && period.trim().isNotEmpty)
             pw.Padding(
               padding: const pw.EdgeInsets.only(left: 8),
-              child: pw.Text(_clean(period), style: pw.TextStyle(fontSize: 9, color: _muted)),
+              child: pw.Text(PdfText.clean(period), style: pw.TextStyle(fontSize: 9, color: _muted)),
             ),
         ],
       ),
       if (subtitle != null && subtitle.trim().isNotEmpty)
-        pw.Text(_clean(subtitle), style: pw.TextStyle(fontSize: 9.5, color: _muted)),
+        pw.Text(PdfText.clean(subtitle), style: pw.TextStyle(fontSize: 9.5, color: _muted)),
       if (desc.isNotEmpty) ...[
         pw.SizedBox(height: 3),
         ..._description(desc),
@@ -209,7 +189,7 @@ class ResumePdfBuilder {
 
   static List<pw.Widget> _textSection(String title, String text) => [
         _sectionTitle(title),
-        ..._description(_clean(text)),
+        ..._description(PdfText.clean(text)),
       ];
 
   static List<pw.Widget> _educationSection(List<EducationModel> list) => [
@@ -240,7 +220,7 @@ class ResumePdfBuilder {
         _sectionTitle('Skills'),
         pw.Text(
           skills
-              .map((s) => s.level == null ? _clean(s.name) : '${_clean(s.name)} (${s.level})')
+              .map((s) => s.level == null ? PdfText.clean(s.name) : '${PdfText.clean(s.name)} (${s.level})')
               .join('   |   '),
           style: pw.TextStyle(fontSize: 9.5, color: _text, lineSpacing: 2),
         ),
@@ -253,8 +233,8 @@ class ResumePdfBuilder {
         pw.Text(
           s.items
               .map((i) => (i.subtitle == null || i.subtitle!.isEmpty)
-                  ? _clean(i.title)
-                  : '${_clean(i.title)} (${_clean(i.subtitle)})')
+                  ? PdfText.clean(i.title)
+                  : '${PdfText.clean(i.title)} (${PdfText.clean(i.subtitle)})')
               .join('   |   '),
           style: pw.TextStyle(fontSize: 9.5, color: _text, lineSpacing: 2),
         ),

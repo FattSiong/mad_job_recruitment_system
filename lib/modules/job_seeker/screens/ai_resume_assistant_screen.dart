@@ -277,25 +277,8 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
               : null,
         ),
         if (!s.isAvailable(ResumeReviewSource.uploaded) && !s.isAvailable(ResumeReviewSource.builder))
-          Container(
-            margin: const EdgeInsets.only(top: 4),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppColors.errorRed.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.info_outline_rounded, color: AppColors.errorRed),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Upload a PDF/Word resume in your Profile or build one in the app to get feedback.',
-                    style: TextStyle(color: AppColors.errorRed, height: 1.35),
-                  ),
-                ),
-              ],
-            ),
+          const CareerToolNotice(
+            'Upload a PDF/Word resume in your Profile or build one in the app to get feedback.',
           ),
       ],
     );

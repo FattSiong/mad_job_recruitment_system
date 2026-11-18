@@ -8,6 +8,7 @@ import '../controllers/guidance_report_controller.dart';
 import 'guidance_pdf_viewer_screen.dart';
 import '../../../shared_widgets/surface_card.dart';
 import '../../../shared_widgets/gradient_page_header.dart';
+import '../widgets/career_tools/career_tool_widgets.dart';
 
 /// Skill Gap Report (end of Use Case 4.60). Also reusable from Guidance Reports.
 class SkillGapResultScreen extends StatelessWidget {
@@ -164,32 +165,7 @@ class SkillGapResultScreen extends StatelessWidget {
       children: [
         Row(
           children: [
-            SizedBox(
-              width: 104,
-              height: 104,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  CircularProgressIndicator(
-                    value: a.matchScore / 100,
-                    strokeWidth: 10,
-                    backgroundColor: AppColors.progressTrack,
-                    valueColor: AlwaysStoppedAnimation(color),
-                    strokeCap: StrokeCap.round,
-                  ),
-                  Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('${a.matchScore}%',
-                            style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: color)),
-                        const Text('match', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            ScoreRing(score: a.matchScore, color: color, valueText: '${a.matchScore}%', caption: 'match'),
             const SizedBox(width: 20),
             Expanded(
               child: Column(

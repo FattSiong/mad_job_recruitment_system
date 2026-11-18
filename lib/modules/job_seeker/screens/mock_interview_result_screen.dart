@@ -12,6 +12,7 @@ import 'guidance_pdf_viewer_screen.dart';
 import 'mock_interview_setup_screen.dart';
 import '../../../shared_widgets/surface_card.dart';
 import '../../../shared_widgets/gradient_page_header.dart';
+import '../widgets/career_tools/career_tool_widgets.dart';
 
 /// Interview scorecard (end of Use Case 4.59). Also reusable from Guidance Reports.
 class MockInterviewResultScreen extends StatefulWidget {
@@ -145,38 +146,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
       children: [
         Row(
           children: [
-            SizedBox(
-              width: 104,
-              height: 104,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  CircularProgressIndicator(
-                    value: overall / 100,
-                    strokeWidth: 10,
-                    backgroundColor: AppColors.progressTrack,
-                    valueColor: AlwaysStoppedAnimation(color),
-                    strokeCap: StrokeCap.round,
-                  ),
-                  Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '$overall',
-                          style: TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.w800,
-                            color: color,
-                          ),
-                        ),
-                        const Text('/ 100', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            ScoreRing(score: overall, color: color),
             const SizedBox(width: 20),
             Expanded(
               child: Column(

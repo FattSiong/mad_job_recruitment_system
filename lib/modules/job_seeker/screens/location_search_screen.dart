@@ -4,6 +4,8 @@ import 'package:geocoding/geocoding.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared_widgets/hero_icon_button.dart';
+import '../../../shared_widgets/hero_card.dart';
+import '../widgets/dashboard/job_search_panel.dart';
 
 /// Choose a location for the Home job search (typed, current location or
 /// a popular one). Pops with {'keyword': ..., 'location': ...}.
@@ -131,34 +133,6 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
     }
   }
 
-  /// Style of the keyword and location boxes.
-  InputDecoration _searchInputDecoration({
-    required String hint,
-    required IconData icon,
-    Widget? suffix,
-  }) {
-    return InputDecoration(
-      hintText: hint,
-      prefixIcon: Icon(icon, color: AppColors.textMuted),
-      suffixIcon: suffix,
-      filled: true,
-      fillColor: AppColors.surfaceAlt,
-      contentPadding: const EdgeInsets.symmetric(vertical: 16),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: BorderSide(color: Colors.grey.shade300),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: BorderSide(color: Colors.grey.shade300),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -173,18 +147,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
                 child: Column(
                   children: [
                     // Header
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [AppColors.primary, AppColors.primaryLight],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(28),
-                      ),
-                      child: Column(
+                    HeroCard(child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
@@ -195,24 +158,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
                                 onTap: () => Navigator.pop(context),
                               ),
                               const Spacer(),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.14),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.location_on_outlined, size: 16, color: Colors.white),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'Location Search',
-                                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                              const HeroPill(icon: Icons.location_on_outlined, label: 'Location Search'),
                             ],
                           ),
                           const SizedBox(height: 24),
@@ -254,7 +200,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
                           TextField(
                             controller: _keywordController,
                             textInputAction: TextInputAction.next,
-                            decoration: _searchInputDecoration(
+                            decoration: jobSearchInputDecoration(
                               hint: 'Job title, keywords, or company',
                               icon: Icons.search,
                             ),
@@ -270,7 +216,7 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
                               _selectLocation(trimmed);
                             },
                             onChanged: (value) => setState(() {}),
-                            decoration: _searchInputDecoration(
+                            decoration: jobSearchInputDecoration(
                               hint: 'Country, city or state',
                               icon: Icons.location_on_outlined,
                               suffix: _locationController.text.isNotEmpty

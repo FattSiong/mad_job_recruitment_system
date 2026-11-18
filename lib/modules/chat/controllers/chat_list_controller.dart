@@ -11,10 +11,11 @@ import '../../../models/message_model.dart';
 import '../../../services/call_service.dart';
 import '../../../services/incoming_call_service.dart';
 import '../../../services/user_directory.dart';
+import '../../../core/utils/safe_notifier.dart';
 
 /// Data for the chat list (inbox): rooms, latest message, unread counts,
 /// search, and live updates while the list is open.
-class ChatListController extends ChangeNotifier {
+class ChatListController extends ChangeNotifier with SafeNotifier {
   final _supabase = Supabase.instance.client;
   final CallService _callService = CallService();
 
@@ -28,7 +29,6 @@ class ChatListController extends ChangeNotifier {
   List<String> _subscribedRoomIds = [];
   Timer? _refreshDebounce;
   StreamSubscription<List<CallModel>>? _callSubscription;
-  bool _disposed = false;
 
   late final String currentUserID = SessionHelper.requireUserId();
 
@@ -53,7 +53,7 @@ class ChatListController extends ChangeNotifier {
   /// Filters the list by name or last message (done on the phone).
   void setSearchQuery(String value) {
     _searchQuery = value;
-    _notify();
+    notifySafely();
   }
 
   // ---------------------------------------------------------------------
@@ -65,7 +65,7 @@ class ChatListController extends ChangeNotifier {
   Future<void> load() async {
     _isLoading = _rooms.isEmpty;
     _error = null;
-    _notify();
+    notifySafely();
     await _refresh();
   }
 
@@ -84,7 +84,7 @@ class ChatListController extends ChangeNotifier {
           : 'Unable to load your chats. Please check your connection and try again.';
     } finally {
       _isLoading = false;
-      _notify();
+      notifySafely();
     }
   }
 
@@ -241,7 +241,7 @@ class ChatListController extends ChangeNotifier {
   void _scheduleRefresh() {
     _refreshDebounce?.cancel();
     _refreshDebounce = Timer(const Duration(milliseconds: 400), () {
-      if (!_disposed) _refresh();
+      if (!isDisposed) _refresh();
     });
   }
 
@@ -262,10 +262,10 @@ class ChatListController extends ChangeNotifier {
     _callSubscription?.cancel();
     _callSubscription = _callService.listenForIncomingCalls(currentUserID).listen(
       (calls) async {
-        if (calls.isEmpty || _disposed) return;
+        if (calls.isEmpty || isDisposed) return;
         final call = calls.first;
         final caller = await UserDirectory.fetchOne(call.callerID);
-        if (_disposed) return;
+        if (isDisposed) return;
         await IncomingCallService.show(
           callID: call.callID,
           roomCode: call.roomCode,
@@ -281,14 +281,8 @@ class ChatListController extends ChangeNotifier {
   // Helpers
   // ---------------------------------------------------------------------
 
-  /// notifyListeners, unless the controller was already disposed.
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
   @override
   void dispose() {
-    _disposed = true;
     _refreshDebounce?.cancel();
     _callSubscription?.cancel();
     _unsubscribe();

@@ -9,6 +9,7 @@ import '../widgets/resume/resume_sections_step.dart';
 import '../widgets/resume/resume_skills_step.dart';
 import 'resume_preview_screen.dart';
 import '../../../shared_widgets/gradient_page_header.dart';
+import '../../../shared_widgets/bottom_action_bar.dart';
 
 /// In-app resume builder:
 /// name -> phone -> address -> education -> work experience -> skills -> more sections,
@@ -399,49 +400,40 @@ class _BuildResumeScreenState extends State<BuildResumeScreen> {
 
   /// Back and Next / Finish buttons.
   Widget _buildBottomButtons() {
-    return SafeArea(
-      top: false,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          boxShadow: [
-            BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, -4)),
-          ],
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: _back,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.textDark,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  side: const BorderSide(color: AppColors.border),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                ),
-                child: Text(_step == 0 ? 'Cancel' : 'Back'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 2,
-              child: ElevatedButton.icon(
-                onPressed: _controller.isSaving ? null : _next,
-                icon: Icon(_isLast ? Icons.picture_as_pdf_outlined : Icons.arrow_forward_rounded),
-                label: Text(_isLast ? 'Preview PDF' : 'Next'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    return BottomActionBar(
+             padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+             child: Row(
+               children: [
+                 Expanded(
+                   child: OutlinedButton(
+                     onPressed: _back,
+                     style: OutlinedButton.styleFrom(
+                       foregroundColor: AppColors.textDark,
+                       padding: const EdgeInsets.symmetric(vertical: 14),
+                       side: const BorderSide(color: AppColors.border),
+                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                     ),
+                     child: Text(_step == 0 ? 'Cancel' : 'Back'),
+                   ),
+                 ),
+                 const SizedBox(width: 12),
+                 Expanded(
+                   flex: 2,
+                   child: ElevatedButton.icon(
+                     onPressed: _controller.isSaving ? null : _next,
+                     icon: Icon(_isLast ? Icons.picture_as_pdf_outlined : Icons.arrow_forward_rounded),
+                     label: Text(_isLast ? 'Preview PDF' : 'Next'),
+                     style: ElevatedButton.styleFrom(
+                       backgroundColor: AppColors.primary,
+                       foregroundColor: Colors.white,
+                       elevation: 0,
+                       padding: const EdgeInsets.symmetric(vertical: 14),
+                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                     ),
+                   ),
+                 ),
+               ],
+             ),
+           );
   }
 }

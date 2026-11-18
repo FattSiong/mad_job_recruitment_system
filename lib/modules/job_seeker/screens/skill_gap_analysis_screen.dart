@@ -293,26 +293,9 @@ class _SkillGapAnalysisScreenState extends State<SkillGapAnalysisScreen> {
           onTap: () => _openProfileScreen(const WorkExperienceScreen()),
         ),
         if (!r.canAnalyse)
-          Container(
-            margin: const EdgeInsets.only(top: 4),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppColors.errorRed.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.info_outline_rounded, color: AppColors.errorRed),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Please complete your profile (education, work experience or a PDF/DOCX resume) '
-                    'before running an analysis.',
-                    style: TextStyle(color: AppColors.errorRed, height: 1.35),
-                  ),
-                ),
-              ],
-            ),
+          const CareerToolNotice(
+            'Please complete your profile (education, work experience or a PDF/DOCX resume) '
+            'before running an analysis.',
           ),
       ],
     );

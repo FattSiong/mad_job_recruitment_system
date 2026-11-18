@@ -265,3 +265,90 @@ class CareerToolHistoryTile extends StatelessWidget {
     );
   }
 }
+
+/// Round 0-100 score with a coloured ring that fills up when shown.
+class ScoreRing extends StatelessWidget {
+  final int score;
+  final Color color;
+
+  /// Big text in the middle (default: the score).
+  final String? valueText;
+
+  /// Small text under it ("/ 100", "match").
+  final String caption;
+  final double size;
+
+  const ScoreRing({
+    super.key,
+    required this.score,
+    required this.color,
+    this.valueText,
+    this.caption = '/ 100',
+    this.size = 104,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: score.clamp(0, 100) / 100),
+            duration: const Duration(milliseconds: 900),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, _) => CircularProgressIndicator(
+              value: value,
+              strokeWidth: size * 0.096,
+              strokeCap: StrokeCap.round,
+              backgroundColor: AppColors.progressTrack,
+              valueColor: AlwaysStoppedAnimation(color),
+            ),
+          ),
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  valueText ?? '$score',
+                  style: TextStyle(fontSize: size * 0.27, fontWeight: FontWeight.w800, color: color, height: 1.1),
+                ),
+                Text(caption, style: TextStyle(fontSize: size * 0.115, color: AppColors.textMuted)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Red note under a career tool's inputs saying what is missing before it can run.
+class CareerToolNotice extends StatelessWidget {
+  final String text;
+
+  const CareerToolNotice(this.text, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.errorRed.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline_rounded, color: AppColors.errorRed),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(text, style: const TextStyle(color: AppColors.errorRed, height: 1.35)),
+          ),
+        ],
+      ),
+    );
+  }
+}

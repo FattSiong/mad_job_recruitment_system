@@ -7,6 +7,7 @@ import 'job_application_screen.dart';
 import 'report_job_screen.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared_widgets/hero_icon_button.dart';
+import '../../../shared_widgets/hero_card.dart';
 
 /// Full job details with Apply, Bookmark and Report.
 /// [disableApplyButton] hides applying (e.g. opened from My Jobs > Applied).
@@ -187,34 +188,6 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => ReportJobScreen(job: widget.job),
-      ),
-    );
-  }
-
-  /// Small see-through chip in the header (location, job type, ...).
-  Widget _buildMetaChip(IconData icon, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: Colors.white, size: 16),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -450,18 +423,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [AppColors.primary, AppColors.primaryLight],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(28),
-                          ),
-                          child: Column(
+                        HeroCard(child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
@@ -489,34 +451,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                                 ],
                               ),
                               const SizedBox(height: 24),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.14),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.work_outline_rounded,
-                                      size: 16,
-                                      color: Colors.white,
-                                    ),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'Job Details',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                              const HeroPill(icon: Icons.work_outline_rounded, label: 'Job Details'),
                               const SizedBox(height: 18),
                               Text(
                                 widget.job.title,
@@ -541,18 +476,20 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                                 spacing: 10,
                                 runSpacing: 10,
                                 children: [
-                                  _buildMetaChip(
-                                    Icons.location_on_outlined,
-                                    widget.job.locationName ??
-                                        'Location unavailable',
+                                  HeroPill(
+                                    icon: Icons.location_on_outlined,
+                                    label: widget.job.locationName ?? 'Location unavailable',
+                                    shrinkLabel: true,
                                   ),
-                                  _buildMetaChip(
-                                    Icons.work_outline_rounded,
-                                    widget.job.jobType,
+                                  HeroPill(
+                                    icon: Icons.work_outline_rounded,
+                                    label: widget.job.jobType,
+                                    shrinkLabel: true,
                                   ),
-                                  _buildMetaChip(
-                                    Icons.schedule_outlined,
-                                    _formatPostedDate(),
+                                  HeroPill(
+                                    icon: Icons.schedule_outlined,
+                                    label: _formatPostedDate(),
+                                    shrinkLabel: true,
                                   ),
                                 ],
                               ),

@@ -6,6 +6,7 @@ import '../../../core/utils/data_load_exception.dart';
 import '../../../models/advisor_conversation_model.dart';
 import '../../../models/advisor_message_model.dart';
 import '../../../core/utils/session_helper.dart';
+import '../../../core/utils/safe_notifier.dart';
 
 /// Result of one successful question -> answer round trip.
 class AdvisorReplyResult {
@@ -33,7 +34,7 @@ class AdvisorException implements Exception {
 
 /// AI Career Advisor: the open conversation (state for the chat screen)
 /// plus loading, sending and deleting conversations.
-class CareerAdvisorController extends ChangeNotifier {
+class CareerAdvisorController extends ChangeNotifier with SafeNotifier {
   final _supabase = Supabase.instance.client;
   String get _currentSeekerID => SessionHelper.requireUserId();
 
@@ -48,7 +49,6 @@ class CareerAdvisorController extends ChangeNotifier {
   String? _conversationTitle;
   bool _isLoadingHistory = false;
   bool _isSending = false;
-  bool _disposed = false;
 
   /// Increases on every conversation switch, so a slow, older load can't
   /// show its messages under the conversation the user opened afterwards.
@@ -70,7 +70,7 @@ class CareerAdvisorController extends ChangeNotifier {
     _conversationID = conversationID;
     _conversationTitle = title;
     _messages.clear();
-    _notify();
+    notifySafely();
 
     try {
       final messages = await fetchMessages(conversationID);
@@ -83,7 +83,7 @@ class CareerAdvisorController extends ChangeNotifier {
     } finally {
       if (request == _historyRequest) {
         _isLoadingHistory = false;
-        _notify();
+        notifySafely();
       }
     }
   }
@@ -96,7 +96,7 @@ class CareerAdvisorController extends ChangeNotifier {
     _conversationID = null;
     _conversationTitle = null;
     _messages.clear();
-    _notify();
+    notifySafely();
   }
 
   /// Sends [text] in the open conversation (or starts one).
@@ -113,7 +113,7 @@ class CareerAdvisorController extends ChangeNotifier {
     final pending = AdvisorMessageModel.pending(question);
     _messages.add(pending);
     _isSending = true;
-    _notify();
+    notifySafely();
 
     try {
       final result = await sendMessage(message: question, conversationID: _conversationID);
@@ -132,19 +132,8 @@ class CareerAdvisorController extends ChangeNotifier {
       rethrow;
     } finally {
       _isSending = false;
-      _notify();
+      notifySafely();
     }
-  }
-
-  /// notifyListeners, unless the controller was already disposed.
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
   }
 
   // ---------------------------------------------------------------------

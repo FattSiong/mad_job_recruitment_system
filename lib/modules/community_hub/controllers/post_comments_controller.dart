@@ -5,9 +5,10 @@ import '../../../core/constants/table_constants.dart';
 import '../../../models/chat_room_model.dart';
 import '../../../models/post_comment_model.dart';
 import '../../../services/user_directory.dart';
+import '../../../core/utils/safe_notifier.dart';
 
 /// Comments and replies of one post (the comments sheet).
-class PostCommentsController extends ChangeNotifier {
+class PostCommentsController extends ChangeNotifier with SafeNotifier {
   final String postID;
   final String currentUserID;
 
@@ -23,7 +24,6 @@ class PostCommentsController extends ChangeNotifier {
   String? _error;
   PostCommentModel? _replyingTo;
   final Set<String> _expanded = {};
-  bool _disposed = false;
 
   bool get isLoading => _isLoading;
   bool get isSending => _isSending;
@@ -50,7 +50,7 @@ class PostCommentsController extends ChangeNotifier {
   Future<void> load() async {
     _isLoading = _comments.isEmpty;
     _error = null;
-    _notify();
+    notifySafely();
     try {
       final rows = List<Map<String, dynamic>>.from(await _supabase
           .from(TableConstants.postComment)
@@ -81,7 +81,7 @@ class PostCommentsController extends ChangeNotifier {
       _error = 'Unable to load comments. Please try again.';
     } finally {
       _isLoading = false;
-      _notify();
+      notifySafely();
     }
   }
 
@@ -92,20 +92,20 @@ class PostCommentsController extends ChangeNotifier {
   /// The next comment sent is a reply to [comment].
   void startReply(PostCommentModel comment) {
     _replyingTo = comment;
-    _notify();
+    notifySafely();
   }
 
   /// Back to writing a normal comment.
   void cancelReply() {
     if (_replyingTo == null) return;
     _replyingTo = null;
-    _notify();
+    notifySafely();
   }
 
   /// Shows or hides the replies under [commentID].
   void toggleThread(String commentID) {
     if (!_expanded.remove(commentID)) _expanded.add(commentID);
-    _notify();
+    notifySafely();
   }
 
   // ---------------------------------------------------------------------
@@ -130,7 +130,7 @@ class PostCommentsController extends ChangeNotifier {
     }
 
     _isSending = true;
-    _notify();
+    notifySafely();
     try {
       await _supabase.from(TableConstants.postComment).insert({
         'postID': postID,
@@ -148,7 +148,7 @@ class PostCommentsController extends ChangeNotifier {
       return 'Unable to send your comment. Please try again.';
     } finally {
       _isSending = false;
-      _notify();
+      notifySafely();
     }
   }
 
@@ -169,7 +169,7 @@ class PostCommentsController extends ChangeNotifier {
       final i = _comments.indexWhere((c) => c.commentID == comment.commentID);
       // the database sets "updateAt" too; show "Edited" straight away
       if (i != -1) _comments[i] = _comments[i].copyWith(content: content, updateAt: DateTime.now());
-      _notify();
+      notifySafely();
       return null;
     } catch (e) {
       debugPrint('Edit comment failed: $e');
@@ -196,16 +196,5 @@ class PostCommentsController extends ChangeNotifier {
       debugPrint('Delete comment failed: $e');
       return 'Unable to delete this comment. Please try again.';
     }
-  }
-
-  /// notifyListeners, unless the controller was already disposed.
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
   }
 }

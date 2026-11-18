@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../core/theme/app_colors.dart';
+import 'hero_card.dart';
 
 /// The green header at the top of a sub-page: back button, an optional
 /// icon, the title and a short line under it, and an optional widget on
@@ -28,14 +28,7 @@ class GradientPageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: AppColors.headerGradient,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Row(
+    return HeroCard(child: Row(
         children: [
           IconButton(
             onPressed: () => Navigator.pop(context),

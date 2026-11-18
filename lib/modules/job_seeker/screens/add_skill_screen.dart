@@ -7,6 +7,7 @@ import '../../../models/skill_model.dart';
 import '../controllers/skill_controller.dart';
 import '../widgets/load_error_view.dart';
 import '../../../shared_widgets/confirm_dialog.dart';
+import '../../../shared_widgets/empty_hint.dart';
 import '../../../shared_widgets/surface_card.dart';
 import '../../../shared_widgets/gradient_page_header.dart';
 
@@ -391,26 +392,7 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
     } else if (_loadError != null) {
       body = LoadErrorView(message: _loadError!, onRetry: _loadSkills);
     } else if (_skills.isEmpty) {
-      body = Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceAlt,
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: const Row(
-          children: [
-            Icon(Icons.inbox_outlined, color: AppColors.textMuted),
-            SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'No skills added yet. Add your first skill above.',
-                style: TextStyle(color: AppColors.textMuted, fontStyle: FontStyle.italic),
-              ),
-            ),
-          ],
-        ),
-      );
+      body = const EmptyHint(text: 'No skills added yet. Add your first skill above.');
     } else {
       body = Column(children: _skills.map(_buildSkillTile).toList());
     }

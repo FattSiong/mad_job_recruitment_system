@@ -9,6 +9,7 @@ import '../../../core/utils/file_picker_helper.dart';
 import '../../../models/pre_screening_question_model.dart';
 import 'applied_jobs_controller.dart';
 import '../../../core/utils/session_helper.dart';
+import '../../../core/utils/safe_notifier.dart';
 
 /// Error with a message that is safe to show to the user.
 class ApplicationException implements Exception {
@@ -28,7 +29,7 @@ enum ResumeChoice { existing, newFile }
 
 /// Applying for a job: the form state (answers, resume choice) for the
 /// application screen, plus loading questions and submitting.
-class ApplicationController extends ChangeNotifier {
+class ApplicationController extends ChangeNotifier with SafeNotifier {
   final _supabase = Supabase.instance.client;
   String get _currentSeekerID => SessionHelper.requireUserId();
 
@@ -47,7 +48,6 @@ class ApplicationController extends ChangeNotifier {
   bool _isLoading = true;
   bool _isSubmitting = false;
   String? _loadError;
-  bool _disposed = false;
 
   List<PreScreeningQuestionModel> get questions => List.unmodifiable(_questions);
   String? get existingResumeUrl => _existingResumeUrl;
@@ -64,7 +64,7 @@ class ApplicationController extends ChangeNotifier {
   Future<void> load(String jobId) async {
     _isLoading = true;
     _loadError = null;
-    _notify();
+    notifySafely();
     try {
       final results = await Future.wait([getQuestions(jobId), getSeekerResume()]);
       _questions = results[0] as List<PreScreeningQuestionModel>;
@@ -74,7 +74,7 @@ class ApplicationController extends ChangeNotifier {
       _loadError = e.message;
     } finally {
       _isLoading = false;
-      _notify();
+      notifySafely();
     }
   }
 
@@ -84,21 +84,21 @@ class ApplicationController extends ChangeNotifier {
   /// Stores the file chosen for a file question.
   void setFileAnswer(String questionID, File file) {
     _answers[questionID] = file;
-    _notify();
+    notifySafely();
   }
 
   /// Chooses which resume goes with the application.
   void chooseResume(ResumeChoice choice) {
     if (_resumeChoice == choice) return;
     _resumeChoice = choice;
-    _notify();
+    notifySafely();
   }
 
   /// Uses a newly picked resume file for this application.
   void setNewResumeFile(File file) {
     _newResumeFile = file;
     _resumeChoice = ResumeChoice.newFile;
-    _notify();
+    notifySafely();
   }
 
   /// True when every question has an answer.
@@ -127,7 +127,7 @@ class ApplicationController extends ChangeNotifier {
     if (_isSubmitting) return;
 
     _isSubmitting = true;
-    _notify();
+    notifySafely();
     try {
       await submitApplication(
         jobId: jobId,
@@ -137,19 +137,8 @@ class ApplicationController extends ChangeNotifier {
       );
     } finally {
       _isSubmitting = false;
-      _notify();
+      notifySafely();
     }
-  }
-
-  /// notifyListeners, unless the controller was already disposed.
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
   }
 
   // ---------------------------------------------------------------------
