@@ -1,10 +1,14 @@
 
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_button_styles.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_input_decoration.dart';
 import '../../../models/chat_room_model.dart';
 import '../controllers/chat_list_controller.dart';
 import '../widgets/chat_list_tile.dart';
+import '../../../shared_widgets/page_title_header.dart';
+import '../../../shared_widgets/state_message_card.dart';
 import 'chat_room_screen.dart';
 
 /// Chat list (inbox). Used as a tab body by the job seeker and employer
@@ -54,23 +58,16 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Messages',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textDark,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  _buildSearchField(),
-                ],
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 20, 20, 0),
+              child: PageTitleHeader(
+                title: 'Messages',
+                subtitle: 'Chat, share files and call employers and job seekers.',
               ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: _buildSearchField(),
             ),
             Expanded(
               child: ListenableBuilder(
@@ -91,30 +88,22 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
       builder: (context, _) => TextField(
         controller: _searchController,
         onChanged: _controller.setSearchQuery,
-        decoration: InputDecoration(
-          hintText: 'Search chats',
-          hintStyle: const TextStyle(color: AppColors.textMuted),
-          prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted),
+        decoration: filledInputDecoration(
+          hint: 'Search chats',
+          icon: Icons.search_rounded,
+          fillColor: AppColors.surface,
+          borderColor: Colors.transparent,
+          contentPadding: const EdgeInsets.symmetric(vertical: 14),
           suffixIcon: _controller.searchQuery.isEmpty
               ? null
               : IconButton(
+                  tooltip: 'Clear',
                   icon: const Icon(Icons.close_rounded, color: AppColors.textMuted),
                   onPressed: () {
                     _searchController.clear();
                     _controller.setSearchQuery('');
                   },
                 ),
-          filled: true,
-          fillColor: AppColors.surface,
-          contentPadding: const EdgeInsets.symmetric(vertical: 16),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(20),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(20),
-            borderSide: const BorderSide(color: AppColors.primary, width: 1.3),
-          ),
         ),
       ),
     );
@@ -127,33 +116,33 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
     }
 
     final rooms = _controller.visibleRooms;
-    Widget content;
+    final Widget content;
 
     if (_controller.error != null && !_controller.hasRooms) {
-      content = _stateCard(
+      content = StateMessageCard(
         icon: Icons.cloud_off_rounded,
+        color: AppColors.danger,
         title: 'Unable to load chats',
         message: _controller.error!,
-        color: AppColors.danger,
-        action: TextButton.icon(
+        action: ElevatedButton.icon(
           onPressed: _controller.load,
           icon: const Icon(Icons.refresh_rounded),
           label: const Text('Try Again'),
+          style: AppButtonStyles.filled(),
         ),
       );
     } else if (!_controller.hasRooms) {
-      content = _stateCard(
+      content = const StateMessageCard(
         icon: Icons.chat_bubble_outline_rounded,
         title: 'No chats yet',
         message: 'Conversations with employers and job seekers will appear here.',
-        color: AppColors.primary,
       );
     } else if (rooms.isEmpty) {
-      content = _stateCard(
+      content = const StateMessageCard(
         icon: Icons.search_off_rounded,
+        color: AppColors.textMuted,
         title: 'No chats match your search',
         message: 'Try another name or keyword.',
-        color: AppColors.textMuted,
       );
     } else {
       return RefreshIndicator(
@@ -161,9 +150,9 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
         onRefresh: _controller.load,
         child: ListView.separated(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
           itemCount: rooms.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 10),
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
             final room = rooms[index];
             return ChatListTile(
@@ -183,51 +172,8 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
       onRefresh: _controller.load,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
         children: [content],
-      ),
-    );
-  }
-
-  /// Centered card for the error and empty states.
-  Widget _stateCard({
-    required IconData icon,
-    required String title,
-    required String message,
-    required Color color,
-    Widget? action,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(26),
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 68,
-            height: 68,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(22),
-            ),
-            child: Icon(icon, size: 32, color: color),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textDark),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: AppColors.textMuted, height: 1.45),
-          ),
-          if (action != null) ...[const SizedBox(height: 12), action],
-        ],
       ),
     );
   }

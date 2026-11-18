@@ -21,6 +21,9 @@ import '../widgets/shared_attachments_sheet.dart';
 import '../../../shared_widgets/action_sheet.dart';
 import '../../../shared_widgets/text_edit_dialog.dart';
 import '../../../shared_widgets/button_spinner.dart';
+import '../../../core/theme/app_button_styles.dart';
+import '../../../shared_widgets/chat_surface.dart';
+import '../../../shared_widgets/state_message_card.dart';
 
 /// One conversation.
 class ChatRoomScreen extends StatefulWidget {
@@ -351,7 +354,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
           backgroundColor: AppColors.background,
           surfaceTintColor: Colors.transparent,
           elevation: 0,
+          scrolledUnderElevation: 0,
           titleSpacing: 0,
+          leading: IconButton(
+            tooltip: 'Back',
+            icon: const Icon(Icons.arrow_back_rounded, color: AppColors.primary),
+            onPressed: () => Navigator.maybePop(context), // PopScope asks about unsent messages
+          ),
           title: Row(
             children: [
               UserAvatar(user: widget.otherUser, size: 42),
@@ -365,11 +374,12 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 17,
+                        fontSize: 18,
                         fontWeight: FontWeight.w800,
                         color: AppColors.textDark,
                       ),
                     ),
+                    const SizedBox(height: 2),
                     Text(
                       widget.otherUser.roleLabel,
                       style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
@@ -386,14 +396,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
                 tooltip: _controller.isBlocked ? 'Calls are off in a blocked chat' : 'Voice call',
                 onPressed: _isStartingCall || _controller.isBlocked ? null : _startCall,
                 icon: _isStartingCall
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                    ? const ButtonSpinner(size: 20, color: AppColors.teal)
                     : Icon(
                         Icons.call_rounded,
-                        color: _controller.isBlocked ? AppColors.textMuted : AppColors.teal,
+                        color: _controller.isBlocked ? AppColors.iconDisabled : AppColors.teal,
                       ),
               ),
             ),
@@ -407,43 +413,19 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
             ),
             ListenableBuilder(
               listenable: _controller,
-              builder: (context, _) {
-                final blockedByMe = _controller.blockState == ChatBlockState.blockedByMe;
-                return PopupMenuButton<String>(
-                  tooltip: 'More',
-                  enabled: !_controller.isChangingBlock,
-                  icon: const Icon(Icons.more_vert_rounded, color: AppColors.textDark),
-                  onSelected: (_) => _toggleBlock(),
-                  itemBuilder: (_) => [
-                    PopupMenuItem(
-                      value: 'block',
-                      child: Row(
-                        children: [
-                          Icon(
-                            blockedByMe ? Icons.lock_open_rounded : Icons.block_rounded,
-                            color: blockedByMe ? AppColors.primary : AppColors.errorRed,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            blockedByMe ? 'Unblock user' : 'Block user',
-                            style: TextStyle(color: blockedByMe ? AppColors.textDark : AppColors.errorRed),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              },
+              builder: (context, _) => _buildMoreMenu(),
             ),
+            const SizedBox(width: 4),
           ],
         ),
         body: Column(
           children: [
             Expanded(
-              child: ListenableBuilder(
-                listenable: _controller,
-                builder: (context, _) => _buildMessages(),
+              child: ChatSurface(
+                child: ListenableBuilder(
+                  listenable: _controller,
+                  builder: (context, _) => _buildMessages(),
+                ),
               ),
             ),
             ListenableBuilder(
@@ -477,24 +459,19 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
     final messages = _controller.messages; // newest first
     if (_controller.error != null && messages.isEmpty) {
       return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.cloud_off_rounded, size: 40, color: AppColors.danger),
-              const SizedBox(height: 12),
-              Text(
-                _controller.error!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.textMuted),
-              ),
-              TextButton.icon(
-                onPressed: _controller.start,
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text('Try Again'),
-              ),
-            ],
+        child: SingleChildScrollView(
+          child: StateMessageCard(
+            boxed: false,
+            icon: Icons.cloud_off_rounded,
+            color: AppColors.danger,
+            title: 'Unable to load messages',
+            message: _controller.error!,
+            action: ElevatedButton.icon(
+              onPressed: _controller.start,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Try Again'),
+              style: AppButtonStyles.filled(),
+            ),
           ),
         ),
       );
@@ -535,7 +512,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
     return ListView.builder(
       controller: _scrollController,
       reverse: true,
-      padding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
+      padding: const EdgeInsets.fromLTRB(8, 16, 8, 16), // inside the chat panel
       itemCount: messages.length + (showOlderRow ? 1 : 0),
       itemBuilder: (context, index) {
         if (index == messages.length) return _buildOlderRow();
@@ -564,18 +541,73 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
     );
   }
 
+  /// ⋮ menu with Block / Unblock user.
+  Widget _buildMoreMenu() {
+    final blockedByMe = _controller.blockState == ChatBlockState.blockedByMe;
+    final color = blockedByMe ? AppColors.primary : AppColors.errorRed;
+    return PopupMenuButton<String>(
+      tooltip: 'More',
+      enabled: !_controller.isChangingBlock,
+      icon: const Icon(Icons.more_vert_rounded, color: AppColors.primary),
+      color: AppColors.surface,
+      surfaceTintColor: Colors.transparent,
+      elevation: 6,
+      offset: const Offset(0, 48),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      onSelected: (_) => _toggleBlock(),
+      itemBuilder: (_) => [
+        PopupMenuItem(
+          value: 'block',
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(blockedByMe ? Icons.lock_open_rounded : Icons.block_rounded, color: color, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    blockedByMe ? 'Unblock user' : 'Block user',
+                    style: TextStyle(fontWeight: FontWeight.w700, color: color),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    blockedByMe ? 'Allow messages and calls again' : 'Stop messages and calls',
+                    style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   /// Replaces the message box while the chat is blocked.
   Widget _buildBlockedBar() {
     final blockedByMe = _controller.blockState == ChatBlockState.blockedByMe;
     final name = widget.otherUser.displayName;
-    return Container(
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border)),
-      ),
-      child: SafeArea(
-        top: false,
+    // Same floating card as the message box it replaces
+    return SafeArea(
+      top: false,
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(26),
+          boxShadow: const [BoxShadow(color: AppColors.shadow, blurRadius: 24, offset: Offset(0, 10))],
+        ),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
           child: Column(
@@ -598,16 +630,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
                 ],
               ),
               if (blockedByMe) ...[
-                const SizedBox(height: 6),
-                TextButton(
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
                   onPressed: _controller.isChangingBlock ? null : _toggleBlock,
-                  child: _controller.isChangingBlock
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Unblock', style: TextStyle(fontWeight: FontWeight.w700)),
+                  icon: _controller.isChangingBlock
+                      ? const ButtonSpinner(color: AppColors.primary)
+                      : const Icon(Icons.lock_open_rounded, size: 18),
+                  label: const Text('Unblock', style: TextStyle(fontWeight: FontWeight.w700)),
+                  style: AppButtonStyles.outlined(padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 22)),
                 ),
               ],
             ],

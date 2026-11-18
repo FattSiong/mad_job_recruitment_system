@@ -7,6 +7,8 @@ import '../../../models/advisor_message_model.dart';
 import '../controllers/career_advisor_controller.dart';
 import '../widgets/career_advisor/advisor_chat_widgets.dart';
 import '../../../shared_widgets/button_spinner.dart';
+import '../../../shared_widgets/app_bar_action_button.dart';
+import '../../../shared_widgets/chat_surface.dart';
 
 /// AI Career Advisor chat (Use Case 4.58: Chat with AI Career Advisor).
 class AiCareerAdvisorScreen extends StatefulWidget {
@@ -188,16 +190,7 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
       appBar: _buildAppBar(),
       body: Column(
         children: [
-          Expanded(
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                gradient: AppColors.chatGradient,
-                borderRadius: BorderRadius.circular(30),
-              ),
-              child: _buildBody(),
-            ),
-          ),
+          Expanded(child: ChatSurface(child: _buildBody())),
           _buildComposer(),
         ],
       ),
@@ -261,39 +254,18 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
         ],
       ),
       actions: [
-        _buildActionButton(
+        AppBarActionButton(
           icon: Icons.history_rounded,
           tooltip: 'Past conversations',
           onPressed: _isSending ? null : _showHistorySheet,
         ),
-        _buildActionButton(
+        AppBarActionButton(
           icon: Icons.add_comment_outlined,
           tooltip: 'New conversation',
           onPressed: _isSending ? null : _startNewConversation,
         ),
         const SizedBox(width: 8),
       ],
-    );
-  }
-
-  /// Small white icon button in the app bar.
-  Widget _buildActionButton({
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback? onPressed, // null = disabled
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(left: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.borderSoft),
-      ),
-      child: IconButton(
-        icon: Icon(icon, color: AppColors.primary),
-        tooltip: tooltip,
-        onPressed: onPressed,
-      ),
     );
   }
 

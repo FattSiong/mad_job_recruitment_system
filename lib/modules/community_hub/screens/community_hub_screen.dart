@@ -10,6 +10,7 @@ import '../widgets/my_posts_summary.dart';
 import '../widgets/post_list_view.dart';
 import 'post_editor_screen.dart';
 import 'saved_posts_screen.dart';
+import '../../../shared_widgets/page_title_header.dart';
 
 /// Community tab for job seekers and employers: the feed (with search,
 /// topics and filters) and the user's own posts.
@@ -78,38 +79,18 @@ class _CommunityHubScreenState extends State<CommunityHubScreen> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Community Hub',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.textDark,
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Ask, share and learn with job seekers and employers.',
-                            style: TextStyle(color: AppColors.textMuted, fontSize: 13),
-                          ),
-                        ],
-                      ),
+                child: PageTitleHeader(
+                  title: 'Community Hub',
+                  subtitle: 'Ask, share and learn with job seekers and employers.',
+                  trailing: Material(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    child: IconButton(
+                      tooltip: 'Saved posts',
+                      onPressed: _openSaved,
+                      icon: const Icon(Icons.bookmarks_outlined, color: AppColors.primary),
                     ),
-                    Material(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(16),
-                      child: IconButton(
-                        tooltip: 'Saved posts',
-                        onPressed: _openSaved,
-                        icon: const Icon(Icons.bookmarks_outlined, color: AppColors.primary),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
               Padding(

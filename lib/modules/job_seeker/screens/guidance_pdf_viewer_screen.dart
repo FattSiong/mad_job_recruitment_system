@@ -8,6 +8,7 @@ import '../../../core/utils/pdf_file_helper.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../controllers/guidance_report_controller.dart';
 import '../widgets/pdf_preview_frame.dart';
+import '../../../shared_widgets/app_bar_action_button.dart';
 
 /// Shows a generated Guidance Report PDF inside the app, with Share and Open options.
 class GuidancePdfViewerScreen extends StatefulWidget {
@@ -76,23 +77,6 @@ class _GuidancePdfViewerScreenState extends State<GuidancePdfViewerScreen> {
     if (error != null && mounted) SnackBarHelper.showError(context, error);
   }
 
-  /// Small white icon button in the app bar.
-  Widget _actionButton(IconData icon, String tooltip, VoidCallback? onPressed) {
-    return Container(
-      margin: const EdgeInsets.only(left: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.borderSoft),
-      ),
-      child: IconButton(
-        icon: Icon(icon, color: onPressed == null ? AppColors.iconDisabled : AppColors.primary),
-        tooltip: tooltip,
-        onPressed: onPressed,
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final ready = _bytes != null;
@@ -122,8 +106,8 @@ class _GuidancePdfViewerScreenState extends State<GuidancePdfViewerScreen> {
           ],
         ),
         actions: [
-          _actionButton(Icons.ios_share_rounded, 'Share or save', ready ? _share : null),
-          _actionButton(Icons.open_in_new_rounded, 'Open in another app', ready ? _openExternally : null),
+          AppBarActionButton(icon: Icons.ios_share_rounded, tooltip: 'Share or save', onPressed: ready ? _share : null),
+          AppBarActionButton(icon: Icons.open_in_new_rounded, tooltip: 'Open in another app', onPressed: ready ? _openExternally : null),
           const SizedBox(width: 8),
         ],
       ),
