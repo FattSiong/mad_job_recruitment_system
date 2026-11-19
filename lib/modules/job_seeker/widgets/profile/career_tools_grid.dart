@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
-import '../../screens/ai_career_advisor_screen.dart';
+import '../../screens/career_advisor_screen.dart';
 import '../../screens/guidance_reports_screen.dart';
 import '../../screens/mock_interview_setup_screen.dart';
 import '../../screens/skill_gap_analysis_screen.dart';
@@ -19,7 +19,7 @@ class CareerToolsGrid extends StatelessWidget {
             Expanded(
               child: _ToolTile(
                 icon: Icons.smart_toy_outlined,
-                label: 'AI Career Advisor',
+                label: 'Career Buddy',
                 color: AppColors.primary,
                 screen: AiCareerAdvisorScreen(),
               ),

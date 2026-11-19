@@ -8,6 +8,11 @@ import '../widgets/resume/resume_record_steps.dart';
 import '../widgets/resume/resume_sections_step.dart';
 import '../widgets/resume/resume_skills_step.dart';
 import 'resume_preview_screen.dart';
+import '../../../shared_widgets/gradient_page_header.dart';
+import '../../../shared_widgets/bottom_action_bar.dart';
+import '../../../core/theme/app_button_styles.dart';
+import '../../../core/theme/app_input_decoration.dart';
+import '../../../shared_widgets/button_spinner.dart';
 
 /// In-app resume builder:
 /// name -> phone -> address -> education -> work experience -> skills -> more sections,
@@ -176,46 +181,13 @@ class _BuildResumeScreenState extends State<BuildResumeScreen> {
   }
 
   /// Gradient header with the title and back button.
-  Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        gradient: AppColors.headerGradient,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-          ),
-          const SizedBox(width: 6),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Build Resume',
-                  style: TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.bold),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'Create a professional PDF resume step by step.',
-                  style: TextStyle(color: Colors.white70, fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-          if (_controller.isSaving)
-            const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-            ),
-        ],
-      ),
-    );
-  }
+  Widget _buildHeader() => GradientPageHeader(
+        title: 'Build Resume',
+        subtitle: 'Create a professional PDF resume step by step.',
+        trailing: _controller.isSaving
+            ? const ButtonSpinner()
+            : null,
+      );
 
   /// "Step 3 of 7" with a progress bar.
   Widget _buildProgress() {
@@ -403,73 +375,35 @@ class _BuildResumeScreenState extends State<BuildResumeScreen> {
       maxLines: maxLines,
       keyboardType: keyboard,
       textCapitalization: capitalization,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        prefixIcon: Icon(icon, color: AppColors.textMuted),
-        filled: true,
-        fillColor: AppColors.surfaceAlt,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-        ),
-      ),
+      decoration: filledInputDecoration(label: label, hint: hint, icon: icon),
     );
   }
 
   /// Back and Next / Finish buttons.
   Widget _buildBottomButtons() {
-    return SafeArea(
-      top: false,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          boxShadow: [
-            BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, -4)),
-          ],
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: _back,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.textDark,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  side: const BorderSide(color: AppColors.border),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                ),
-                child: Text(_step == 0 ? 'Cancel' : 'Back'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 2,
-              child: ElevatedButton.icon(
-                onPressed: _controller.isSaving ? null : _next,
-                icon: Icon(_isLast ? Icons.picture_as_pdf_outlined : Icons.arrow_forward_rounded),
-                label: Text(_isLast ? 'Preview PDF' : 'Next'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    return BottomActionBar(
+             padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+             child: Row(
+               children: [
+                 Expanded(
+                   child: OutlinedButton(
+                     onPressed: _back,
+                     style: AppButtonStyles.neutral(),
+                     child: Text(_step == 0 ? 'Cancel' : 'Back'),
+                   ),
+                 ),
+                 const SizedBox(width: 12),
+                 Expanded(
+                   flex: 2,
+                   child: ElevatedButton.icon(
+                     onPressed: _controller.isSaving ? null : _next,
+                     icon: Icon(_isLast ? Icons.picture_as_pdf_outlined : Icons.arrow_forward_rounded),
+                     label: Text(_isLast ? 'Preview PDF' : 'Next'),
+                     style: AppButtonStyles.filled(),
+                   ),
+                 ),
+               ],
+             ),
+           );
   }
 }

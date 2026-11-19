@@ -4,9 +4,12 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../core/utils/data_load_exception.dart';
+import '../../../models/job_model.dart';
 import '../../../models/nearby_job_model.dart';
 import '../../../core/constants/job_filter_options.dart';
+import 'job_discovery_controller.dart';
 import 'location_controller.dart';
+import '../../../core/utils/safe_notifier.dart';
 
 /// Why the map couldn't use the phone's location.
 enum LocationIssue { serviceOff, denied, blocked, failed }
@@ -19,55 +22,53 @@ class StartLocation {
   const StartLocation(this.position, [this.issue]);
 }
 
-/// State of the "Discover Nearby Jobs" map: filters, results, the selected
-/// job, and whether the user has moved away from the searched area.
-class JobMapController extends ChangeNotifier {
+/// State of the Nearby Jobs map: the search, its results grouped by pin,
+/// the opened pin, and whether the user has moved away from the searched area.
+class JobMapController extends ChangeNotifier with SafeNotifier {
   final LocationController _locations = LocationController();
 
   /// Kuala Lumpur city centre, used when the phone's location isn't available.
   static const LatLng fallbackCenter = LatLng(3.140853, 101.693207);
 
-  // ---- Filters --------------------------------------------------------
-  String _keyword = '';
-  String _jobType = JobFilterOptions.anyJobType;
-  String _datePosted = JobFilterOptions.anyDate;
-  String _salary = JobFilterOptions.anySalary;
-  double _radiusKm = JobFilterOptions.defaultRadiusKm;
+  // ---- Search ---------------------------------------------------------
+  /// Keyword, filters and radius. [JobSearchFilters.location] is what the
+  /// search is around: [JobFilterOptions.currentLocation] (the phone), a
+  /// place name, or empty (wherever the user moved the map).
+  JobSearchFilters _filters = const JobSearchFilters(
+    location: JobFilterOptions.currentLocation,
+    radiusKm: JobFilterOptions.defaultRadiusKm,
+  );
 
-  String get keyword => _keyword;
-  String get jobType => _jobType;
-  String get datePosted => _datePosted;
-  String get salary => _salary;
-  double get radiusKm => _radiusKm;
+  JobSearchFilters get filters => _filters;
+  double get radiusKm => _filters.radiusKm ?? JobFilterOptions.defaultRadiusKm;
 
-  bool get hasActiveFilters =>
-      _keyword.trim().isNotEmpty ||
-      _jobType != JobFilterOptions.anyJobType ||
-      _datePosted != JobFilterOptions.anyDate ||
-      _salary != JobFilterOptions.anySalary ||
-      _radiusKm != JobFilterOptions.defaultRadiusKm;
+  /// "Near you", "Cyberjaya" or "This map area".
+  String get areaLabel {
+    final location = _filters.location.trim();
+    if (location == JobFilterOptions.currentLocation) return 'Near you';
+    return location.isEmpty ? 'This map area' : location;
+  }
 
-  /// The current value of one filter chip (date posted, job type or salary).
-  String filterValue(String filterType) => switch (filterType) {
-        JobFilterOptions.datePosted => _datePosted,
-        JobFilterOptions.jobType => _jobType,
-        _ => _salary,
-      };
+  /// True when the keyword or a filter narrows the search.
+  bool get hasActiveFilters => _filters.query.trim().isNotEmpty || _filters.filterCount > 0;
 
   // ---- Results --------------------------------------------------------
-  List<NearbyJob> _jobs = [];
+  // Set once per search (and when a pin is opened), so building the map
+  // and the list doesn't regroup or copy the jobs every frame.
+  List<NearbyJob> _jobs = const [];
+  Map<String, List<NearbyJob>> _spots = const {};
+  List<NearbyJob> _listed = const [];
   bool _capped = false;
   bool _isLoading = false;
   bool _isLocating = false;
   bool _hasSearched = false;
   String? _error;
   LatLng? _searchCenter;
-  int _selectedIndex = 0;
+  String? _openSpot;
   bool _areaMoved = false;
   int _searchId = 0;
-  bool _disposed = false;
 
-  List<NearbyJob> get jobs => List.unmodifiable(_jobs);
+  List<NearbyJob> get jobs => _jobs;
   bool get capped => _capped;
   bool get isLoading => _isLoading;
   bool get isLocating => _isLocating;
@@ -77,26 +78,34 @@ class JobMapController extends ChangeNotifier {
   bool get areaMoved => _areaMoved;
   bool get hasResults => _jobs.isNotEmpty;
 
-  int get selectedIndex => _jobs.isEmpty ? -1 : _selectedIndex.clamp(0, _jobs.length - 1);
-  NearbyJob? get selectedJob => _jobs.isEmpty ? null : _jobs[selectedIndex];
+  /// The pin whose jobs the list shows (after tapping it), or null for all jobs.
+  String? get openedSpot => _openSpot;
 
-  /// Jobs at the same spot as [job] (including it), for "1 of 3 here".
-  List<NearbyJob> jobsAtSameSpot(NearbyJob job) =>
-      _jobs.where((j) => j.spotKey == job.spotKey).toList();
+  /// The jobs in the list: those at [openedSpot], or all of them.
+  List<NearbyJob> get listedJobs => _listed;
 
-  /// Jobs grouped by spot, in the order of the list (nearest first).
-  Map<String, List<NearbyJob>> get spots {
-    final map = <String, List<NearbyJob>>{};
-    for (final j in _jobs) {
-      map.putIfAbsent(j.spotKey, () => []).add(j);
+  /// Jobs at the same spot as [job] (including it), for "3 here".
+  List<NearbyJob> jobsAtSameSpot(NearbyJob job) => _spots[job.spotKey] ?? const [];
+
+  /// Jobs grouped by spot (one pin each), nearest first.
+  Map<String, List<NearbyJob>> get spots => _spots;
+
+  /// Stores a new result and groups it by spot.
+  void _setJobs(List<NearbyJob> jobs) {
+    final grouped = <String, List<NearbyJob>>{};
+    for (final j in jobs) {
+      grouped.putIfAbsent(j.spotKey, () => []).add(j);
     }
-    return map;
+    _jobs = List.unmodifiable(jobs);
+    _spots = Map.unmodifiable(grouped.map((key, list) => MapEntry(key, List<NearbyJob>.unmodifiable(list))));
+    _listed = _jobs;
+    _openSpot = null;
   }
 
   /// "12 jobs within 10 km"
   String get summary {
     final n = _jobs.length;
-    final km = _radiusKm.toInt();
+    final km = radiusKm.toInt();
     if (n == 0) return 'No jobs within $km km';
     final count = _capped ? 'Nearest $n' : '$n';
     return '$count job${n == 1 ? '' : 's'} within $km km';
@@ -110,7 +119,7 @@ class JobMapController extends ChangeNotifier {
   /// one, otherwise a fresh fix (gives up after 8 seconds).
   Future<StartLocation> findStartLocation() async {
     _isLocating = true;
-    _notify();
+    notifySafely();
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
         return const StartLocation(fallbackCenter, LocationIssue.serviceOff);
@@ -145,7 +154,7 @@ class JobMapController extends ChangeNotifier {
       return const StartLocation(fallbackCenter, LocationIssue.failed);
     } finally {
       _isLocating = false;
-      _notify();
+      notifySafely();
     }
   }
 
@@ -154,17 +163,19 @@ class JobMapController extends ChangeNotifier {
   Future<LatLng?> findPlace(String query) async {
     final text = query.trim();
     if (text.isEmpty) return null;
-    try {
-      // Bias towards Malaysia for short names like "Bangsar".
-      final withCountry = text.toLowerCase().contains('malaysia') ? text : '$text, Malaysia';
-      var results = await locationFromAddress(withCountry);
-      if (results.isEmpty) results = await locationFromAddress(text);
-      if (results.isEmpty) return null;
-      return LatLng(results.first.latitude, results.first.longitude);
-    } catch (e) {
-      debugPrint('Place search failed: $e');
-      return null;
+    // Bias towards Malaysia for short names like "Bangsar", then try the
+    // text as typed. The geocoder throws (not returns empty) when nothing
+    // matches, so each try is caught on its own.
+    final tries = {if (!text.toLowerCase().contains('malaysia')) '$text, Malaysia', text};
+    for (final address in tries) {
+      try {
+        final results = await locationFromAddress(address);
+        if (results.isNotEmpty) return LatLng(results.first.latitude, results.first.longitude);
+      } catch (e) {
+        debugPrint('Place search failed for "$address": $e');
+      }
     }
+    return null;
   }
 
   // ---------------------------------------------------------------------
@@ -178,32 +189,32 @@ class JobMapController extends ChangeNotifier {
     _isLoading = true;
     _areaMoved = false;
     _error = null;
-    _notify();
+    notifySafely();
 
     try {
       final result = await _locations.getNearbyJobs(
         center.latitude,
         center.longitude,
-        _radiusKm * 1000,
-        query: _keyword,
-        jobType: _jobType,
-        salary: _salary,
-        datePosted: _datePosted,
+        radiusKm * 1000,
+        query: _filters.query,
+        jobType: _filters.jobType,
+        salary: _filters.salary,
+        datePosted: _filters.datePosted,
+        workplaceType: _filters.workplaceType,
       );
       if (id != _searchId) return; // a newer search started
-      _jobs = result.jobs;
+      _setJobs(result.jobs);
       _capped = result.capped;
-      _selectedIndex = 0;
     } catch (e) {
       if (id != _searchId) return;
-      _jobs = [];
+      _setJobs(const []);
       _capped = false;
       _error = e is DataLoadException ? e.message : 'Unable to load nearby jobs. Please try again.';
     } finally {
       if (id == _searchId) {
         _isLoading = false;
         _hasSearched = true;
-        _notify();
+        notifySafely();
       }
     }
   }
@@ -220,74 +231,89 @@ class JobMapController extends ChangeNotifier {
           center.longitude,
         ) /
         1000;
-    final moved = movedKm > (_radiusKm * 0.2).clamp(0.5, 10.0);
+    final moved = movedKm > (radiusKm * 0.2).clamp(0.5, 10.0);
     if (moved != _areaMoved) {
       _areaMoved = moved;
-      _notify();
+      notifySafely();
     }
   }
 
-  /// Selects the job at [index] in the result list (its pin is highlighted).
-  void select(int index) {
-    if (index < 0 || index >= _jobs.length || index == _selectedIndex) return;
-    _selectedIndex = index;
-    _notify();
+  // ---------------------------------------------------------------------
+  // Opening a job
+  // ---------------------------------------------------------------------
+
+  /// Full jobs already loaded (the search leaves out descriptions).
+  final Map<String, JobModel> _fullJobs = {};
+  String? _openingJobID;
+
+  /// The job being loaded to open its details (its card shows a spinner).
+  String? get openingJobID => _openingJobID;
+
+  /// The whole job for its details screen (loaded once, then remembered).
+  /// Throws a [DataLoadException] when it can't be loaded.
+  Future<JobModel> loadFullJob(NearbyJob item) async {
+    final id = item.job.jobID;
+    if (id == null) return item.job;
+    final cached = _fullJobs[id];
+    if (cached != null) return cached;
+
+    _openingJobID = id;
+    notifySafely();
+    try {
+      return _fullJobs[id] = await _locations.fetchJob(id);
+    } finally {
+      _openingJobID = null;
+      notifySafely();
+    }
   }
 
-  /// Index of the first job at [spotKey] (for a tapped pin).
-  int indexOfSpot(String spotKey) => _jobs.indexWhere((j) => j.spotKey == spotKey);
+  /// A pin was tapped: list only its jobs (and highlight it).
+  void openSpot(String spotKey) {
+    final jobsHere = _spots[spotKey];
+    if (_openSpot == spotKey || jobsHere == null) return;
+    _openSpot = spotKey;
+    _listed = jobsHere;
+    notifySafely();
+  }
+
+  /// "Show all": list every job again.
+  void showAllJobs() {
+    if (_openSpot == null) return;
+    _openSpot = null;
+    _listed = _jobs;
+    notifySafely();
+  }
 
   // ---------------------------------------------------------------------
   // Filters (the screen runs a new search after each change)
   // ---------------------------------------------------------------------
 
-  /// The search keyword (used by the next search).
-  void setKeyword(String value) => _keyword = value.trim();
+  /// Sets the keyword, filters, radius and area for the next search.
+  void setFilters(JobSearchFilters filters) {
+    _filters = filters.copyWith(
+      radiusKm: (filters.radiusKm ?? JobFilterOptions.defaultRadiusKm).clamp(5.0, 100.0),
+    );
+    notifySafely();
+  }
 
-  /// Sets one filter (date posted, job type or salary).
-  void setFilter(String filterType, String value) {
-    switch (filterType) {
-      case JobFilterOptions.datePosted:
-        _datePosted = value;
-      case JobFilterOptions.jobType:
-        _jobType = value;
-      default:
-        _salary = value;
+  /// The next bigger radius choice, or null at the biggest.
+  double? get nextRadiusKm {
+    for (final km in JobFilterOptions.radiusOptions) {
+      if (km > radiusKm) return km;
     }
-    _notify();
+    return null;
   }
 
-  /// Sets the search radius (5 to 100 km).
-  void setRadius(double km) {
-    _radiusKm = km.clamp(5.0, 100.0);
-    _notify();
-  }
-
-  /// Doubles the radius (up to 100 km). Returns false if already at the max.
+  /// Switches to [nextRadiusKm]. Returns false if already at the biggest.
   bool widenRadius() {
-    if (_radiusKm >= 100) return false;
-    setRadius((_radiusKm * 2).clamp(5.0, 100.0));
+    final next = nextRadiusKm;
+    if (next == null) return false;
+    setFilters(_filters.copyWith(radiusKm: next));
     return true;
   }
 
-  /// Resets the keyword, filters and radius to their defaults.
+  /// Clears the keyword and filters (keeps the area and radius).
   void clearFilters() {
-    _keyword = '';
-    _jobType = JobFilterOptions.anyJobType;
-    _datePosted = JobFilterOptions.anyDate;
-    _salary = JobFilterOptions.anySalary;
-    _radiusKm = JobFilterOptions.defaultRadiusKm;
-    _notify();
-  }
-
-  /// notifyListeners, unless the controller was already disposed.
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
+    setFilters(JobSearchFilters(location: _filters.location, radiusKm: _filters.radiusKm));
   }
 }

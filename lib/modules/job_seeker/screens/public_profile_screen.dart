@@ -1,6 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/data_load_exception.dart';
@@ -8,15 +7,16 @@ import '../../../core/utils/file_preview_helper.dart';
 import '../../../core/utils/link_helper.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/job_seeker_model.dart';
-import '../../../models/work_experience_model.dart';
-import '../../../models/education_model.dart';
 import '../../../models/skill_model.dart';
 import '../../../shared_widgets/skill_chips.dart';
 import '../controllers/profile_controller.dart';
 import '../controllers/skill_controller.dart';
 import '../widgets/load_error_view.dart';
+import '../widgets/profile/profile_details_card.dart';
+import '../widgets/profile/profile_record_card.dart';
 import '../../../shared_widgets/hero_icon_button.dart';
 import '../../../shared_widgets/surface_card.dart';
+import '../../../shared_widgets/hero_card.dart';
 
 /// A job seeker's profile as others see it (read-only), e.g. after
 /// scanning their QR code. Contact details and resume are shown only to
@@ -89,14 +89,6 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     }
   }
 
-  /// "Jan 2024 - Present" ("N/A" when there is no end date).
-  String _formatDateRange(DateTime start, DateTime? end, bool isCurrent) {
-    final DateFormat formatter = DateFormat('MMM yyyy');
-    String startStr = formatter.format(start);
-    String endStr = isCurrent ? 'Present' : (end != null ? formatter.format(end) : 'N/A');
-    return '$startStr - $endStr';
-  }
-
   /// First letter of the name for the avatar ('J' when there is no name).
   String _getProfileInitial() {
     if (_profile == null || _profile!.fullName.trim().isEmpty) return 'J';
@@ -140,18 +132,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
 
   /// Gradient header with the photo, name and location.
   Widget _buildHeroHeader() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.primary, AppColors.primaryLight],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Column(
+    return HeroCard(child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -162,27 +143,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                 onTap: () => Navigator.pop(context),
               ),
               const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.person_search_rounded, size: 16, color: Colors.white),
-                    SizedBox(width: 8),
-                    Text(
-                      'Candidate Profile',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              const HeroPill(icon: Icons.person_search_rounded, label: 'Candidate Profile'),
             ],
           ),
           const SizedBox(height: 24),
@@ -244,191 +205,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   /// One labelled detail row; hidden when [value] is empty.
   Widget _buildField({required String label, required String? value, required Widget icon, bool isLink = false}) {
     if (value == null || value.trim().isEmpty) return const SizedBox.shrink(); // empty fields are not shown
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: AppColors.surfaceAlt,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Center(child: icon),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textMuted,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                InkWell(
-                  onTap: isLink ? () => _launchURL(value) : null,
-                  borderRadius: BorderRadius.circular(8),
-                  child: Text(
-                    value,
-                    style: TextStyle(
-                      fontSize: 15,
-                      height: 1.45,
-                      color: isLink ? AppColors.primary : AppColors.textDark,
-                      fontWeight: isLink ? FontWeight.w600 : FontWeight.w500,
-                      decoration: isLink ? TextDecoration.underline : TextDecoration.none,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// One work experience entry.
-  Widget _buildExperienceCard(WorkExperienceModel exp) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: SurfaceCard(
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(Icons.work_outline_rounded, color: AppColors.primary, size: 24),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    exp.jobTitle,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                      color: AppColors.textDark,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    exp.companyName,
-                    style: const TextStyle(
-                      color: AppColors.textMuted,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _formatDateRange(exp.startDate, exp.endDate, exp.isCurrent),
-                    style: TextStyle(
-                      color: Colors.grey.shade500,
-                      fontSize: 13,
-                    ),
-                  ),
-                  if (exp.description != null && exp.description!.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      exp.description!,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        color: AppColors.textDark,
-                        height: 1.45,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// One education entry.
-  Widget _buildEducationCard(EducationModel edu) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: SurfaceCard(
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(Icons.school_outlined, color: Colors.orange, size: 24),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    edu.fieldOfStudy != null && edu.fieldOfStudy!.isNotEmpty
-                        ? '${edu.degree} - ${edu.fieldOfStudy}'
-                        : edu.degree,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                      color: AppColors.textDark,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    edu.institutionName,
-                    style: const TextStyle(
-                      color: AppColors.textMuted,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _formatDateRange(edu.startDate, edu.endDate, edu.isCurrent),
-                    style: TextStyle(
-                      color: Colors.grey.shade500,
-                      fontSize: 13,
-                    ),
-                  ),
-                  if (edu.description != null && edu.description!.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      edu.description!,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        color: AppColors.textDark,
-                        height: 1.45,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    return ProfileInfoRow(label: label, value: value, icon: icon, onTap: isLink ? () => _launchURL(value) : null);
   }
 
   @override
@@ -573,22 +350,22 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                 ),
               ],
 
-              // Skills
-              if (_skills.isNotEmpty) ...[
-                _buildSectionHeader('Skills'),
-                SurfaceCard(child: SkillChips(skills: _skills)),
-              ],
-
               // Work experience
               if (_profile!.workExperience.isNotEmpty) ...[
                 _buildSectionHeader('Experience'),
-                ..._profile!.workExperience.map(_buildExperienceCard),
+                ..._profile!.workExperience.map(ProfileRecordCard.experience),
               ],
 
               // Education
               if (_profile!.education.isNotEmpty) ...[
                 _buildSectionHeader('Education'),
-                ..._profile!.education.map(_buildEducationCard),
+                ..._profile!.education.map(ProfileRecordCard.education),
+              ],
+
+              // Skills
+              if (_skills.isNotEmpty) ...[
+                _buildSectionHeader('Skills'),
+                SurfaceCard(child: SkillChips(skills: _skills)),
               ],
             ],
           ),

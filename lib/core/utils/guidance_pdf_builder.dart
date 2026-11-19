@@ -1,12 +1,12 @@
 import 'dart:typed_data';
 
-import 'package:flutter/services.dart' show rootBundle;
-import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../../models/mock_interview_model.dart';
 import '../../models/skill_gap_model.dart';
+import 'pdf_text.dart';
+import 'app_date_format.dart';
 
 /// Builds the Guidance Report PDFs (full history, one interview, one skill gap analysis).
 class GuidancePdfBuilder {
@@ -23,33 +23,6 @@ class GuidancePdfBuilder {
   static final PdfColor _amber = PdfColor.fromInt(0xFFC77700);
   static final PdfColor _red = PdfColor.fromInt(0xFFD32F2F);
 
-  static final DateFormat _date = DateFormat('d MMM yyyy');
-  static final DateFormat _dateTime = DateFormat('d MMM yyyy, h:mm a');
-
-  static pw.ThemeData? _theme;
-
-  /// Loads the Poppins fonts once and reuses them for every PDF.
-  static Future<pw.ThemeData> _loadTheme() async {
-    if (_theme != null) return _theme!;
-    final regular = await rootBundle.load('assets/fonts/Poppins-Regular.ttf');
-    final bold = await rootBundle.load('assets/fonts/Poppins-Bold.ttf');
-    _theme = pw.ThemeData.withFont(
-      base: pw.Font.ttf(regular),
-      bold: pw.Font.ttf(bold),
-    );
-    return _theme!;
-  }
-
-  /// Removes characters the font can't draw (emoji, arrows, check marks).
-  static String _clean(String? s) {
-    if (s == null) return '';
-    return s
-        .replaceAll('→', '->')
-        .replaceAll('✓', '-')
-        .replaceAll('✔', '-')
-        .replaceAll(RegExp(r'[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE0F}]', unicode: true), '')
-        .trim();
-  }
 
   /// Shortens [s] to [max] characters, ending with "…".
   static String _cut(String s, int max) => s.length > max ? '${s.substring(0, max)}…' : s;
@@ -75,7 +48,7 @@ class GuidancePdfBuilder {
     required List<MockInterviewRecordModel> interviews,
     required List<SkillGapAnalysisModel> skillGaps,
   }) async {
-    final theme = await _loadTheme();
+    final theme = await PdfText.theme();
     final doc = pw.Document(
       theme: theme,
       title: 'Career Guidance Report',
@@ -84,7 +57,7 @@ class GuidancePdfBuilder {
 
     doc.addPage(_multiPage(
       title: 'Career Guidance Report',
-      subtitle: '${_clean(applicantName)} · Generated ${_dateTime.format(DateTime.now())}',
+      subtitle: '${PdfText.clean(applicantName)} · Generated ${AppDateFormat.dayTime.format(DateTime.now())}',
       body: [
         ..._overview(interviews, skillGaps),
         if (interviews.isNotEmpty) ..._interviewTable(interviews),
@@ -95,14 +68,14 @@ class GuidancePdfBuilder {
     for (final r in interviews) {
       doc.addPage(_multiPage(
         title: 'Mock Interview Scorecard',
-        subtitle: '${_clean(r.targetJobRole)} · ${_date.format(r.completedAt ?? r.createdAt)}',
+        subtitle: '${PdfText.clean(r.targetJobRole)} · ${AppDateFormat.day.format(r.completedAt ?? r.createdAt)}',
         body: _interviewDetail(r),
       ));
     }
     for (final a in skillGaps) {
       doc.addPage(_multiPage(
         title: 'Skill Gap Report',
-        subtitle: '${_clean(a.targetJobRole)} · ${_date.format(a.createdAt)}',
+        subtitle: '${PdfText.clean(a.targetJobRole)} · ${AppDateFormat.day.format(a.createdAt)}',
         body: _skillGapDetail(a),
       ));
     }
@@ -114,13 +87,13 @@ class GuidancePdfBuilder {
     MockInterviewRecordModel r, {
     String? applicantName,
   }) async {
-    final doc = pw.Document(theme: await _loadTheme(), title: 'Mock Interview Scorecard');
+    final doc = pw.Document(theme: await PdfText.theme(), title: 'Mock Interview Scorecard');
     doc.addPage(_multiPage(
       title: 'Mock Interview Scorecard',
       subtitle: [
-        if (applicantName != null && applicantName.isNotEmpty) _clean(applicantName),
-        _clean(r.targetJobRole),
-        _date.format(r.completedAt ?? r.createdAt),
+        if (applicantName != null && applicantName.isNotEmpty) PdfText.clean(applicantName),
+        PdfText.clean(r.targetJobRole),
+        AppDateFormat.day.format(r.completedAt ?? r.createdAt),
       ].join(' · '),
       body: _interviewDetail(r),
     ));
@@ -132,13 +105,13 @@ class GuidancePdfBuilder {
     SkillGapAnalysisModel a, {
     String? applicantName,
   }) async {
-    final doc = pw.Document(theme: await _loadTheme(), title: 'Skill Gap Report');
+    final doc = pw.Document(theme: await PdfText.theme(), title: 'Skill Gap Report');
     doc.addPage(_multiPage(
       title: 'Skill Gap Report',
       subtitle: [
-        if (applicantName != null && applicantName.isNotEmpty) _clean(applicantName),
-        _clean(a.targetJobRole),
-        _date.format(a.createdAt),
+        if (applicantName != null && applicantName.isNotEmpty) PdfText.clean(applicantName),
+        PdfText.clean(a.targetJobRole),
+        AppDateFormat.day.format(a.createdAt),
       ].join(' · '),
       body: _skillGapDetail(a),
     ));
@@ -226,14 +199,14 @@ class GuidancePdfBuilder {
 
   static pw.Widget _para(String text, {PdfColor? color, double size = 9.5}) => pw.Padding(
         padding: const pw.EdgeInsets.only(bottom: 6),
-        child: pw.Text(_clean(text),
+        child: pw.Text(PdfText.clean(text),
             style: pw.TextStyle(color: color ?? _text, fontSize: size, lineSpacing: 2)),
       );
 
   static List<pw.Widget> _bullets(List<String> items, {PdfColor? color}) => items
       .where((s) => s.trim().isNotEmpty)
       .map((s) => pw.Bullet(
-            text: _clean(s),
+            text: PdfText.clean(s),
             style: pw.TextStyle(color: _text, fontSize: 9.5, lineSpacing: 2),
             bulletColor: color ?? _navy,
             bulletSize: 3.5,
@@ -279,7 +252,7 @@ class GuidancePdfBuilder {
   }) {
     return pw.TableHelper.fromTextArray(
       headers: headers,
-      data: rows.map((r) => r.map(_clean).toList()).toList(),
+      data: rows.map((r) => r.map(PdfText.clean).toList()).toList(),
       columnWidths: widths,
       border: pw.TableBorder.all(color: _border, width: 0.6),
       headerDecoration: pw.BoxDecoration(color: _navy),
@@ -305,7 +278,7 @@ class GuidancePdfBuilder {
           children: [
             pw.Text(title, style: pw.TextStyle(color: _navy, fontSize: 9, fontWeight: pw.FontWeight.bold)),
             pw.SizedBox(height: 4),
-            pw.Text(_clean(text), style: pw.TextStyle(color: _text, fontSize: 9, lineSpacing: 2)),
+            pw.Text(PdfText.clean(text), style: pw.TextStyle(color: _text, fontSize: 9, lineSpacing: 2)),
           ],
         ),
       );
@@ -362,7 +335,7 @@ class GuidancePdfBuilder {
           },
           rows: interviews
               .map((r) => [
-                    _date.format(r.completedAt ?? r.createdAt),
+                    AppDateFormat.day.format(r.completedAt ?? r.createdAt),
                     r.targetJobRole,
                     '${r.overallScore ?? '-'}',
                     '${r.contentScore ?? '-'}',
@@ -386,7 +359,7 @@ class GuidancePdfBuilder {
           },
           rows: skillGaps
               .map((a) => [
-                    _date.format(a.createdAt),
+                    AppDateFormat.day.format(a.createdAt),
                     a.targetJobRole,
                     '${a.matchScore}%',
                     '${a.missing.length}',
@@ -482,7 +455,7 @@ class GuidancePdfBuilder {
                   pw.Text(a.questionIndex == 0 ? 'Introduction' : 'Question ${a.questionIndex}',
                       style: pw.TextStyle(color: _navy, fontSize: 9, fontWeight: pw.FontWeight.bold)),
                   pw.SizedBox(height: 2),
-                  pw.Text(_clean(a.questionText), style: pw.TextStyle(color: _text, fontSize: 9.5)),
+                  pw.Text(PdfText.clean(a.questionText), style: pw.TextStyle(color: _text, fontSize: 9.5)),
                 ],
               ),
             ),
@@ -596,7 +569,7 @@ class GuidancePdfBuilder {
         child: pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            pw.Text('$number. ${_clean(p.title)}',
+            pw.Text('$number. ${PdfText.clean(p.title)}',
                 style: pw.TextStyle(color: _navy, fontSize: 10, fontWeight: pw.FontWeight.bold)),
             pw.SizedBox(height: 2),
             pw.Text(
@@ -614,7 +587,7 @@ class GuidancePdfBuilder {
       for (var i = 0; i < p.steps.length; i++)
         pw.Padding(
           padding: const pw.EdgeInsets.only(left: 6, bottom: 3),
-          child: pw.Text('${i + 1}. ${_clean(p.steps[i])}',
+          child: pw.Text('${i + 1}. ${PdfText.clean(p.steps[i])}',
               style: pw.TextStyle(color: _text, fontSize: 9, lineSpacing: 2)),
         ),
       if (p.suggestedResources.isNotEmpty)

@@ -4,9 +4,9 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/file_picker_helper.dart';
 import '../../../../core/utils/file_preview_helper.dart';
 import '../../../../shared_widgets/surface_card.dart';
-import '../../screens/ai_resume_assistant_screen.dart';
+import '../../screens/resume_assistant_screen.dart';
 import '../../screens/build_resume_screen.dart';
-import 'profile_sections.dart';
+import '../../../../core/theme/app_button_styles.dart';
 
 /// Resume status, then Build Resume, Upload and AI Resume Assistant.
 class ProfileResumeCard extends StatelessWidget {
@@ -132,7 +132,7 @@ class ProfileResumeCard extends StatelessWidget {
         onPressed: onPressed,
         icon: icon,
         label: Text(label),
-        style: ProfileButtonStyles.outlinedPrimary(),
+        style: AppButtonStyles.outlined(),
       ),
     );
   }

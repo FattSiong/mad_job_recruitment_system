@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_button_styles.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared_widgets/sheet_handle.dart';
 import '../../../core/utils/data_load_exception.dart';
 import '../../../core/utils/file_preview_helper.dart';
 import '../../../models/message_model.dart';
 import '../chat_formatters.dart';
 import '../../../shared_widgets/full_screen_image_viewer.dart';
+import '../../../shared_widgets/state_message_card.dart';
 import '../../../shared_widgets/storage_image.dart';
 
 /// Photos and files shared in a chat.
@@ -18,7 +21,7 @@ Future<void> showSharedAttachmentsSheet(
     isScrollControlled: true,
     backgroundColor: AppColors.background,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
     builder: (_) => _SharedAttachmentsSheet(load: load),
   );
@@ -46,16 +49,7 @@ class _SharedAttachmentsSheetState extends State<_SharedAttachmentsSheet> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Container(
-                width: 42,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.border,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-            ),
+            const SheetHandle(),
             const SizedBox(height: 18),
             const Text(
               'Shared photos & files',
@@ -71,32 +65,31 @@ class _SharedAttachmentsSheetState extends State<_SharedAttachmentsSheet> {
                   }
                   if (snapshot.hasError) {
                     final error = snapshot.error;
-                    return Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            error is DataLoadException
-                                ? error.message
-                                : 'Unable to load shared photos and files.',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: AppColors.textMuted),
-                          ),
-                          TextButton.icon(
-                            onPressed: () => setState(() => _future = widget.load()),
-                            icon: const Icon(Icons.refresh_rounded),
-                            label: const Text('Try Again'),
-                          ),
-                        ],
+                    return SingleChildScrollView(
+                      child: StateMessageCard(
+                        boxed: false,
+                        icon: Icons.cloud_off_rounded,
+                        color: AppColors.danger,
+                        title: 'Something went wrong',
+                        message: error is DataLoadException
+                            ? error.message
+                            : 'Unable to load shared photos and files.',
+                        action: ElevatedButton.icon(
+                          onPressed: () => setState(() => _future = widget.load()),
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: const Text('Try Again'),
+                          style: AppButtonStyles.filled(),
+                        ),
                       ),
                     );
                   }
                   final items = snapshot.data ?? [];
                   if (items.isEmpty) {
-                    return const Center(
-                      child: Text(
-                        'No photos or files shared yet.',
-                        style: TextStyle(color: AppColors.textMuted),
+                    return const SingleChildScrollView(
+                      child: StateMessageCard(
+                        icon: Icons.perm_media_outlined,
+                        title: 'Nothing shared yet',
+                        message: 'Photos and files you send each other will appear here.',
                       ),
                     );
                   }

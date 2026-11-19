@@ -3,9 +3,12 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../models/resume_model.dart';
 import '../../controllers/resume_builder_controller.dart';
+import '../../../../shared_widgets/empty_hint.dart';
 import 'resume_record_steps.dart';
 import 'resume_section_item_sheet.dart';
 import '../../../../shared_widgets/confirm_dialog.dart';
+import '../../../../shared_widgets/action_sheet.dart';
+import '../../../../core/theme/app_input_decoration.dart';
 
 /// Last step: optional sections (summary, projects, awards, languages...).
 class ResumeSectionsStep extends StatelessWidget {
@@ -18,38 +21,12 @@ class ResumeSectionsStep extends StatelessWidget {
     final types = controller.availableSectionTypes;
     if (types.isEmpty) return;
 
-    final type = await showModalBottomSheet<ResumeSectionType>(
-      context: context,
-      backgroundColor: AppColors.surface,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Padding(
-                padding: EdgeInsets.fromLTRB(20, 20, 20, 8),
-                child: Text(
-                  'Add a section',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textDark),
-                ),
-              ),
-              for (final t in types)
-                ListTile(
-                  leading: Icon(_iconFor(t), color: AppColors.primary),
-                  title: Text(t.label, style: const TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: Text(t.hint),
-                  onTap: () => Navigator.pop(sheetContext, t),
-                ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        ),
-      ),
+    final type = await showActionSheet<ResumeSectionType>(
+      context,
+      title: 'Add a section',
+      actions: [
+        for (final t in types) SheetAction(t, t.label, icon: _iconFor(t), subtitle: t.hint),
+      ],
     );
     if (type == null) return;
     controller.addSection(type);
@@ -67,7 +44,8 @@ class ResumeSectionsStep extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (sections.isEmpty)
-          const ResumeEmptyHint(
+          const EmptyHint(
+            margin: EdgeInsets.only(bottom: 14),
             text: 'Optional: add a summary, projects, awards, languages and more. '
                 'You can also finish now.',
           ),
@@ -183,21 +161,9 @@ class _SectionCardState extends State<_SectionCard> {
                 maxLines: 8,
                 maxLength: 1200,
                 textCapitalization: TextCapitalization.sentences,
-                decoration: InputDecoration(
-                  hintText: _type == ResumeSectionType.summary
+                decoration: filledInputDecoration(hint: _type == ResumeSectionType.summary
                       ? 'e.g. Final-year IT student with hands-on Flutter experience...'
-                      : 'Anything else an employer should know',
-                  filled: true,
-                  fillColor: AppColors.surface,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: AppColors.border),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: AppColors.border),
-                  ),
-                ),
+                      : 'Anything else an employer should know', fillColor: AppColors.surface, radius: 14),
               ),
             )
           else ...[

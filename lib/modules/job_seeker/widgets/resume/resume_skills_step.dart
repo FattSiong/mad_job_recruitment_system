@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../models/skill_model.dart';
 import '../../controllers/resume_builder_controller.dart';
-import 'resume_record_steps.dart';
+import '../../../../shared_widgets/empty_hint.dart';
+import '../../../../shared_widgets/action_sheet.dart';
+import '../../../../core/theme/app_button_styles.dart';
+import '../../../../core/theme/app_input_decoration.dart';
 
 /// Skills step: add skills with an optional level; tap a skill to change it.
 class ResumeSkillsStep extends StatefulWidget {
@@ -39,6 +42,7 @@ class _ResumeSkillsStepState extends State<ResumeSkillsStep> {
   @override
   Widget build(BuildContext context) {
     final skills = widget.controller.resume.skills;
+    final full = widget.controller.skillsFull;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -49,38 +53,20 @@ class _ResumeSkillsStepState extends State<ResumeSkillsStep> {
             Expanded(
               child: TextField(
                 controller: _input,
+                enabled: !full,
                 maxLength: 50,
                 textCapitalization: TextCapitalization.words,
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _add(),
-                decoration: InputDecoration(
-                  hintText: 'e.g. Flutter, Customer Service',
-                  errorText: _error,
-                  counterText: '',
-                  filled: true,
-                  fillColor: AppColors.surfaceAlt,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: AppColors.border),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: AppColors.border),
-                  ),
-                ),
+                decoration: filledInputDecoration(hint: full ? 'Skill limit reached' : 'e.g. Flutter, Customer Service', errorText: _error, counterText: '', radius: 14),
               ),
             ),
             const SizedBox(width: 8),
             SizedBox(
               height: 56,
               child: ElevatedButton(
-                onPressed: _add,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
+                onPressed: full ? null : _add,
+                style: AppButtonStyles.filled(radius: 14),
                 child: const Text('Add'),
               ),
             ),
@@ -108,7 +94,10 @@ class _ResumeSkillsStepState extends State<ResumeSkillsStep> {
         ),
         const SizedBox(height: 18),
         if (skills.isEmpty)
-          const ResumeEmptyHint(text: 'No skills yet. Add at least a few that match the jobs you want.')
+          const EmptyHint(
+            text: 'No skills yet. Add at least a few that match the jobs you want.',
+            margin: EdgeInsets.only(bottom: 14),
+          )
         else
           Wrap(
             spacing: 8,
@@ -130,9 +119,11 @@ class _ResumeSkillsStepState extends State<ResumeSkillsStep> {
           ),
         if (skills.isNotEmpty) ...[
           const SizedBox(height: 8),
-          const Text(
-            'Tap a skill to change its level.',
-            style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+          Text(
+            full
+                ? '${skills.length}/${ResumeBuilderController.maxSkills} skills. Remove one to add another.'
+                : '${skills.length}/${ResumeBuilderController.maxSkills} skills · Tap a skill to change its level.',
+            style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
           ),
         ],
       ],
@@ -141,29 +132,12 @@ class _ResumeSkillsStepState extends State<ResumeSkillsStep> {
 
   /// Sheet to choose a new level for the skill at [index].
   Future<void> _changeLevel(int index) async {
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            for (final level in SkillModel.proficiencyLevels)
-              ListTile(
-                title: Text(level),
-                onTap: () => Navigator.pop(sheetContext, level),
-              ),
-            ListTile(
-              title: const Text('No level'),
-              onTap: () => Navigator.pop(sheetContext, ''),
-            ),
-          ],
-        ),
-      ),
+    final choice = await showActionSheet<String>(
+      context,
+      actions: [
+        for (final level in SkillModel.proficiencyLevels) SheetAction(level, level),
+        const SheetAction('', 'No level'),
+      ],
     );
     if (choice == null) return;
     widget.controller.setSkillLevel(index, choice.isEmpty ? null : choice);

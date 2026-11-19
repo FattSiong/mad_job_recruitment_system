@@ -4,6 +4,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../models/job_model.dart';
 import '../../controllers/bookmarked_controller.dart';
 import '../../screens/job_details_screen.dart';
+import '../../screens/unavailable_job_notice_screen.dart';
 import '../job_card.dart';
 import '../load_error_view.dart';
 import 'my_jobs_empty_state.dart';
@@ -86,13 +87,18 @@ class _BookmarkedJobsListState extends State<_BookmarkedJobsList> {
             itemCount: jobs.length,
             itemBuilder: (context, index) {
               final job = jobs[index];
+              // Removed by the employer or an admin (e.g. reported as a
+              // scam): don't show its details any more, only a notice.
+              final removed = job.status.trim().toLowerCase() == 'deleted';
               return JobCard(
                 job: job,
                 onTap: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => JobDetailsScreen(job: job),
+                      builder: (context) => removed
+                          ? UnavailableJobNoticeScreen(isDeleted: true, jobTitle: job.title)
+                          : JobDetailsScreen(job: job),
                     ),
                   );
                 },

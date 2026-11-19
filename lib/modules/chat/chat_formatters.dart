@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 class ChatFormatters {
   ChatFormatters._();
 
-  /// Chat list: "14:05" today, "Yesterday", "Mon", or "12/03/26".
+  /// Chat list: "2:05 PM" today, "Yesterday", "Mon", or "12/03/26".
   static String listTime(DateTime? time) {
     if (time == null) return '';
     final local = time.toLocal();
@@ -13,14 +13,17 @@ class ChatFormatters {
     final day = DateTime(local.year, local.month, local.day);
     final daysAgo = today.difference(day).inDays;
 
-    if (daysAgo <= 0) return DateFormat('HH:mm').format(local);
+    if (daysAgo <= 0) return _time.format(local);
     if (daysAgo == 1) return 'Yesterday';
     if (daysAgo < 7) return DateFormat('EEE').format(local);
     return DateFormat('dd/MM/yy').format(local);
   }
 
-  /// Under each bubble: "14:05".
-  static String bubbleTime(DateTime time) => DateFormat('HH:mm').format(time.toLocal());
+  /// Same clock style as the rest of the app ("2:05 PM").
+  static final DateFormat _time = DateFormat('h:mm a');
+
+  /// Under each bubble: "2:05 PM".
+  static String bubbleTime(DateTime time) => _time.format(time.toLocal());
 
   /// Separator between days: "Today", "Yesterday", "Monday, 3 Nov 2026".
   static String daySeparator(DateTime time) {

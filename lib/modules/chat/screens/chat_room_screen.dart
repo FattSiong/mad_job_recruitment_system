@@ -18,6 +18,13 @@ import '../../../shared_widgets/user_avatar.dart';
 import '../widgets/chat_composer.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/shared_attachments_sheet.dart';
+import '../../../shared_widgets/action_sheet.dart';
+import '../../../shared_widgets/text_edit_dialog.dart';
+import '../../../shared_widgets/button_spinner.dart';
+import '../../../core/theme/app_button_styles.dart';
+import '../../../shared_widgets/chat_surface.dart';
+import '../../../shared_widgets/state_message_card.dart';
+import '../../../shared_widgets/plain_app_bar.dart';
 
 /// One conversation.
 class ChatRoomScreen extends StatefulWidget {
@@ -97,35 +104,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
 
   /// Photo / camera / document sheet, then sends the chosen file.
   Future<void> _showAttachOptions() async {
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined, color: AppColors.primary),
-              title: const Text('Photo from library'),
-              onTap: () => Navigator.pop(sheetContext, 'gallery'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_camera_outlined, color: AppColors.primary),
-              title: const Text('Take a photo'),
-              onTap: () => Navigator.pop(sheetContext, 'camera'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.description_outlined, color: AppColors.primary),
-              title: const Text('Document (PDF, Word)'),
-              onTap: () => Navigator.pop(sheetContext, 'document'),
-            ),
-          ],
-        ),
-      ),
+    final choice = await showActionSheet<String>(
+      context,
+      actions: const [
+        SheetAction('gallery', 'Photo from library', icon: Icons.photo_library_outlined),
+        SheetAction('camera', 'Take a photo', icon: Icons.photo_camera_outlined),
+        SheetAction('document', 'Document (PDF, Word)', icon: Icons.description_outlined),
+      ],
     );
     if (choice == null || !mounted) return;
 
@@ -187,36 +172,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
   /// Long-press menu on a "Not sent" message: retry, copy (text) or discard.
   Future<void> _showUnsentActions(MessageModel message) async {
     final isText = (message.mediaType ?? 'text') == 'text';
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            ListTile(
-              leading: const Icon(Icons.refresh_rounded, color: AppColors.primary),
-              title: const Text('Try again'),
-              onTap: () => Navigator.pop(sheetContext, 'retry'),
-            ),
-            if (isText)
-              ListTile(
-                leading: const Icon(Icons.copy_rounded, color: AppColors.primary),
-                title: const Text('Copy text'),
-                onTap: () => Navigator.pop(sheetContext, 'copy'),
-              ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline_rounded, color: AppColors.errorRed),
-              title: const Text('Don\'t send', style: TextStyle(color: AppColors.errorRed)),
-              onTap: () => Navigator.pop(sheetContext, 'discard'),
-            ),
-          ],
-        ),
-      ),
+    final choice = await showActionSheet<String>(
+      context,
+      actions: [
+        const SheetAction('retry', 'Try again', icon: Icons.refresh_rounded),
+        if (isText) const SheetAction('copy', 'Copy text', icon: Icons.copy_rounded),
+        const SheetAction('discard', 'Don\'t send', icon: Icons.delete_outline_rounded, destructive: true),
+      ],
     );
     if (!mounted || choice == null) return;
     switch (choice) {
@@ -225,7 +187,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
       case 'copy':
         await Clipboard.setData(ClipboardData(text: message.content));
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied')));
+          SnackBarHelper.showSuccess(context, 'Copied');
         }
       case 'discard':
         await _controller.discard(message);
@@ -253,42 +215,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
 
   /// Edit dialog for one of the user's messages (within 2 minutes of sending).
   Future<void> _editMessage(MessageModel message) async {
-    final editController = TextEditingController(text: message.content);
-    final newText = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Edit message'),
-        content: TextField(
-          controller: editController,
-          autofocus: true,
-          minLines: 1,
-          maxLines: 6,
-          maxLength: 4000,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: InputDecoration(
-            counterText: '',
-            filled: true,
-            fillColor: AppColors.surfaceAlt,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, editController.text),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
+    final newText = await showTextEditDialog(
+      context,
+      title: 'Edit message',
+      initialText: message.content,
+      maxLength: 4000,
+      showCounter: false,
     );
-    // Not disposed here: the dialog's TextField is still on screen while it closes.
     if (newText == null || !mounted) return;
     final error = await _controller.editMessage(message, newText);
     if (error != null) _showError(error);
@@ -304,46 +237,27 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
     final canDelete = _controller.isMine(message) && !_controller.isPending(message);
     if (!isText && !canDelete) return;
 
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            if (isText)
-              ListTile(
-                leading: const Icon(Icons.copy_rounded, color: AppColors.primary),
-                title: const Text('Copy text'),
-                onTap: () => Navigator.pop(sheetContext, 'copy'),
-              ),
-            if (canEdit)
-              ListTile(
-                leading: const Icon(Icons.edit_outlined, color: AppColors.primary),
-                title: const Text('Edit'),
-                subtitle: const Text('Possible for 2 minutes after sending'),
-                onTap: () => Navigator.pop(sheetContext, 'edit'),
-              ),
-            if (canDelete)
-              ListTile(
-                leading: const Icon(Icons.delete_outline_rounded, color: AppColors.errorRed),
-                title: const Text('Delete for everyone', style: TextStyle(color: AppColors.errorRed)),
-                onTap: () => Navigator.pop(sheetContext, 'delete'),
-              ),
-          ],
-        ),
-      ),
+    final choice = await showActionSheet<String>(
+      context,
+      actions: [
+        if (isText) const SheetAction('copy', 'Copy text', icon: Icons.copy_rounded),
+        if (canEdit)
+          const SheetAction(
+            'edit',
+            'Edit',
+            icon: Icons.edit_outlined,
+            subtitle: 'Possible for 2 minutes after sending',
+          ),
+        if (canDelete)
+          const SheetAction('delete', 'Delete for everyone', icon: Icons.delete_outline_rounded, destructive: true),
+      ],
     );
     if (!mounted || choice == null) return;
 
     if (choice == 'copy') {
       await Clipboard.setData(ClipboardData(text: message.content));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied')));
+        SnackBarHelper.showSuccess(context, 'Copied');
       }
     } else if (choice == 'edit') {
       await _editMessage(message);
@@ -437,12 +351,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
       },
       child: Scaffold(
         backgroundColor: AppColors.background,
-        appBar: AppBar(
-          backgroundColor: AppColors.background,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-          titleSpacing: 0,
-          title: Row(
+        appBar: PlainAppBar(
+          // Back uses maybePop: PopScope asks about unsent messages.
+          titleWidget: Row(
             children: [
               UserAvatar(user: widget.otherUser, size: 42),
               const SizedBox(width: 12),
@@ -455,11 +366,12 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 17,
+                        fontSize: 18,
                         fontWeight: FontWeight.w800,
                         color: AppColors.textDark,
                       ),
                     ),
+                    const SizedBox(height: 2),
                     Text(
                       widget.otherUser.roleLabel,
                       style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
@@ -476,14 +388,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
                 tooltip: _controller.isBlocked ? 'Calls are off in a blocked chat' : 'Voice call',
                 onPressed: _isStartingCall || _controller.isBlocked ? null : _startCall,
                 icon: _isStartingCall
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                    ? const ButtonSpinner(size: 20, color: AppColors.teal)
                     : Icon(
                         Icons.call_rounded,
-                        color: _controller.isBlocked ? AppColors.textMuted : AppColors.teal,
+                        color: _controller.isBlocked ? AppColors.iconDisabled : AppColors.teal,
                       ),
               ),
             ),
@@ -497,43 +405,19 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
             ),
             ListenableBuilder(
               listenable: _controller,
-              builder: (context, _) {
-                final blockedByMe = _controller.blockState == ChatBlockState.blockedByMe;
-                return PopupMenuButton<String>(
-                  tooltip: 'More',
-                  enabled: !_controller.isChangingBlock,
-                  icon: const Icon(Icons.more_vert_rounded, color: AppColors.textDark),
-                  onSelected: (_) => _toggleBlock(),
-                  itemBuilder: (_) => [
-                    PopupMenuItem(
-                      value: 'block',
-                      child: Row(
-                        children: [
-                          Icon(
-                            blockedByMe ? Icons.lock_open_rounded : Icons.block_rounded,
-                            color: blockedByMe ? AppColors.primary : AppColors.errorRed,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            blockedByMe ? 'Unblock user' : 'Block user',
-                            style: TextStyle(color: blockedByMe ? AppColors.textDark : AppColors.errorRed),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              },
+              builder: (context, _) => _buildMoreMenu(),
             ),
+            const SizedBox(width: 4),
           ],
         ),
         body: Column(
           children: [
             Expanded(
-              child: ListenableBuilder(
-                listenable: _controller,
-                builder: (context, _) => _buildMessages(),
+              child: ChatSurface(
+                child: ListenableBuilder(
+                  listenable: _controller,
+                  builder: (context, _) => _buildMessages(),
+                ),
               ),
             ),
             ListenableBuilder(
@@ -567,24 +451,19 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
     final messages = _controller.messages; // newest first
     if (_controller.error != null && messages.isEmpty) {
       return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.cloud_off_rounded, size: 40, color: AppColors.danger),
-              const SizedBox(height: 12),
-              Text(
-                _controller.error!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.textMuted),
-              ),
-              TextButton.icon(
-                onPressed: _controller.start,
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text('Try Again'),
-              ),
-            ],
+        child: SingleChildScrollView(
+          child: StateMessageCard(
+            boxed: false,
+            icon: Icons.cloud_off_rounded,
+            color: AppColors.danger,
+            title: 'Unable to load messages',
+            message: _controller.error!,
+            action: ElevatedButton.icon(
+              onPressed: _controller.start,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Try Again'),
+              style: AppButtonStyles.filled(),
+            ),
           ),
         ),
       );
@@ -625,7 +504,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
     return ListView.builder(
       controller: _scrollController,
       reverse: true,
-      padding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
+      padding: const EdgeInsets.fromLTRB(8, 16, 8, 16), // inside the chat panel
       itemCount: messages.length + (showOlderRow ? 1 : 0),
       itemBuilder: (context, index) {
         if (index == messages.length) return _buildOlderRow();
@@ -654,18 +533,73 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
     );
   }
 
+  /// ⋮ menu with Block / Unblock user.
+  Widget _buildMoreMenu() {
+    final blockedByMe = _controller.blockState == ChatBlockState.blockedByMe;
+    final color = blockedByMe ? AppColors.primary : AppColors.errorRed;
+    return PopupMenuButton<String>(
+      tooltip: 'More',
+      enabled: !_controller.isChangingBlock,
+      icon: const Icon(Icons.more_vert_rounded, color: AppColors.primary),
+      color: AppColors.surface,
+      surfaceTintColor: Colors.transparent,
+      elevation: 6,
+      offset: const Offset(0, 48),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      onSelected: (_) => _toggleBlock(),
+      itemBuilder: (_) => [
+        PopupMenuItem(
+          value: 'block',
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(blockedByMe ? Icons.lock_open_rounded : Icons.block_rounded, color: color, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    blockedByMe ? 'Unblock user' : 'Block user',
+                    style: TextStyle(fontWeight: FontWeight.w700, color: color),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    blockedByMe ? 'Allow messages and calls again' : 'Stop messages and calls',
+                    style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   /// Replaces the message box while the chat is blocked.
   Widget _buildBlockedBar() {
     final blockedByMe = _controller.blockState == ChatBlockState.blockedByMe;
     final name = widget.otherUser.displayName;
-    return Container(
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border)),
-      ),
-      child: SafeArea(
-        top: false,
+    // Same floating card as the message box it replaces
+    return SafeArea(
+      top: false,
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(26),
+          boxShadow: const [BoxShadow(color: AppColors.shadow, blurRadius: 24, offset: Offset(0, 10))],
+        ),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
           child: Column(
@@ -688,16 +622,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
                 ],
               ),
               if (blockedByMe) ...[
-                const SizedBox(height: 6),
-                TextButton(
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
                   onPressed: _controller.isChangingBlock ? null : _toggleBlock,
-                  child: _controller.isChangingBlock
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Unblock', style: TextStyle(fontWeight: FontWeight.w700)),
+                  icon: _controller.isChangingBlock
+                      ? const ButtonSpinner(color: AppColors.primary)
+                      : const Icon(Icons.lock_open_rounded, size: 18),
+                  label: const Text('Unblock', style: TextStyle(fontWeight: FontWeight.w700)),
+                  style: AppButtonStyles.outlined(padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 22)),
                 ),
               ],
             ],
@@ -727,11 +659,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
     return const Padding(
       padding: EdgeInsets.symmetric(vertical: 12),
       child: Center(
-        child: SizedBox(
-          width: 22,
-          height: 22,
-          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
-        ),
+        child: ButtonSpinner(size: 22, color: AppColors.primary),
       ),
     );
   }

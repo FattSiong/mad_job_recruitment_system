@@ -68,6 +68,10 @@ class NotificationModel {
   /// An admin removed the user's community post or comment.
   bool get isCommunityNotice => type == 'community_post_removed' || type == 'community_comment_removed';
 
+  /// An admin removed something the user posted (community post / comment,
+  /// or an employer's job post): the message says it all, nothing to open.
+  bool get isModerationNotice => isCommunityNotice || type == 'job_removed';
+
   /// True when the notification targets an Employer (e.g. new application, interview response, offer response).
   bool get isEmployerEvent {
     switch (type) {

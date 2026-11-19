@@ -8,8 +8,10 @@ import '../controllers/content_report_controller.dart';
 import '../controllers/post_comments_controller.dart';
 import '../screens/report_content_screen.dart';
 import 'comment_tile.dart';
-import 'community_state_card.dart';
+import '../../../shared_widgets/state_message_card.dart';
 import '../../../shared_widgets/confirm_dialog.dart';
+import '../../../shared_widgets/text_edit_dialog.dart';
+import '../../../shared_widgets/sheet_handle.dart';
 
 /// Opens the comments of [post]. Returns the number of comments when closed,
 /// so the post card can show the new count.
@@ -106,41 +108,12 @@ class _PostCommentsSheetState extends State<PostCommentsSheet> {
 
   /// Edit dialog for one of the user's comments.
   Future<void> _edit(PostCommentModel comment) async {
-    final editController = TextEditingController(text: comment.content);
-    final newText = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Edit comment'),
-        content: TextField(
-          controller: editController,
-          autofocus: true,
-          minLines: 1,
-          maxLines: 6,
-          maxLength: PostCommentsController.maxLength,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: AppColors.surfaceAlt,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, editController.text),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
+    final newText = await showTextEditDialog(
+      context,
+      title: 'Edit comment',
+      initialText: comment.content,
+      maxLength: PostCommentsController.maxLength,
     );
-    // Not disposed here: the dialog's TextField is still on screen while it closes.
     if (newText == null || newText.trim() == comment.content.trim()) return;
     final error = await _c.edit(comment, newText);
     if (error != null && mounted) _showError(error);
@@ -166,7 +139,7 @@ class _PostCommentsSheetState extends State<PostCommentsSheet> {
         height: MediaQuery.of(context).size.height * 0.85,
         decoration: const BoxDecoration(
           color: AppColors.background,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: ListenableBuilder(
           listenable: _c,
@@ -188,14 +161,7 @@ class _PostCommentsSheetState extends State<PostCommentsSheet> {
       padding: const EdgeInsets.fromLTRB(20, 10, 8, 6),
       child: Column(
         children: [
-          Container(
-            width: 42,
-            height: 4,
-            decoration: BoxDecoration(
-              color: AppColors.border,
-              borderRadius: BorderRadius.circular(999),
-            ),
-          ),
+          const SheetHandle(),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -225,7 +191,7 @@ class _PostCommentsSheetState extends State<PostCommentsSheet> {
       return ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          CommunityStateCard(
+          StateMessageCard(
             icon: Icons.cloud_off_rounded,
             title: 'Unable to load comments',
             message: _c.error!,
@@ -243,7 +209,7 @@ class _PostCommentsSheetState extends State<PostCommentsSheet> {
       return ListView(
         padding: const EdgeInsets.all(16),
         children: const [
-          CommunityStateCard(
+          StateMessageCard(
             icon: Icons.chat_bubble_outline_rounded,
             title: 'No comments yet',
             message: 'Be the first to share your thoughts on this post.',

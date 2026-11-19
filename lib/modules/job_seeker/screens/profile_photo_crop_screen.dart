@@ -8,7 +8,10 @@ import 'package:path_provider/path_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../shared_widgets/hero_icon_button.dart';
-import '../widgets/profile/profile_sections.dart';
+import '../../../shared_widgets/hero_card.dart';
+import '../../../shared_widgets/bottom_action_bar.dart';
+import '../../../core/theme/app_button_styles.dart';
+import '../../../shared_widgets/button_spinner.dart';
 
 /// Opens the crop screen for [source]. Returns a square 512 x 512 PNG of
 /// the area inside the circle, or null if the user cancels.
@@ -207,14 +210,7 @@ class _ProfilePhotoCropScreenState extends State<ProfilePhotoCropScreen> {
 
   /// Gradient header card, like the other job seeker screens.
   Widget _buildHeader() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: AppColors.headerGradient,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Column(
+    return HeroCard(child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -227,24 +223,7 @@ class _ProfilePhotoCropScreenState extends State<ProfilePhotoCropScreen> {
                 },
               ),
               const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.account_circle_outlined, size: 16, color: Colors.white),
-                    SizedBox(width: 8),
-                    Text(
-                      'Profile Photo',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-              ),
+              const HeroPill(icon: Icons.account_circle_outlined, label: 'Profile Photo'),
             ],
           ),
           const SizedBox(height: 20),
@@ -379,42 +358,30 @@ class _ProfilePhotoCropScreenState extends State<ProfilePhotoCropScreen> {
 
   /// White bar with a soft shadow, like the other screens' bottom bars.
   Widget _buildBottomBar() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        boxShadow: [BoxShadow(color: AppColors.shadow, blurRadius: 12, offset: Offset(0, -4))],
-      ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: _saving ? null : () => Navigator.pop(context),
-                style: ProfileButtonStyles.secondary(),
-                child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: _image == null || _saving ? null : _usePhoto,
-                style: ProfileButtonStyles.primary(),
-                icon: _saving ? const SizedBox.shrink() : const Icon(Icons.check_rounded),
-                label: _saving
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Text('Use Photo', style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    return BottomActionBar(
+             child: Row(
+               children: [
+                 Expanded(
+                   child: OutlinedButton(
+                     onPressed: _saving ? null : () => Navigator.pop(context),
+                     style: AppButtonStyles.neutral(),
+                     child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold)),
+                   ),
+                 ),
+                 const SizedBox(width: 12),
+                 Expanded(
+                   child: ElevatedButton.icon(
+                     onPressed: _image == null || _saving ? null : _usePhoto,
+                     style: AppButtonStyles.filled(radius: 18),
+                     icon: _saving ? const SizedBox.shrink() : const Icon(Icons.check_rounded),
+                     label: _saving
+                         ? const ButtonSpinner(size: 20)
+                         : const Text('Use Photo', style: TextStyle(fontWeight: FontWeight.bold)),
+                   ),
+                 ),
+               ],
+             ),
+           );
   }
 }
 

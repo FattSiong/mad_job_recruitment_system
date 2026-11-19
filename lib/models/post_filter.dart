@@ -60,7 +60,7 @@ enum PostMediaFilter {
   final String label;
 }
 
-/// Filter for the My Posts tab (done on the phone: all own posts are loaded).
+/// Filter for My Posts (done on the phone: all own posts are loaded).
 enum MyPostsStatus { all, visible, drafts, removed }
 
 /// Everything that narrows down the community feed.

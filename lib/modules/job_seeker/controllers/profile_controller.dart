@@ -46,18 +46,22 @@ class ProfileController {
     }
   }
 
-  /// Full name of the logged-in job seeker (for the dashboard greeting).
+  /// Full name and photo of the logged-in job seeker (for the Home greeting).
   /// Optional decoration, so it returns null instead of throwing.
-  Future<String?> fetchFullName() async {
+  Future<({String? fullName, String? photoUrl})?> fetchGreeting() async {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return null;
       final row = await _supabase
           .from(TableConstants.jobSeeker)
-          .select('fullName')
+          .select('fullName, profilePictureURL')
           .eq('seekerID', userId)
           .maybeSingle();
-      return row?['fullName'] as String?;
+      if (row == null) return null;
+      return (
+        fullName: row['fullName'] as String?,
+        photoUrl: row['profilePictureURL'] as String?,
+      );
     } catch (e) {
       debugPrint('Error fetching name: $e');
       return null;

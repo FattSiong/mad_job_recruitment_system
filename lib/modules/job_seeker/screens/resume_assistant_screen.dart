@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/data_load_exception.dart';
@@ -13,6 +12,9 @@ import 'build_resume_screen.dart';
 import 'resume_review_result_screen.dart';
 import '../../../shared_widgets/confirm_dialog.dart';
 import '../../../shared_widgets/surface_card.dart';
+import '../../../shared_widgets/gradient_page_header.dart';
+import '../widgets/career_tools/career_tool_widgets.dart';
+import '../../../core/utils/app_date_format.dart';
 
 /// AI Resume Assistant: pick a resume (uploaded or built in the app), optionally
 /// a target job, and get AI feedback on how to improve it.
@@ -145,7 +147,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
     final confirmed = await showConfirmDialog(
       context,
       title: 'Delete review?',
-      message: 'The review from ${DateFormat('d MMM yyyy').format(item.createdAt)} will be permanently deleted.',
+      message: 'The review from ${AppDateFormat.day.format(item.createdAt)} will be permanently deleted.',
     );
     if (!confirmed) return;
 
@@ -207,45 +209,10 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
   }
 
   /// Gradient header with the title and back button.
-  Widget _buildHeader() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.primary, AppColors.primaryLight],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-          ),
-          const SizedBox(width: 8),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'AI Resume Assistant',
-                  style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold),
-                ),
-                SizedBox(height: 6),
-                Text(
-                  'Get a score and clear tips to improve your resume.',
-                  style: TextStyle(color: Colors.white70, fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildHeader() => const GradientPageHeader(
+        title: 'AI Resume Assistant',
+        subtitle: 'Get a score and clear tips to improve your resume.',
+      );
 
   // ---- Resume choice --------------------------------------------------
 
@@ -267,7 +234,7 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
 
     final builtSubtitle = s.hasBuiltResume
         ? s.builtResumeUpdatedAt != null
-            ? 'Last saved ${DateFormat('d MMM yyyy').format(s.builtResumeUpdatedAt!)}'
+            ? 'Last saved ${AppDateFormat.day.format(s.builtResumeUpdatedAt!)}'
             : 'Saved in the app'
         : 'Not built yet – tap to create one in a few steps.';
 
@@ -310,25 +277,8 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
               : null,
         ),
         if (!s.isAvailable(ResumeReviewSource.uploaded) && !s.isAvailable(ResumeReviewSource.builder))
-          Container(
-            margin: const EdgeInsets.only(top: 4),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppColors.errorRed.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.info_outline_rounded, color: AppColors.errorRed),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Upload a PDF/Word resume in your Profile or build one in the app to get feedback.',
-                    style: TextStyle(color: AppColors.errorRed, height: 1.35),
-                  ),
-                ),
-              ],
-            ),
+          const CareerToolNotice(
+            'Upload a PDF/Word resume in your Profile or build one in the app to get feedback.',
           ),
       ],
     );
@@ -419,71 +369,16 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
   // ---- Target job -----------------------------------------------------
 
   /// Optional target job box with suggested roles.
-  Widget _buildRoleCard() {
-    return SurfaceCard(
-      children: [
-        SectionTitle('Target Job (Optional)',
-          subtitle: 'Add the job you are applying for to get keywords and tips for that job.',
-        ),
-        TextField(
-          controller: _roleController,
-          enabled: !_isReviewing,
-          maxLength: 100,
-          textCapitalization: TextCapitalization.words,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) => _review(),
-          decoration: InputDecoration(
-            hintText: 'e.g. Junior Data Analyst',
-            counterText: '',
-            prefixIcon: const Icon(Icons.work_outline, color: AppColors.primary),
-            suffixIcon: _roleController.text.isEmpty
-                ? null
-                : IconButton(
-                    tooltip: 'Clear',
-                    onPressed: _isReviewing ? null : _roleController.clear,
-                    icon: const Icon(Icons.close_rounded, color: AppColors.textMuted),
-                  ),
-            filled: true,
-            fillColor: AppColors.surfaceAlt,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: AppColors.primary, width: 1.2),
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _suggestedRoles.map((role) {
-            final selected = _roleController.text.trim() == role;
-            return ChoiceChip(
-              label: Text(role),
-              selected: selected,
-              onSelected: _isReviewing ? null : (_) => _setRole(role),
-              selectedColor: AppColors.primarySoft,
-              backgroundColor: AppColors.surfaceAlt,
-              side: BorderSide(color: selected ? AppColors.primary : AppColors.border),
-              labelStyle: TextStyle(
-                color: selected ? AppColors.primary : AppColors.textDark,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              ),
-              showCheckmark: false,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
+  Widget _buildRoleCard() => TargetRoleField(
+        title: 'Target Job (Optional)',
+        subtitle: 'Add the job you are applying for to get keywords and tips for that job.',
+        controller: _roleController,
+        enabled: !_isReviewing,
+        suggestions: _suggestedRoles,
+        onSuggestionTap: _setRole,
+        onSubmitted: (_) => _review(),
+        showClear: true,
+      );
 
   // ---- What is checked ------------------------------------------------
 
@@ -548,113 +443,27 @@ class _AiResumeAssistantScreenState extends State<AiResumeAssistantScreen> {
     return SurfaceCard(
       children: [
         SectionTitle('Past Reviews', subtitle: 'Tap to view a previous report.'),
-        ..._history.map((h) {
-          final color = resumeScoreColor(h.overallScore);
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Material(
-              color: AppColors.surfaceAlt,
-              borderRadius: BorderRadius.circular(18),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(18),
-                onTap: () => _openReview(h),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 46,
-                        height: 46,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Text('${h.overallScore}',
-                            style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 15)),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              h.roleLabel,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${DateFormat('d MMM yyyy').format(h.createdAt)} · ${h.source.label}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Delete',
-                        icon: const Icon(Icons.delete_outline_rounded, color: AppColors.errorRed),
-                        onPressed: _isReviewing ? null : () => _confirmDelete(h),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        }),
+        for (final h in _history)
+          CareerToolHistoryTile(
+            score: '${h.overallScore}',
+            scoreColor: resumeScoreColor(h.overallScore),
+            title: h.roleLabel,
+            subtitle: '${AppDateFormat.day.format(h.createdAt)} · ${h.source.label}',
+            onTap: () => _openReview(h),
+            onDelete: _isReviewing ? null : () => _confirmDelete(h),
+          ),
       ],
     );
   }
 
   /// "Review My Resume" button (with a progress note while reviewing).
-  Widget _buildBottomButton() {
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (_isReviewing)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 10),
-                child: Text(
-                  'Reading your resume and preparing feedback… this can take up to a minute.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.textMuted, fontSize: 13),
-                ),
-              ),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _canReview ? _review : null,
-                icon: _isReviewing
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Icons.auto_awesome_rounded),
-                label: Text(_isReviewing ? 'Reviewing…' : 'Review My Resume'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: AppColors.disabled,
-                  disabledForegroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _buildBottomButton() => CareerToolRunBar(
+        busy: _isReviewing,
+        enabled: _canReview,
+        onPressed: _review,
+        icon: Icons.auto_awesome_rounded,
+        label: 'Review My Resume',
+        busyLabel: 'Reviewing…',
+        busyHint: 'Reading your resume and preparing feedback… this can take up to a minute.',
+      );
 }

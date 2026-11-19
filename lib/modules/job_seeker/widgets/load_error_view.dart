@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+
+import '../../../core/theme/app_button_styles.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared_widgets/state_message_card.dart';
 
 /// Shown when a list couldn't be loaded (instead of an empty-state message).
 class LoadErrorView extends StatelessWidget {
@@ -11,45 +14,17 @@ class LoadErrorView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: AppColors.dangerSoft,
-                borderRadius: BorderRadius.circular(22),
-              ),
-              child: const Icon(Icons.cloud_off_rounded, size: 34, color: AppColors.danger),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Something went wrong',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textDark),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 14, height: 1.45, color: AppColors.textMuted),
-            ),
-            const SizedBox(height: 18),
-            ElevatedButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Try Again'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              ),
-            ),
-          ],
+      child: StateMessageCard(
+        boxed: false,
+        icon: Icons.cloud_off_rounded,
+        color: AppColors.danger,
+        title: 'Something went wrong',
+        message: message,
+        action: ElevatedButton.icon(
+          onPressed: onRetry,
+          icon: const Icon(Icons.refresh_rounded),
+          label: const Text('Try Again'),
+          style: AppButtonStyles.filled(padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14)),
         ),
       ),
     );

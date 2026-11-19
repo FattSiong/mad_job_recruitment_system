@@ -3,17 +3,24 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/utils/data_load_exception.dart';
 import '../../../core/utils/salary_utils.dart';
 import '../../../models/job_model.dart';
+import '../../../core/constants/job_filter_options.dart';
 import '../../../core/constants/table_constants.dart';
 import '../../../core/utils/job_search_helper.dart';
 
-/// Search options for the Home job list. Kept together so "load more"
-/// continues with exactly the same search the first page used.
+/// A job search: keyword, location and filters. Kept together so "load
+/// more" continues with exactly the same search the first page used.
+/// The filters hold [JobFilterOptions] values; null or the "any" value
+/// means no filter.
 class JobSearchFilters {
   final String query;
   final String location;
   final String? jobType;
   final String? datePosted;
   final String? salary;
+  final String? workplaceType;
+
+  /// Search radius in km. Only used by the Nearby Jobs map.
+  final double? radiusKm;
 
   const JobSearchFilters({
     this.query = '',
@@ -21,7 +28,31 @@ class JobSearchFilters {
     this.jobType,
     this.datePosted,
     this.salary,
+    this.workplaceType,
+    this.radiusKm,
   });
+
+  JobSearchFilters copyWith({String? location, double? radiusKm}) => JobSearchFilters(
+        query: query,
+        location: location ?? this.location,
+        jobType: jobType,
+        datePosted: datePosted,
+        salary: salary,
+        workplaceType: workplaceType,
+        radiusKm: radiusKm ?? this.radiusKm,
+      );
+
+  bool get hasJobType => JobSearchHelper.isJobTypeFilter(jobType);
+  bool get hasDatePosted => datePosted != null && datePosted != JobFilterOptions.anyDate;
+  bool get hasSalary => salary != null && salary != JobFilterOptions.anySalary;
+  bool get hasWorkplaceType =>
+      workplaceType != null && workplaceType != JobFilterOptions.anyWorkplace;
+
+  /// How many of job type, salary, workplace type and date posted are set.
+  int get filterCount => [hasJobType, hasSalary, hasWorkplaceType, hasDatePosted].where((on) => on).length;
+
+  /// True when nothing narrows the search (every active job matches).
+  bool get isEmpty => query.trim().isEmpty && location.trim().isEmpty && filterCount == 0;
 }
 
 /// One page of results.
@@ -87,8 +118,11 @@ class JobDiscoveryController {
         if (location.isNotEmpty) {
           query = query.ilike('locationName', '%${sanitizeKeyword(location)}%');
         }
-        if (JobSearchHelper.isJobTypeFilter(filters.jobType)) {
+        if (filters.hasJobType) {
           query = query.eq('jobType', filters.jobType!);
+        }
+        if (filters.hasWorkplaceType) {
+          query = query.eq('workplaceType', filters.workplaceType!);
         }
         if (fromDate != null) {
           query = query.gte('createdAt', fromDate.toIso8601String());

@@ -4,6 +4,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/snackbar_helper.dart';
 import '../../../core/utils/storage_url_helper.dart';
 import '../chat_formatters.dart';
 
@@ -101,9 +102,7 @@ class _VoiceMessagePlayerState extends State<VoiceMessagePlayer> {
     } catch (e) {
       debugPrint('Voice message playback failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Unable to play this voice message.')),
-        );
+        SnackBarHelper.showError(context, 'Unable to play this voice message.');
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

@@ -8,7 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/table_constants.dart';
 import '../../../services/auth_service.dart';
 import '../../../shared_widgets/login_screen.dart';
-import 'admin_job_details.dart';
+import 'admin_job_moderation_screen.dart';
 import 'company_verification_screen.dart';
 
 // --- STYLING CONSTANTS ---

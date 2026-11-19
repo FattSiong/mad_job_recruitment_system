@@ -6,6 +6,7 @@ import '../../../core/utils/data_load_exception.dart';
 import '../../../models/advisor_conversation_model.dart';
 import '../../../models/advisor_message_model.dart';
 import '../../../core/utils/session_helper.dart';
+import '../../../core/utils/safe_notifier.dart';
 
 /// Result of one successful question -> answer round trip.
 class AdvisorReplyResult {
@@ -33,7 +34,7 @@ class AdvisorException implements Exception {
 
 /// AI Career Advisor: the open conversation (state for the chat screen)
 /// plus loading, sending and deleting conversations.
-class CareerAdvisorController extends ChangeNotifier {
+class CareerAdvisorController extends ChangeNotifier with SafeNotifier {
   final _supabase = Supabase.instance.client;
   String get _currentSeekerID => SessionHelper.requireUserId();
 
@@ -48,7 +49,6 @@ class CareerAdvisorController extends ChangeNotifier {
   String? _conversationTitle;
   bool _isLoadingHistory = false;
   bool _isSending = false;
-  bool _disposed = false;
 
   /// Increases on every conversation switch, so a slow, older load can't
   /// show its messages under the conversation the user opened afterwards.
@@ -64,13 +64,13 @@ class CareerAdvisorController extends ChangeNotifier {
   Future<String?> openConversation(String conversationID, {String? title}) async {
     // While a reply is on its way it belongs to the open conversation: switching
     // now would put that reply (and the next question) in the wrong chat.
-    if (_isSending) return 'Please wait for the advisor to reply first.';
+    if (_isSending) return 'Please wait for Career Buddy to reply first.';
     final request = ++_historyRequest;
     _isLoadingHistory = true;
     _conversationID = conversationID;
     _conversationTitle = title;
     _messages.clear();
-    _notify();
+    notifySafely();
 
     try {
       final messages = await fetchMessages(conversationID);
@@ -83,7 +83,7 @@ class CareerAdvisorController extends ChangeNotifier {
     } finally {
       if (request == _historyRequest) {
         _isLoadingHistory = false;
-        _notify();
+        notifySafely();
       }
     }
   }
@@ -96,7 +96,7 @@ class CareerAdvisorController extends ChangeNotifier {
     _conversationID = null;
     _conversationTitle = null;
     _messages.clear();
-    _notify();
+    notifySafely();
   }
 
   /// Sends [text] in the open conversation (or starts one).
@@ -107,13 +107,13 @@ class CareerAdvisorController extends ChangeNotifier {
     if (_isSending || _isLoadingHistory) return;
     final question = text.trim();
     if (question.isEmpty) {
-      throw AdvisorException('empty_message', 'Please enter a question for the advisor.');
+      throw AdvisorException('empty_message', 'Please enter a question for Career Buddy.');
     }
 
     final pending = AdvisorMessageModel.pending(question);
     _messages.add(pending);
     _isSending = true;
-    _notify();
+    notifySafely();
 
     try {
       final result = await sendMessage(message: question, conversationID: _conversationID);
@@ -132,19 +132,8 @@ class CareerAdvisorController extends ChangeNotifier {
       rethrow;
     } finally {
       _isSending = false;
-      _notify();
+      notifySafely();
     }
-  }
-
-  /// notifyListeners, unless the controller was already disposed.
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
   }
 
   // ---------------------------------------------------------------------
@@ -163,7 +152,7 @@ class CareerAdvisorController extends ChangeNotifier {
     if (text.isEmpty) {
       throw AdvisorException(
         'empty_message',
-        'Please enter a question for the advisor.',
+        'Please enter a question for Career Buddy.',
       );
     }
     if (text.length > maxMessageLength) {
@@ -210,7 +199,7 @@ class CareerAdvisorController extends ChangeNotifier {
   }
 
   static const String _unavailableMessage =
-      'The AI Advisor is currently unavailable. Please try again later.';
+      'Career Buddy is currently unavailable. Please try again later.';
 
   /// Past conversations, newest first. Throws [DataLoadException].
   Future<List<AdvisorConversationModel>> fetchConversations() async {

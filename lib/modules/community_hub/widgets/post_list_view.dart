@@ -8,10 +8,11 @@ import '../controllers/content_report_controller.dart';
 import '../controllers/post_list_controller.dart';
 import '../screens/post_editor_screen.dart';
 import '../screens/report_content_screen.dart';
-import 'community_state_card.dart';
+import '../../../shared_widgets/state_message_card.dart';
 import 'post_card.dart';
 import 'post_comments_sheet.dart';
 import '../../../shared_widgets/confirm_dialog.dart';
+import '../../../shared_widgets/button_spinner.dart';
 
 /// Scrollable list of posts for a [PostListController], with pull to refresh,
 /// "load more" for the feed, and all post actions (like, save, comments,
@@ -146,7 +147,7 @@ class PostListView extends StatelessWidget {
 
         final List<Widget> top = [...header];
         if (controller.error != null && controller.isEmpty) {
-          top.add(CommunityStateCard(
+          top.add(StateMessageCard(
             icon: Icons.cloud_off_rounded,
             title: 'Unable to load posts',
             message: controller.error!,
@@ -186,11 +187,7 @@ class PostListView extends StatelessWidget {
                   return const Padding(
                     padding: EdgeInsets.symmetric(vertical: 16),
                     child: Center(
-                      child: SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
-                      ),
+                      child: ButtonSpinner(size: 24, color: AppColors.primary),
                     ),
                   );
                 }

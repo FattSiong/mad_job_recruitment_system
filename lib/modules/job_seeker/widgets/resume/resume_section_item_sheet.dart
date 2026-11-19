@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../models/resume_model.dart';
 import '../profile/profile_sheet_helpers.dart';
+import '../../../../shared_widgets/sheet_handle.dart';
 
 /// Field labels for each optional section.
 class _Fields {
@@ -121,16 +122,7 @@ class _SectionItemSheetState extends State<_SectionItemSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
+              const SheetHandle(),
               const SizedBox(height: 20),
               Text(
                 '${widget.initial == null ? 'Add' : 'Edit'} ${widget.type.label}',

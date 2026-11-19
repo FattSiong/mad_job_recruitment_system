@@ -12,6 +12,12 @@ import '../controllers/application_controller.dart';
 import '../widgets/load_error_view.dart';
 import '../../../shared_widgets/hero_icon_button.dart';
 import '../../../shared_widgets/surface_card.dart';
+import '../../../shared_widgets/hero_card.dart';
+import '../../../shared_widgets/bottom_action_bar.dart';
+import '../../../core/theme/app_button_styles.dart';
+import '../../../core/theme/app_input_decoration.dart';
+import '../../../shared_widgets/button_spinner.dart';
+import '../../../shared_widgets/plain_app_bar.dart';
 
 /// Applying for a job: answer the employer's questions, choose a resume,
 /// then submit.
@@ -115,29 +121,12 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
 
   /// Style of the filled navy buttons (Next, Submit).
   ButtonStyle _primaryButtonStyle() {
-    return ElevatedButton.styleFrom(
-      backgroundColor: AppColors.primary,
-      foregroundColor: Colors.white,
-      elevation: 0,
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 18),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-      ),
-    );
+    return AppButtonStyles.filled(radius: 18);
   }
 
   /// Style of the white outlined buttons (Back, file pickers).
   ButtonStyle _secondaryButtonStyle() {
-    return OutlinedButton.styleFrom(
-      foregroundColor: AppColors.textDark,
-      backgroundColor: Colors.white,
-      elevation: 0,
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
-      side: const BorderSide(color: AppColors.border),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-    );
+    return AppButtonStyles.neutral();
   }
 
   /// One numbered step at the top (done, current or still to come).
@@ -223,23 +212,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
               TextField(
                 onChanged: (val) => _appController.setTextAnswer(questionId, val),
                 maxLines: 4,
-                decoration: InputDecoration(
-                  hintText: 'Enter your answer',
-                  filled: true,
-                  fillColor: AppColors.surfaceAlt,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-                  ),
-                ),
+                decoration: filledInputDecoration(hint: 'Enter your answer'),
               )
             else
               Row(
@@ -531,12 +504,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     if (loadError != null) {
       return Scaffold(
         backgroundColor: AppColors.background,
-        appBar: AppBar(
-          backgroundColor: AppColors.background,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-          iconTheme: const IconThemeData(color: AppColors.primary),
-        ),
+        appBar: const PlainAppBar(),
         body: LoadErrorView(
           message: loadError,
           onRetry: () => _appController.load(widget.job.jobID!),
@@ -574,18 +542,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                       ),
                       child: Column(
                         children: [
-                          Container(
-                            width: double.infinity,
-                            padding: EdgeInsets.all(headerPadding),
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [AppColors.primary, AppColors.primaryLight],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              borderRadius: BorderRadius.circular(28),
-                            ),
-                            child: Column(
+                          HeroCard(padding: EdgeInsets.all(headerPadding), child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
@@ -615,35 +572,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
                                 const SizedBox(height: 12),
                                 Align(
                                   alignment: Alignment.centerLeft,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 8,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withValues(alpha: 0.14),
-                                      borderRadius: BorderRadius.circular(999),
-                                    ),
-                                    child: const Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.send_outlined,
-                                          size: 16,
-                                          color: Colors.white,
-                                        ),
-                                        SizedBox(width: 8),
-                                        Text(
-                                          'Job Application',
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
+                                  child: const HeroPill(icon: Icons.send_outlined, label: 'Job Application'),
                                 ),
                                 SizedBox(height: heroGap),
                                 Text(
@@ -741,92 +670,71 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
           },
         ),
       ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 12,
-              offset: const Offset(0, -4),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          top: false,
-          child: Row(
-            children: [
-              if (hasQuestions && _currentPage > 0) ...[
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _isSubmitting
-                        ? null
-                        : () {
-                            _pageController.previousPage(
-                              duration: const Duration(milliseconds: 300),
-                              curve: Curves.ease,
-                            );
-                          },
-                    style: _secondaryButtonStyle(),
-                    child: const Text(
-                      'Back',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-              ],
-              Expanded(
-                flex: hasQuestions && _currentPage > 0 ? 2 : 1,
-                child: ElevatedButton(
-                  onPressed: _isSubmitting
-                      ? null
-                      : () {
-                          if (hasQuestions && _currentPage == 0) {
-                            if (!_appController.questionsAnswered) {
-                              SnackBarHelper.showStyled(
-                                context,
-                                message:
-                                    'Please answer all pre-screening questions before continuing.',
-                                icon: Icons.info_outline_rounded,
-                                accentColor: AppColors.coral,
-                              );
-                              return;
-                            }
-                            _pageController.nextPage(
-                              duration: const Duration(milliseconds: 300),
-                              curve: Curves.ease,
-                            );
-                          } else {
-                            _submitApplication();
-                          }
-                        },
-                  style: _primaryButtonStyle(),
-                  child: _isSubmitting
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : Text(
-                          (hasQuestions && _currentPage == 0)
-                              ? 'Continue'
-                              : 'Submit Application',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      bottomNavigationBar: BottomActionBar(
+                             child: Row(
+                               children: [
+                                 if (hasQuestions && _currentPage > 0) ...[
+                                   Expanded(
+                                     child: OutlinedButton(
+                                       onPressed: _isSubmitting
+                                           ? null
+                                           : () {
+                                               _pageController.previousPage(
+                                                 duration: const Duration(milliseconds: 300),
+                                                 curve: Curves.ease,
+                                               );
+                                             },
+                                       style: _secondaryButtonStyle(),
+                                       child: const Text(
+                                         'Back',
+                                         style: TextStyle(fontWeight: FontWeight.bold),
+                                       ),
+                                     ),
+                                   ),
+                                   const SizedBox(width: 12),
+                                 ],
+                                 Expanded(
+                                   flex: hasQuestions && _currentPage > 0 ? 2 : 1,
+                                   child: ElevatedButton(
+                                     onPressed: _isSubmitting
+                                         ? null
+                                         : () {
+                                             if (hasQuestions && _currentPage == 0) {
+                                               if (!_appController.questionsAnswered) {
+                                                 SnackBarHelper.showStyled(
+                                                   context,
+                                                   message:
+                                                       'Please answer all pre-screening questions before continuing.',
+                                                   icon: Icons.info_outline_rounded,
+                                                   accentColor: AppColors.coral,
+                                                 );
+                                                 return;
+                                               }
+                                               _pageController.nextPage(
+                                                 duration: const Duration(milliseconds: 300),
+                                                 curve: Curves.ease,
+                                               );
+                                             } else {
+                                               _submitApplication();
+                                             }
+                                           },
+                                     style: _primaryButtonStyle(),
+                                     child: _isSubmitting
+                                         ? const ButtonSpinner(size: 20)
+                                         : Text(
+                                             (hasQuestions && _currentPage == 0)
+                                                 ? 'Continue'
+                                                 : 'Submit Application',
+                                             style: const TextStyle(
+                                               fontSize: 16,
+                                               fontWeight: FontWeight.bold,
+                                             ),
+                                           ),
+                                   ),
+                                 ),
+                               ],
+                             ),
+                           ),
     );
   }
 }
