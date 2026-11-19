@@ -8,6 +8,7 @@ import '../../../../core/utils/data_load_exception.dart';
 import '../../../../shared_widgets/button_spinner.dart';
 import '../../controllers/current_city_controller.dart';
 import '../../controllers/job_discovery_controller.dart';
+import '../../../../shared_widgets/sheet_handle.dart';
 
 /// Full-screen sheet for a job search: job title / keyword, location
 /// (typed, a quick pick, or the phone's location) and the job type, salary,
@@ -223,14 +224,7 @@ class _JobSearchSheetState extends State<_JobSearchSheet> {
       padding: const EdgeInsets.fromLTRB(8, 10, 12, 4),
       child: Column(
         children: [
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
+          const SheetHandle(),
           const SizedBox(height: 6),
           Row(
             children: [

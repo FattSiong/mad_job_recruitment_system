@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_button_styles.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared_widgets/sheet_handle.dart';
 import '../../../core/utils/data_load_exception.dart';
 import '../../../core/utils/file_preview_helper.dart';
 import '../../../models/message_model.dart';
@@ -20,7 +21,7 @@ Future<void> showSharedAttachmentsSheet(
     isScrollControlled: true,
     backgroundColor: AppColors.background,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
     builder: (_) => _SharedAttachmentsSheet(load: load),
   );
@@ -48,16 +49,7 @@ class _SharedAttachmentsSheetState extends State<_SharedAttachmentsSheet> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Container(
-                width: 42,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.border,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-            ),
+            const SheetHandle(),
             const SizedBox(height: 18),
             const Text(
               'Shared photos & files',

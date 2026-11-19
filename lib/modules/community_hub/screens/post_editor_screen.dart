@@ -9,6 +9,7 @@ import '../controllers/post_editor_controller.dart';
 import '../widgets/community_chips.dart';
 import '../../../shared_widgets/confirm_dialog.dart';
 import '../../../shared_widgets/button_spinner.dart';
+import '../../../shared_widgets/plain_app_bar.dart';
 
 /// Create a post, or edit one (pass [post]). Pops with true when saved.
 class PostEditorScreen extends StatefulWidget {
@@ -97,20 +98,12 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
         },
         child: Scaffold(
           backgroundColor: AppColors.background,
-          appBar: AppBar(
-            backgroundColor: AppColors.background,
-            surfaceTintColor: Colors.transparent,
-            elevation: 0,
-            leading: IconButton(
-              icon: const Icon(Icons.close_rounded, color: AppColors.primary),
-              onPressed: () => Navigator.maybePop(context),
-            ),
-            title: Text(
-              _controller.isEditingDraft
-                  ? 'Edit Draft'
-                  : (_controller.isEditing ? 'Edit Post' : 'Create Post'),
-              style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textDark),
-            ),
+          appBar: PlainAppBar(
+            backIcon: Icons.close_rounded,
+            backTooltip: 'Close',
+            title: _controller.isEditingDraft
+                ? 'Edit Draft'
+                : (_controller.isEditing ? 'Edit Post' : 'Create Post'),
             actions: [
               if (_controller.canBeDraft)
                 TextButton(

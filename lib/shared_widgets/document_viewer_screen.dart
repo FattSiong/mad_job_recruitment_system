@@ -11,6 +11,7 @@ import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import '../core/theme/app_colors.dart';
 import '../core/utils/snackbar_helper.dart';
 import '../core/utils/storage_url_helper.dart';
+import 'plain_app_bar.dart';
 
 enum DocumentKind { pdf, image, other }
 
@@ -135,42 +136,19 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        titleSpacing: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.primary),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.title ?? 'Document',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textDark),
-            ),
-            Text(
-              _fileName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
-            ),
-          ],
-        ),
+      appBar: PlainAppBar(
+        title: widget.title ?? 'Document',
+        subtitle: _fileName,
         actions: [
           IconButton(
             tooltip: 'Share or save',
             onPressed: ready ? _share : null,
-            icon: const Icon(Icons.ios_share_rounded, color: AppColors.primary),
+            icon: Icon(Icons.ios_share_rounded, color: ready ? AppColors.primary : AppColors.iconDisabled),
           ),
           IconButton(
             tooltip: 'Open in another app',
             onPressed: ready ? _openExternally : null,
-            icon: const Icon(Icons.open_in_new_rounded, color: AppColors.primary),
+            icon: Icon(Icons.open_in_new_rounded, color: ready ? AppColors.primary : AppColors.iconDisabled),
           ),
           const SizedBox(width: 4),
         ],

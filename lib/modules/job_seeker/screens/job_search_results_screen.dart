@@ -6,6 +6,7 @@ import '../controllers/job_discovery_controller.dart';
 import '../controllers/job_list_controller.dart';
 import '../widgets/dashboard/job_search_sheet.dart';
 import '../widgets/job_list_view.dart';
+import '../../../shared_widgets/plain_app_bar.dart';
 
 /// Jobs matching a search from Home. Tapping the search summary reopens
 /// the search to change it.
@@ -37,20 +38,7 @@ class _JobSearchResultsScreenState extends State<JobSearchResultsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          tooltip: 'Back',
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.primary),
-          onPressed: () => Navigator.maybePop(context),
-        ),
-        title: const Text(
-          'Search Results',
-          style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.textDark),
-        ),
-      ),
+      appBar: const PlainAppBar(title: 'Search Results'),
       body: SafeArea(
         top: false,
         child: JobListView(

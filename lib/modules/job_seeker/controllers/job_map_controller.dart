@@ -22,8 +22,8 @@ class StartLocation {
   const StartLocation(this.position, [this.issue]);
 }
 
-/// State of the "Discover Nearby Jobs" map: filters, results, the selected
-/// job, and whether the user has moved away from the searched area.
+/// State of the Nearby Jobs map: the search, its results grouped by pin,
+/// the opened pin, and whether the user has moved away from the searched area.
 class JobMapController extends ChangeNotifier with SafeNotifier {
   final LocationController _locations = LocationController();
 
@@ -163,17 +163,19 @@ class JobMapController extends ChangeNotifier with SafeNotifier {
   Future<LatLng?> findPlace(String query) async {
     final text = query.trim();
     if (text.isEmpty) return null;
-    try {
-      // Bias towards Malaysia for short names like "Bangsar".
-      final withCountry = text.toLowerCase().contains('malaysia') ? text : '$text, Malaysia';
-      var results = await locationFromAddress(withCountry);
-      if (results.isEmpty) results = await locationFromAddress(text);
-      if (results.isEmpty) return null;
-      return LatLng(results.first.latitude, results.first.longitude);
-    } catch (e) {
-      debugPrint('Place search failed: $e');
-      return null;
+    // Bias towards Malaysia for short names like "Bangsar", then try the
+    // text as typed. The geocoder throws (not returns empty) when nothing
+    // matches, so each try is caught on its own.
+    final tries = {if (!text.toLowerCase().contains('malaysia')) '$text, Malaysia', text};
+    for (final address in tries) {
+      try {
+        final results = await locationFromAddress(address);
+        if (results.isNotEmpty) return LatLng(results.first.latitude, results.first.longitude);
+      } catch (e) {
+        debugPrint('Place search failed for "$address": $e');
+      }
     }
+    return null;
   }
 
   // ---------------------------------------------------------------------

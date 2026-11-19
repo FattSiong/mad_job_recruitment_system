@@ -11,6 +11,7 @@ import '../controllers/resume_builder_controller.dart';
 import '../widgets/pdf_preview_frame.dart';
 import '../../../core/theme/app_button_styles.dart';
 import '../../../shared_widgets/button_spinner.dart';
+import '../../../shared_widgets/plain_app_bar.dart';
 
 /// PDF preview of the built resume: share, download, open, and optionally
 /// use it as the profile resume for job applications.
@@ -159,41 +160,25 @@ class _ResumePreviewScreenState extends State<ResumePreviewScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        titleSpacing: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.primary),
-          tooltip: 'Back to editing',
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Resume Preview',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textDark),
-            ),
-            Text('Go back to make changes', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
-          ],
-        ),
+      appBar: PlainAppBar(
+        title: 'Resume Preview',
+        subtitle: 'Go back to make changes',
+        backTooltip: 'Back to editing',
         actions: [
           IconButton(
             tooltip: 'Download',
             onPressed: ready ? _download : null,
-            icon: const Icon(Icons.download_rounded, color: AppColors.primary),
+            icon: Icon(Icons.download_rounded, color: ready ? AppColors.primary : AppColors.iconDisabled),
           ),
           IconButton(
             tooltip: 'Share',
             onPressed: ready ? _share : null,
-            icon: const Icon(Icons.ios_share_rounded, color: AppColors.primary),
+            icon: Icon(Icons.ios_share_rounded, color: ready ? AppColors.primary : AppColors.iconDisabled),
           ),
           IconButton(
             tooltip: 'Open in another app',
             onPressed: ready ? _openExternally : null,
-            icon: const Icon(Icons.open_in_new_rounded, color: AppColors.primary),
+            icon: Icon(Icons.open_in_new_rounded, color: ready ? AppColors.primary : AppColors.iconDisabled),
           ),
           const SizedBox(width: 4),
         ],

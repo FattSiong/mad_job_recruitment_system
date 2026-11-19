@@ -11,6 +11,7 @@ import 'comment_tile.dart';
 import '../../../shared_widgets/state_message_card.dart';
 import '../../../shared_widgets/confirm_dialog.dart';
 import '../../../shared_widgets/text_edit_dialog.dart';
+import '../../../shared_widgets/sheet_handle.dart';
 
 /// Opens the comments of [post]. Returns the number of comments when closed,
 /// so the post card can show the new count.
@@ -138,7 +139,7 @@ class _PostCommentsSheetState extends State<PostCommentsSheet> {
         height: MediaQuery.of(context).size.height * 0.85,
         decoration: const BoxDecoration(
           color: AppColors.background,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: ListenableBuilder(
           listenable: _c,
@@ -160,14 +161,7 @@ class _PostCommentsSheetState extends State<PostCommentsSheet> {
       padding: const EdgeInsets.fromLTRB(20, 10, 8, 6),
       child: Column(
         children: [
-          Container(
-            width: 42,
-            height: 4,
-            decoration: BoxDecoration(
-              color: AppColors.border,
-              borderRadius: BorderRadius.circular(999),
-            ),
-          ),
+          const SheetHandle(),
           const SizedBox(height: 8),
           Row(
             children: [

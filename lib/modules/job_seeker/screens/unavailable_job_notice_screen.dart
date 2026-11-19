@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_button_styles.dart';
+import '../../../shared_widgets/plain_app_bar.dart';
 
 /// Shown when an applied job has been deleted or made inactive.
 class UnavailableJobNoticeScreen extends StatelessWidget {
@@ -33,12 +34,7 @@ class UnavailableJobNoticeScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Job Details'),
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.textDark,
-        elevation: 0,
-      ),
+      appBar: const PlainAppBar(title: 'Job Details'),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),

@@ -7,8 +7,8 @@ import '../../../models/advisor_message_model.dart';
 import '../controllers/career_advisor_controller.dart';
 import '../widgets/career_advisor/advisor_chat_widgets.dart';
 import '../../../shared_widgets/button_spinner.dart';
-import '../../../shared_widgets/app_bar_action_button.dart';
 import '../../../shared_widgets/chat_surface.dart';
+import '../../../shared_widgets/plain_app_bar.dart';
 
 /// AI Career Advisor chat (Use Case 4.58: Chat with AI Career Advisor).
 class AiCareerAdvisorScreen extends StatefulWidget {
@@ -199,17 +199,8 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
 
   /// App bar with the conversation title, history and new chat buttons.
   PreferredSizeWidget _buildAppBar() {
-    return AppBar(
-      backgroundColor: AppColors.background,
-      surfaceTintColor: Colors.transparent,
-      elevation: 0,
-      scrolledUnderElevation: 0,
-      titleSpacing: 0,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_rounded, color: AppColors.primary),
-        onPressed: () => Navigator.pop(context),
-      ),
-      title: Row(
+    return PlainAppBar(
+      titleWidget: Row(
         children: [
           Container(
             width: 44,
@@ -254,17 +245,17 @@ class _AiCareerAdvisorScreenState extends State<AiCareerAdvisorScreen> {
         ],
       ),
       actions: [
-        AppBarActionButton(
-          icon: Icons.history_rounded,
+        IconButton(
           tooltip: 'Past conversations',
           onPressed: _isSending ? null : _showHistorySheet,
+          icon: Icon(Icons.history_rounded, color: _isSending ? AppColors.iconDisabled : AppColors.primary),
         ),
-        AppBarActionButton(
-          icon: Icons.add_comment_outlined,
+        IconButton(
           tooltip: 'New conversation',
           onPressed: _isSending ? null : _startNewConversation,
+          icon: Icon(Icons.add_comment_outlined, color: _isSending ? AppColors.iconDisabled : AppColors.primary),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 4),
       ],
     );
   }

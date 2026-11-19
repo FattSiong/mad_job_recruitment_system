@@ -317,7 +317,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onEdit: editing && !saving ? _changePhoto : null,
                 ),
                 onViewPublic: editing ? null : _openPublicProfile,
-                onShowQr: editing ? null : () => showProfileQrDialog(context, profile.seekerID),
+                onShowQr: editing
+                    ? null
+                    : () => showProfileQrDialog(context, profile.seekerID, name: profile.fullName),
               ),
               if (!editing) ...[
                 const SizedBox(height: 16),

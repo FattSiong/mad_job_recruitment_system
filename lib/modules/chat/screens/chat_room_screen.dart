@@ -24,6 +24,7 @@ import '../../../shared_widgets/button_spinner.dart';
 import '../../../core/theme/app_button_styles.dart';
 import '../../../shared_widgets/chat_surface.dart';
 import '../../../shared_widgets/state_message_card.dart';
+import '../../../shared_widgets/plain_app_bar.dart';
 
 /// One conversation.
 class ChatRoomScreen extends StatefulWidget {
@@ -350,18 +351,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
       },
       child: Scaffold(
         backgroundColor: AppColors.background,
-        appBar: AppBar(
-          backgroundColor: AppColors.background,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          titleSpacing: 0,
-          leading: IconButton(
-            tooltip: 'Back',
-            icon: const Icon(Icons.arrow_back_rounded, color: AppColors.primary),
-            onPressed: () => Navigator.maybePop(context), // PopScope asks about unsent messages
-          ),
-          title: Row(
+        appBar: PlainAppBar(
+          // Back uses maybePop: PopScope asks about unsent messages.
+          titleWidget: Row(
             children: [
               UserAvatar(user: widget.otherUser, size: 42),
               const SizedBox(width: 12),

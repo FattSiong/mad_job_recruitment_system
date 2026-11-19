@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_input_decoration.dart';
 import '../../../../core/utils/app_date_format.dart';
+import '../../../../shared_widgets/sheet_handle.dart';
 
 // Shared bits for the profile bottom sheets and record cards.
 
@@ -108,16 +109,7 @@ Future<T?> showProfileFormSheet<T>(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
+                  const SheetHandle(),
                   const SizedBox(height: 20),
                   Text(
                     title,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
+import 'sheet_handle.dart';
 
 /// One choice in [showActionSheet].
 class SheetAction<T> {
@@ -35,7 +36,8 @@ Future<T?> showActionSheet<T>(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
+            const SheetHandle(),
             if (title != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),

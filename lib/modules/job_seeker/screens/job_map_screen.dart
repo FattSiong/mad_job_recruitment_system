@@ -17,6 +17,7 @@ import '../widgets/dashboard/job_search_sheet.dart';
 import '../widgets/load_error_view.dart';
 import '../widgets/map/nearby_job_card.dart';
 import 'job_details_screen.dart';
+import '../../../shared_widgets/sheet_handle.dart';
 
 /// Nearby Jobs: a full-screen map of jobs around a point, with a search
 /// pill on top (opens the same search as Home, plus distance) and a
@@ -644,14 +645,7 @@ class _JobMapScreenState extends State<JobMapScreen> {
       child: Column(
         children: [
           const SizedBox(height: 10),
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
+          const SheetHandle(),
           const SizedBox(height: 14),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),

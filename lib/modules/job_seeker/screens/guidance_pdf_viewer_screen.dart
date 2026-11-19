@@ -8,7 +8,7 @@ import '../../../core/utils/pdf_file_helper.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../controllers/guidance_report_controller.dart';
 import '../widgets/pdf_preview_frame.dart';
-import '../../../shared_widgets/app_bar_action_button.dart';
+import '../../../shared_widgets/plain_app_bar.dart';
 
 /// Shows a generated Guidance Report PDF inside the app, with Share and Open options.
 class GuidancePdfViewerScreen extends StatefulWidget {
@@ -83,32 +83,21 @@ class _GuidancePdfViewerScreenState extends State<GuidancePdfViewerScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        titleSpacing: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.primary),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textDark),
-            ),
-            const Text('PDF preview', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
-          ],
-        ),
+      appBar: PlainAppBar(
+        title: widget.title,
+        subtitle: 'PDF preview',
         actions: [
-          AppBarActionButton(icon: Icons.ios_share_rounded, tooltip: 'Share or save', onPressed: ready ? _share : null),
-          AppBarActionButton(icon: Icons.open_in_new_rounded, tooltip: 'Open in another app', onPressed: ready ? _openExternally : null),
-          const SizedBox(width: 8),
+          IconButton(
+            tooltip: 'Share or save',
+            onPressed: ready ? _share : null,
+            icon: Icon(Icons.ios_share_rounded, color: ready ? AppColors.primary : AppColors.iconDisabled),
+          ),
+          IconButton(
+            tooltip: 'Open in another app',
+            onPressed: ready ? _openExternally : null,
+            icon: Icon(Icons.open_in_new_rounded, color: ready ? AppColors.primary : AppColors.iconDisabled),
+          ),
+          const SizedBox(width: 4),
         ],
       ),
       body: PdfPreviewFrame(

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/theme/admin_colors.dart';
+import '../../../core/utils/app_date_format.dart';
 import '../../../models/job_moderation_item_model.dart';
 import '../../community_hub/community_formatters.dart';
 import 'moderation_parts.dart';
@@ -135,7 +135,7 @@ class JobModerationCard extends StatelessWidget {
         Icons.schedule_rounded,
         [
           if (job.createdAt != null) 'Posted ${CommunityFormatters.relative(job.createdAt!.toLocal())}',
-          if (job.expiresAt != null) 'closes ${DateFormat('d MMM yyyy').format(job.expiresAt!.toLocal())}',
+          if (job.expiresAt != null) 'closes ${AppDateFormat.day.format(job.expiresAt!.toLocal())}',
           '${job.vacancies} ${job.vacancies == 1 ? 'vacancy' : 'vacancies'}',
         ].join(' · '),
       ),

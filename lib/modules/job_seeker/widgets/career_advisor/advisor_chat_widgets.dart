@@ -10,6 +10,7 @@ import '../../../../models/advisor_message_model.dart';
 import '../../../../shared_widgets/button_spinner.dart';
 import '../../../../shared_widgets/confirm_dialog.dart';
 import '../../controllers/career_advisor_controller.dart';
+import '../../../../shared_widgets/sheet_handle.dart';
 
 // Pieces of the AI Career Advisor chat screen.
 
@@ -203,16 +204,7 @@ class _ConversationHistorySheetState extends State<ConversationHistorySheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
+              const SheetHandle(),
               const SizedBox(height: 20),
               const Text(
                 'Past Conversations',

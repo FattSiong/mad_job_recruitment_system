@@ -7,6 +7,7 @@ import '../controllers/post_list_controller.dart';
 import '../widgets/my_posts_summary.dart';
 import '../widgets/post_list_view.dart';
 import 'post_editor_screen.dart';
+import '../../../shared_widgets/plain_app_bar.dart';
 
 /// The current user's own posts (opened from their avatar in Community Hub):
 /// counts by status, drafts, and posts removed by an admin.
@@ -42,19 +43,7 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.primary),
-          onPressed: () => Navigator.maybePop(context),
-        ),
-        title: const Text(
-          'My Posts',
-          style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.textDark),
-        ),
-      ),
+      appBar: const PlainAppBar(title: 'My Posts'),
       floatingActionButton: FloatingActionButton(
         heroTag: 'my-posts-new-post',
         tooltip: 'New post',

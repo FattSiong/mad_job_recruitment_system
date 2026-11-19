@@ -1,3 +1,4 @@
+import '../core/utils/app_date_format.dart';
 import 'job_applicant_model.dart';
 import 'job_model.dart';
 
@@ -69,9 +70,11 @@ class AppliedJob {
 
   String get companyName => job?.companyName ?? 'Company';
 
-  /// "2026-11-18" (or "Unknown date").
-  String get appliedDateText =>
-      application.appliedAt?.toLocal().toIso8601String().substring(0, 10) ?? 'Unknown date';
+  /// "18 Nov 2026" (or "Unknown date").
+  String get appliedDateText {
+    final appliedAt = application.appliedAt;
+    return appliedAt == null ? 'Unknown date' : AppDateFormat.day.format(appliedAt.toLocal());
+  }
 
   /// True when there are offer details worth showing.
   bool get hasOfferDetails {

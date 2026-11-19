@@ -350,12 +350,6 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                 ),
               ],
 
-              // Skills
-              if (_skills.isNotEmpty) ...[
-                _buildSectionHeader('Skills'),
-                SurfaceCard(child: SkillChips(skills: _skills)),
-              ],
-
               // Work experience
               if (_profile!.workExperience.isNotEmpty) ...[
                 _buildSectionHeader('Experience'),
@@ -366,6 +360,12 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
               if (_profile!.education.isNotEmpty) ...[
                 _buildSectionHeader('Education'),
                 ..._profile!.education.map(ProfileRecordCard.education),
+              ],
+
+              // Skills
+              if (_skills.isNotEmpty) ...[
+                _buildSectionHeader('Skills'),
+                SurfaceCard(child: SkillChips(skills: _skills)),
               ],
             ],
           ),

@@ -4,11 +4,13 @@ import 'package:open_filex/open_filex.dart';
 import '../../../../core/theme/app_button_styles.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_input_decoration.dart';
+import '../../../../core/utils/app_date_format.dart';
 import '../../../../core/utils/data_load_exception.dart';
 import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../models/job_applicant_model.dart';
 import '../../../../shared_widgets/button_spinner.dart';
 import '../../controllers/applied_jobs_controller.dart';
+import '../../../../shared_widgets/sheet_handle.dart';
 
 /// The employer's job offer with Accept / Decline (or its final status).
 Future<void> showJobOfferSheet(
@@ -138,14 +140,14 @@ class _JobOfferSheetState extends State<_JobOfferSheet> {
   @override
   Widget build(BuildContext context) {
     final start = _app.offerStartDate;
-    final startDate = start != null ? start.toIso8601String().split('T').first : 'To be confirmed';
+    final startDate = start != null ? AppDateFormat.day.format(start) : 'To be confirmed';
     final pdfUrl = (_app.offerLetterURL ?? '').trim();
 
     return Container(
       constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88),
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(22, 16, 22, 28),
@@ -153,13 +155,7 @@ class _JobOfferSheetState extends State<_JobOfferSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Container(
-                width: 42,
-                height: 4,
-                decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(999)),
-              ),
-            ),
+            const SheetHandle(),
             const SizedBox(height: 18),
             _buildTitle(),
             const SizedBox(height: 18),

@@ -17,6 +17,7 @@ import '../../../shared_widgets/bottom_action_bar.dart';
 import '../../../core/theme/app_button_styles.dart';
 import '../../../core/theme/app_input_decoration.dart';
 import '../../../shared_widgets/button_spinner.dart';
+import '../../../shared_widgets/plain_app_bar.dart';
 
 /// Applying for a job: answer the employer's questions, choose a resume,
 /// then submit.
@@ -503,12 +504,7 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
     if (loadError != null) {
       return Scaffold(
         backgroundColor: AppColors.background,
-        appBar: AppBar(
-          backgroundColor: AppColors.background,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-          iconTheme: const IconThemeData(color: AppColors.primary),
-        ),
+        appBar: const PlainAppBar(),
         body: LoadErrorView(
           message: loadError,
           onRetry: () => _appController.load(widget.job.jobID!),

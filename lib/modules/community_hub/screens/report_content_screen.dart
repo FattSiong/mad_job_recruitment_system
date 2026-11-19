@@ -5,6 +5,7 @@ import '../../../core/utils/snackbar_helper.dart';
 import '../controllers/content_report_controller.dart';
 import '../../../core/theme/app_input_decoration.dart';
 import '../../../shared_widgets/button_spinner.dart';
+import '../../../shared_widgets/plain_app_bar.dart';
 
 /// Report a community post or comment to the admins.
 class ReportContentScreen extends StatefulWidget {
@@ -80,18 +81,8 @@ class _ReportContentScreenState extends State<ReportContentScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.primary),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          widget.target == ReportTarget.post ? 'Report Post' : 'Report Comment',
-          style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textDark),
-        ),
+      appBar: PlainAppBar(
+        title: widget.target == ReportTarget.post ? 'Report Post' : 'Report Comment',
       ),
       body: SafeArea(
         child: ListView(

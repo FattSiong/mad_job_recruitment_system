@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../models/post_filter.dart';
 import 'community_chips.dart';
+import '../../../shared_widgets/sheet_handle.dart';
 
 /// Bottom sheet with Sort by / Posted by / Date posted / Attachment.
 /// Returns the new filter, or null if closed without applying.
@@ -53,16 +54,7 @@ class _CommunityFilterSheetState extends State<_CommunityFilterSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.border,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-            ),
+            const SheetHandle(),
             const SizedBox(height: 12),
             Row(
               children: [
