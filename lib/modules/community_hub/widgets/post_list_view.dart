@@ -165,7 +165,7 @@ class PostListView extends StatelessWidget {
         }
 
         final posts = controller.posts;
-        final showFooter = controller.hasMore || controller.isLoadingMore;
+        final showFooter = controller.hasMore || controller.isLoadingMore || controller.loadMoreFailed;
 
         return RefreshIndicator(
           color: AppColors.primary,
@@ -184,6 +184,18 @@ class PostListView extends StatelessWidget {
                 if (i < top.length) return top[i];
                 final index = i - top.length;
                 if (index == posts.length) {
+                  if (controller.loadMoreFailed) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Center(
+                        child: TextButton.icon(
+                          onPressed: controller.retryLoadMore,
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: const Text("Couldn't load more posts. Tap to retry"),
+                        ),
+                      ),
+                    );
+                  }
                   return const Padding(
                     padding: EdgeInsets.symmetric(vertical: 16),
                     child: Center(

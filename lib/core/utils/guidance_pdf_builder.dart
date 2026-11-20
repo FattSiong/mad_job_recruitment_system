@@ -7,6 +7,7 @@ import '../../models/mock_interview_model.dart';
 import '../../models/skill_gap_model.dart';
 import 'pdf_text.dart';
 import 'app_date_format.dart';
+import 'text_cut.dart';
 
 /// Builds the Guidance Report PDFs (full history, one interview, one skill gap analysis).
 class GuidancePdfBuilder {
@@ -25,7 +26,7 @@ class GuidancePdfBuilder {
 
 
   /// Shortens [s] to [max] characters, ending with "…".
-  static String _cut(String s, int max) => s.length > max ? '${s.substring(0, max)}…' : s;
+  static String _cut(String s, int max) => TextCut.withEllipsis(s, max);
 
   /// Green / amber / red for a 0-100 score (grey when there is no score).
   static PdfColor _scoreColor(int? score) {

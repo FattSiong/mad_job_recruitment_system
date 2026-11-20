@@ -3,10 +3,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/table_constants.dart';
 import '../../../core/utils/data_load_exception.dart';
+import '../../../core/utils/id_helper.dart';
 import '../../../models/advisor_conversation_model.dart';
 import '../../../models/advisor_message_model.dart';
 import '../../../core/utils/session_helper.dart';
 import '../../../core/utils/safe_notifier.dart';
+import '../../../core/utils/text_cut.dart';
 
 /// Result of one successful question -> answer round trip.
 class AdvisorReplyResult {
@@ -23,6 +25,10 @@ class AdvisorReplyResult {
 
 /// Error with a message that is safe to show to the user.
 class AdvisorException implements Exception {
+  /// No reply arrived (timeout or lost connection). The server may still
+  /// have answered and saved it.
+  static const String noResponse = 'no_response';
+
   final String code;
   final String message;
 
@@ -53,6 +59,11 @@ class CareerAdvisorController extends ChangeNotifier with SafeNotifier {
   /// Increases on every conversation switch, so a slow, older load can't
   /// show its messages under the conversation the user opened afterwards.
   int _historyRequest = 0;
+
+  /// The last question that got no reply. Sending the same question again
+  /// in the same conversation reuses its request ID, so if the server had
+  /// answered it after all, that saved answer comes back (no duplicate).
+  ({String question, String? conversationID, String requestID})? _unanswered;
 
   List<AdvisorMessageModel> get messages => List.unmodifiable(_messages);
   String? get conversationID => _conversationID;
@@ -110,21 +121,31 @@ class CareerAdvisorController extends ChangeNotifier with SafeNotifier {
       throw AdvisorException('empty_message', 'Please enter a question for Career Buddy.');
     }
 
+    final previous = _unanswered;
+    final requestID = previous != null &&
+            previous.question == question &&
+            previous.conversationID == _conversationID
+        ? previous.requestID
+        : IdHelper.uuidV4();
+
     final pending = AdvisorMessageModel.pending(question);
     _messages.add(pending);
     _isSending = true;
     notifySafely();
 
     try {
-      final result = await sendMessage(message: question, conversationID: _conversationID);
+      final result = await _sendOrRecover(question, requestID);
+      _unanswered = null;
       final index = _messages.indexOf(pending);
       if (index != -1) _messages[index] = result.userMessage;
       _messages.add(result.reply);
-      _conversationTitle ??=
-          question.length > 50 ? '${question.substring(0, 50)}…' : question;
+      _conversationTitle ??= TextCut.withEllipsis(question, 50);
       _conversationID = result.conversationID;
     } on AdvisorException catch (e) {
       _messages.remove(pending);
+      _unanswered = e.code == AdvisorException.noResponse
+          ? (question: question, conversationID: _conversationID, requestID: requestID)
+          : null;
       if (e.code == 'conversation_not_found') {
         _isSending = false;
         startNewConversation();
@@ -136,15 +157,35 @@ class CareerAdvisorController extends ChangeNotifier with SafeNotifier {
     }
   }
 
+  /// Sends [question]. When no reply arrives, waits a moment and checks
+  /// once whether the server saved an answer anyway before giving up.
+  Future<AdvisorReplyResult> _sendOrRecover(String question, String requestID) async {
+    try {
+      return await sendMessage(
+        message: question,
+        conversationID: _conversationID,
+        requestID: requestID,
+      );
+    } on AdvisorException catch (e) {
+      if (e.code != AdvisorException.noResponse) rethrow;
+      await Future<void>.delayed(const Duration(seconds: 3));
+      final saved = await findSavedReply(requestID);
+      if (saved == null) rethrow;
+      return saved;
+    }
+  }
+
   // ---------------------------------------------------------------------
   // Data
   // ---------------------------------------------------------------------
 
   /// Sends a question to the `career-advisor` Edge Function.
-  /// Pass [conversationID] = null to start a new conversation.
+  /// Pass [conversationID] = null to start a new conversation. [requestID]
+  /// identifies the question, so sending it again can't save it twice.
   Future<AdvisorReplyResult> sendMessage({
     required String message,
     String? conversationID,
+    String? requestID,
   }) async {
     final text = message.trim();
 
@@ -166,7 +207,11 @@ class CareerAdvisorController extends ChangeNotifier with SafeNotifier {
       final response = await _supabase.functions
           .invoke(
             'career-advisor',
-            body: {'message': text, 'conversationId': conversationID},
+            body: {
+              'message': text,
+              'conversationId': conversationID,
+              if (requestID != null) 'requestId': requestID,
+            },
           )
           .timeout(const Duration(seconds: 35));
 
@@ -189,12 +234,51 @@ class CareerAdvisorController extends ChangeNotifier with SafeNotifier {
           details['message'] as String,
         );
       }
+      // No reply of ours (e.g. the gateway timed out): the outcome is unknown
       debugPrint('career-advisor FunctionException: ${e.status} ${e.details}');
-      throw AdvisorException('ai_unavailable', _unavailableMessage);
+      throw AdvisorException(AdvisorException.noResponse, _unavailableMessage);
     } catch (e) {
-      // Use case A1: timeout / no internet / unexpected response
+      // Use case A1: timeout / no internet / unexpected response. The server
+      // may still have answered, so the caller can look for a saved reply.
       debugPrint('career-advisor error: $e');
-      throw AdvisorException('ai_unavailable', _unavailableMessage);
+      throw AdvisorException(AdvisorException.noResponse, _unavailableMessage);
+    }
+  }
+
+  /// The answer saved for the question with [requestID], or null when there
+  /// is none (or it can't be checked, e.g. before the database update).
+  Future<AdvisorReplyResult?> findSavedReply(String requestID) async {
+    const columns = 'messageID, conversationID, role, content, createdAt';
+    try {
+      final question = await _supabase
+          .from(TableConstants.advisorMessage)
+          .select(columns)
+          .eq('seekerID', _currentSeekerID)
+          .eq('requestID', requestID)
+          .eq('role', 'user')
+          .maybeSingle();
+      if (question == null) return null;
+
+      final answer = await _supabase
+          .from(TableConstants.advisorMessage)
+          .select(columns)
+          .eq('conversationID', question['conversationID'] as String)
+          .eq('role', 'model')
+          .gt('createdAt', question['createdAt'] as String)
+          .order('createdAt', ascending: true)
+          .limit(1)
+          .maybeSingle();
+      if (answer == null) return null;
+
+      final userMessage = AdvisorMessageModel.fromJson(question);
+      return AdvisorReplyResult(
+        conversationID: userMessage.conversationID,
+        userMessage: userMessage,
+        reply: AdvisorMessageModel.fromJson(answer),
+      );
+    } catch (e) {
+      debugPrint('Checking for a saved Career Buddy reply failed: $e');
+      return null;
     }
   }
 

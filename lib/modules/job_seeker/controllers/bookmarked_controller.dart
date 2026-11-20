@@ -21,6 +21,7 @@ class BookmarkedController {
   static final ValueNotifier<Set<String>> bookmarkedIds = ValueNotifier(<String>{});
   static String? _loadedForUser;
   static Future<void>? _loading;
+  static String? _loadingForUser;
 
   /// Loads the bookmarked job IDs if they aren't loaded yet for the current user.
   /// Many cards can call this at the same time; only one query is sent.
@@ -32,10 +33,20 @@ class BookmarkedController {
       return Future.value();
     }
     if (!force && _loadedForUser == userId) return Future.value();
-    if (!force && _loading != null) return _loading!;
+    // Reuse a load in progress only if it is for this user (not the account
+    // that was signed in a moment ago).
+    if (!force && _loading != null && _loadingForUser == userId) return _loading!;
 
-    _loading = _loadIds(userId).whenComplete(() => _loading = null);
-    return _loading!;
+    final loading = _loadIds(userId);
+    _loading = loading;
+    _loadingForUser = userId;
+    loading.whenComplete(() {
+      if (identical(_loading, loading)) {
+        _loading = null;
+        _loadingForUser = null;
+      }
+    });
+    return loading;
   }
 
   /// Fetches the IDs of [userId]'s bookmarked jobs into [bookmarkedIds].
@@ -45,6 +56,8 @@ class BookmarkedController {
           .from(TableConstants.bookmarkedJob)
           .select('jobID')
           .eq('seekerID', userId);
+      // Signed out or switched account while loading: these aren't theirs.
+      if (_supabase.auth.currentUser?.id != userId) return;
       bookmarkedIds.value = (rows as List<dynamic>)
           .map((r) => (r as Map<String, dynamic>)['jobID'] as String)
           .toSet();

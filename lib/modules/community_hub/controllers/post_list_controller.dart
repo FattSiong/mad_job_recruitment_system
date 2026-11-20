@@ -56,6 +56,7 @@ class PostListController extends ChangeNotifier with SafeNotifier {
   List<FeedPostModel> _posts = [];
   bool _isLoading = true;
   bool _isLoadingMore = false;
+  bool _loadMoreFailed = false;
   bool _hasMore = false;
   String? _error;
   ChatParticipant? _currentUser;
@@ -80,6 +81,10 @@ class PostListController extends ChangeNotifier with SafeNotifier {
 
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
+
+  /// Loading the next page failed; the list shows "Tap to retry" instead of
+  /// trying again on every scroll.
+  bool get loadMoreFailed => _loadMoreFailed;
   bool get hasMore => _hasMore;
   String? get error => _error;
 
@@ -143,6 +148,7 @@ class PostListController extends ChangeNotifier with SafeNotifier {
     final token = ++_loadToken;
     _isLoading = _posts.isEmpty;
     _isLoadingMore = false;
+    _loadMoreFailed = false;
     _error = null;
     notifySafely();
     _refreshCurrentUser();
@@ -167,7 +173,7 @@ class PostListController extends ChangeNotifier with SafeNotifier {
 
   /// Next page of the feed (called near the end of the list).
   Future<void> loadMore() async {
-    if (!_hasMore || _isLoadingMore || _isLoading) return;
+    if (!_hasMore || _isLoadingMore || _isLoading || _loadMoreFailed) return;
     final token = _loadToken;
     _isLoadingMore = true;
     notifySafely();
@@ -181,12 +187,19 @@ class PostListController extends ChangeNotifier with SafeNotifier {
       _hasMore = page.full;
     } catch (e) {
       debugPrint('PostListController loadMore failed: $e');
+      if (token == _loadToken) _loadMoreFailed = true;
     } finally {
       if (token == _loadToken) {
         _isLoadingMore = false;
         notifySafely();
       }
     }
+  }
+
+  /// "Tap to retry" after loading the next page failed.
+  void retryLoadMore() {
+    _loadMoreFailed = false;
+    loadMore();
   }
 
   /// One page of rows. [count] is how many results the page used up (for the

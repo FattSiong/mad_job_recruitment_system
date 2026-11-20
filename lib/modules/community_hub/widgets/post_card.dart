@@ -7,6 +7,7 @@ import '../../../shared_widgets/user_avatar.dart';
 import '../community_formatters.dart';
 import 'community_chips.dart';
 import 'post_media_view.dart';
+import '../../../core/utils/text_cut.dart';
 
 /// Menu actions on a post.
 enum PostAction { edit, publish, delete, message, report }
@@ -51,7 +52,7 @@ class _PostCardState extends State<PostCard> {
     final longText = post.content.length > _collapsedLength;
     final text = !longText || _expanded
         ? post.content
-        : '${post.content.substring(0, _collapsedLength).trimRight()}…';
+        : TextCut.withEllipsis(post.content, _collapsedLength);
 
     return Container(
       padding: const EdgeInsets.all(18),

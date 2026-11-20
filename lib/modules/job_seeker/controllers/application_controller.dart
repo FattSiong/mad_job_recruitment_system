@@ -289,6 +289,12 @@ class ApplicationController extends ChangeNotifier with SafeNotifier {
       throw _mapDatabaseError(e.message);
     } catch (e) {
       debugPrint('Application submission error: $e');
+      // The connection may have dropped after the server saved it: then the
+      // files belong to the application and must not be deleted.
+      if (await appliedStatus(jobId) != null) {
+        AppliedJobsController.notifyChanged();
+        return;
+      }
       await _removeUploaded(uploaded);
       throw ApplicationException('failed', 'Failed to submit application. Please try again.');
     }

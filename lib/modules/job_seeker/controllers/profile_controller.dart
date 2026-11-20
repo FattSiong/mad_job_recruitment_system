@@ -146,11 +146,17 @@ class ProfileController {
       //    (StorageUrlHelper), and only people allowed to see it can.
       final newResumeUrl = _supabase.storage.from(_resumesBucket).getPublicUrl(filePath);
 
-      // 3. Save the link on the profile
-      await _supabase
-          .from(TableConstants.jobSeeker)
-          .update({'resumeURL': newResumeUrl})
-          .eq('seekerID', userId);
+      // 3. Save the link on the profile. If that fails, the new file isn't
+      //    used and is deleted. When it can't be told whether it saved
+      //    (still offline), the file is kept: a spare file is harmless, a
+      //    profile linking to a deleted resume is not.
+      final saved = await _saveResumeUrl(userId, newResumeUrl);
+      if (saved != true) {
+        if (saved == false) {
+          await StorageUrlHelper.removeOwnFile(newResumeUrl, bucket: _resumesBucket, userId: userId);
+        }
+        return null;
+      }
 
       // 4. Tidy up the replaced file (never blocks the upload)
       if (oldResumeUrl != null && oldResumeUrl != newResumeUrl) {
@@ -160,6 +166,38 @@ class ProfileController {
       return newResumeUrl;
     } catch (e) {
       debugPrint('Error uploading resume: $e');
+      return null;
+    }
+  }
+
+  /// Saves [url] as the profile's resume: true when saved, false when not,
+  /// null when it can't be told (the reply was lost and checking failed).
+  Future<bool?> _saveResumeUrl(String userId, String url) async {
+    try {
+      await _supabase
+          .from(TableConstants.jobSeeker)
+          .update({'resumeURL': url})
+          .eq('seekerID', userId);
+      return true;
+    } catch (e) {
+      debugPrint('Error saving the resume link: $e');
+      // The update may have gone through with only its reply lost
+      return _savedValueIs('resumeURL', url);
+    }
+  }
+
+  /// Whether the profile's [column] is [value] now: true / false, or null
+  /// when it can't be checked (e.g. still offline).
+  Future<bool?> _savedValueIs(String column, String value) async {
+    try {
+      final row = await _supabase
+          .from(TableConstants.jobSeeker)
+          .select(column)
+          .eq('seekerID', SessionHelper.requireUserId())
+          .maybeSingle();
+      return row?[column] == value;
+    } catch (e) {
+      debugPrint('Could not check the saved $column: $e');
       return null;
     }
   }
@@ -211,6 +249,16 @@ class ProfileController {
     } catch (e) {
       debugPrint('Could not delete old profile photo: $e');
     }
+  }
+
+  /// After a failed profile save with the new photo [publicUrl]: true when
+  /// the save went through anyway (only its reply was lost). Otherwise the
+  /// photo isn't used and its file is deleted, unless that can't be told
+  /// (then it's kept: a spare file is harmless, a missing photo is not).
+  Future<bool> profilePictureSavedAnyway(String publicUrl) async {
+    final saved = await _savedValueIs('profilePictureURL', publicUrl);
+    if (saved == false) await deleteProfilePictureFile(publicUrl);
+    return saved == true;
   }
 
   /// Uploads a profile photo and returns its public link, or null if it failed.

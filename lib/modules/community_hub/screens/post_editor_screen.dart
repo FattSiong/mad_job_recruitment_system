@@ -259,7 +259,9 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
 
     Widget preview;
     if (isImage && file != null) {
-      preview = Image.file(file, height: 200, width: double.infinity, fit: BoxFit.cover);
+      // A damaged image shows just its name below instead of an error box.
+      preview = Image.file(file, height: 200, width: double.infinity, fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => const SizedBox.shrink());
     } else if (isImage && url != null) {
       preview = Image.network(url, height: 200, width: double.infinity, fit: BoxFit.cover,
           errorBuilder: (_, __, ___) => const SizedBox.shrink());

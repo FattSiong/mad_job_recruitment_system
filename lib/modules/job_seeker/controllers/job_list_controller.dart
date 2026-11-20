@@ -14,6 +14,11 @@ class JobListController extends ChangeNotifier with SafeNotifier {
 
   static const int pageSize = 10;
 
+  /// With a salary filter a page can come back empty while more jobs are
+  /// left (salary is checked in the app). The first load keeps going this
+  /// many more pages before showing "no jobs".
+  static const int _maxEmptyFirstPages = 3;
+
   JobSearchFilters _filters;
   List<JobModel> _jobs = [];
   bool _isLoading = true;
@@ -60,7 +65,15 @@ class JobListController extends ChangeNotifier with SafeNotifier {
     notifySafely();
 
     try {
-      final page = await _discovery.fetchJobsPage(filters: _filters, pageSize: pageSize);
+      var page = await _discovery.fetchJobsPage(filters: _filters, pageSize: pageSize);
+      for (var i = 0; i < _maxEmptyFirstPages && page.jobs.isEmpty && page.hasMore; i++) {
+        if (isDisposed || requestId != _requestId) return;
+        page = await _discovery.fetchJobsPage(
+          filters: _filters,
+          offset: page.nextOffset,
+          pageSize: pageSize,
+        );
+      }
       if (isDisposed || requestId != _requestId) return;
       _jobs = page.jobs;
       _nextOffset = page.nextOffset;
