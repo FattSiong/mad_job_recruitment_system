@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../models/reported_job_model.dart';
 import '../../../core/constants/table_constants.dart';
 import '../../../core/utils/session_helper.dart';
+import '../../../core/utils/text_cut.dart';
 
 /// Outcome of reporting a job.
 enum JobReportResult { submitted, alreadyReported, failed }
@@ -53,7 +54,7 @@ class ReportController {
   static String? _cleanDetails(String? details) {
     final text = details?.trim() ?? '';
     if (text.isEmpty) return null;
-    return text.length > maxDetailsLength ? text.substring(0, maxDetailsLength) : text;
+    return TextCut.take(text, maxDetailsLength);
   }
 
   /// True if this seeker already has a report on this job that the admins

@@ -226,13 +226,13 @@ class MyProfileController extends ChangeNotifier with SafeNotifier {
         workExperience: current.workExperience,
       );
 
-      if (!await _profiles.updateProfileBasics(updated)) {
-        // Not saved: the photo just uploaded isn't used (Save uploads it again)
-        if (pictureUrl != null && pictureUrl != oldPictureUrl) {
-          _profiles.deleteProfilePictureFile(pictureUrl);
-        }
-        return 'Failed to update profile.';
+      var saved = await _profiles.updateProfileBasics(updated);
+      if (!saved && pictureUrl != null && pictureUrl != oldPictureUrl) {
+        // The save may have gone through with only its reply lost (the new
+        // photo link tells). If not, that photo is deleted (Save uploads it again).
+        saved = await _profiles.profilePictureSavedAnyway(pictureUrl);
       }
+      if (!saved) return 'Failed to update profile.';
 
       _profile = updated;
       _isEditing = false;

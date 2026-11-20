@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/table_constants.dart';
 import '../../../core/utils/file_picker_helper.dart';
+import '../../../core/utils/safe_notifier.dart';
 import '../../../core/utils/storage_url_helper.dart';
 import '../../../models/feed_post_model.dart';
 import '../../../models/post_topic.dart';
@@ -13,7 +14,7 @@ import 'post_list_controller.dart';
 /// Create a new post, or edit an existing one (topic, text and one PDF/image).
 /// A new post can be saved as a draft (only its author sees it) and published
 /// later; a published post can't go back to being a draft.
-class PostEditorController extends ChangeNotifier {
+class PostEditorController extends ChangeNotifier with SafeNotifier {
   final String currentUserID;
 
   /// null = new post.
@@ -88,14 +89,14 @@ class PostEditorController extends ChangeNotifier {
   /// The post text as the user types it.
   void setContent(String value) {
     _content = value;
-    notifyListeners();
+    notifySafely();
   }
 
   /// The chosen topic.
   void setTopic(PostTopic topic) {
     if (topic == _topic) return;
     _topic = topic;
-    notifyListeners();
+    notifySafely();
   }
 
   /// Opens the file picker. [onError] gets a message if the file is too big.
@@ -107,14 +108,14 @@ class PostEditorController extends ChangeNotifier {
     );
     if (file == null) return;
     _newFile = file;
-    notifyListeners();
+    notifySafely();
   }
 
   /// Removes the attachment (the old file is deleted only when the post is saved).
   void removeAttachment() {
     _newFile = null;
     _existingMediaURL = null;
-    notifyListeners();
+    notifySafely();
   }
 
   /// Publishes (or, with [asDraft], saves a draft).
@@ -128,7 +129,7 @@ class PostEditorController extends ChangeNotifier {
     }
 
     _isSaving = true;
-    notifyListeners();
+    notifySafely();
     String? uploadedURL;
     try {
       var mediaURL = _existingMediaURL;
@@ -161,16 +162,24 @@ class PostEditorController extends ChangeNotifier {
           if (asDraft) 'isDraft': true, // left out otherwise (works before the drafts migration)
         });
       }
-      // The attachment was replaced or removed: its old file is no longer used
-      final oldURL = original?.mediaURL;
-      if (isEditing && oldURL != null && oldURL.isNotEmpty && oldURL != mediaURL) {
-        await StorageUrlHelper.removeOwnFile(oldURL, bucket: bucket, userId: currentUserID);
-      }
+      await _removeReplacedFile(mediaURL);
       return null;
     } catch (e) {
       debugPrint('Save post failed: $e');
-      // Not saved: don't leave the file that was just uploaded behind
-      await StorageUrlHelper.removeOwnFile(uploadedURL, bucket: bucket, userId: currentUserID);
+      if (uploadedURL != null) {
+        // The save may have gone through with only its reply lost: a post
+        // with the new file's link tells. If there's none, the file isn't
+        // used and is deleted. If it can't be told, it's kept (a spare file
+        // is harmless, a post whose attachment was deleted is not).
+        final saved = await _savedWithMedia(uploadedURL);
+        if (saved == true) {
+          await _removeReplacedFile(uploadedURL);
+          return null;
+        }
+        if (saved == false) {
+          await StorageUrlHelper.removeOwnFile(uploadedURL, bucket: bucket, userId: currentUserID);
+        }
+      }
       if (asDraft && PostListController.isMissingDraftColumns(e)) {
         PostListController.draftsSupported = false; // hides Save draft
         return 'Drafts aren\'t available yet (database update needed). You can still post.';
@@ -181,7 +190,32 @@ class PostEditorController extends ChangeNotifier {
           : 'Unable to publish your post. Please try again.';
     } finally {
       _isSaving = false;
-      notifyListeners();
+      notifySafely();
+    }
+  }
+
+  /// The attachment was replaced or removed: its old file is no longer used.
+  Future<void> _removeReplacedFile(String? mediaURL) async {
+    final oldURL = original?.mediaURL;
+    if (isEditing && oldURL != null && oldURL.isNotEmpty && oldURL != mediaURL) {
+      await StorageUrlHelper.removeOwnFile(oldURL, bucket: bucket, userId: currentUserID);
+    }
+  }
+
+  /// Whether one of the user's posts links to [url] now: true / false, or
+  /// null when it can't be checked (e.g. still offline).
+  Future<bool?> _savedWithMedia(String url) async {
+    try {
+      final rows = await _supabase
+          .from(TableConstants.communityPost)
+          .select('postID')
+          .eq('authorID', currentUserID)
+          .eq('mediaURL', url)
+          .limit(1);
+      return rows.isNotEmpty;
+    } catch (e) {
+      debugPrint('Could not check whether the post was saved: $e');
+      return null;
     }
   }
 

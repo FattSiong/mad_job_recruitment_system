@@ -2,7 +2,14 @@
 // career-advisor  —  Career Buddy, the AI career chat (Use Case 4.58)
 //
 // Request  (POST, Authorization: Bearer <user access token>)
-//   { "message": "How do I move into data analytics?", "conversationId": "<uuid>" | null }
+//   { "message": "How do I move into data analytics?", "conversationId": "<uuid>" | null,
+//     "requestId": "<uuid>" }   // optional, one per question (see below)
+//
+// requestId: the app makes one per question and sends it again if it asks
+// the same question after a timeout. When that question was already
+// answered, the saved answer is returned (no second AI call, nothing saved
+// twice). Needs migration 20261120000000_advisor_request_id; without it the
+// ID is ignored.
 //
 // Response 200
 //   {
@@ -45,6 +52,50 @@ function json(body: unknown, status = 200): Response {
 
 function fail(status: number, error: string, message: string): Response {
   return json({ error, message }, status);
+}
+
+type SavedMessage = { messageID: string; conversationID: string; role: string; content: string; createdAt: string };
+type SavedTurn = { conversationId: string; userMessage: SavedMessage; reply: SavedMessage };
+
+const MESSAGE_COLUMNS = "messageID, conversationID, role, content, createdAt";
+
+/** Postgres / PostgREST codes for "the requestID column doesn't exist yet". */
+function isMissingRequestColumn(error: { code?: string } | null): boolean {
+  return error?.code === "42703" || error?.code === "PGRST204";
+}
+
+/**
+ * The question saved earlier with [requestID] and the answer saved with it,
+ * null when there is none yet, or "unsupported" before the migration.
+ */
+async function findSavedTurn(
+  supabase: SupabaseClient,
+  seekerID: string,
+  requestID: string,
+): Promise<SavedTurn | null | "unsupported"> {
+  const { data: user, error } = await supabase
+    .from("AdvisorMessage")
+    .select(MESSAGE_COLUMNS)
+    .eq("seekerID", seekerID)
+    .eq("requestID", requestID)
+    .eq("role", "user")
+    .maybeSingle();
+  if (isMissingRequestColumn(error)) return "unsupported";
+  if (error) throw error;
+  if (!user) return null;
+
+  const { data: reply, error: replyErr } = await supabase
+    .from("AdvisorMessage")
+    .select(MESSAGE_COLUMNS)
+    .eq("conversationID", user.conversationID)
+    .eq("role", "model")
+    .gt("createdAt", user.createdAt)
+    .order("createdAt", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (replyErr) throw replyErr;
+  if (!reply) return null;
+  return { conversationId: user.conversationID, userMessage: user as SavedMessage, reply: reply as SavedMessage };
 }
 
 /** The conversation doesn't exist (any more); the app then starts a new one. */
@@ -231,7 +282,7 @@ Deno.serve(async (req) => {
     const seekerID = userData.user.id;
 
     // 2. Validate input (Use case A2: empty message) ---------------------
-    let body: { message?: unknown; conversationId?: unknown };
+    let body: { message?: unknown; conversationId?: unknown; requestId?: unknown };
     try {
       body = await req.json();
     } catch {
@@ -240,6 +291,8 @@ Deno.serve(async (req) => {
     const message = typeof body.message === "string" ? body.message.trim() : "";
     const conversationIdIn =
       typeof body.conversationId === "string" && body.conversationId.length > 0 ? body.conversationId : null;
+    const requestIdIn =
+      typeof body.requestId === "string" && UUID_RE.test(body.requestId) ? body.requestId : null;
 
     if (!message) return fail(400, "empty_message", "Please enter a question for Career Buddy.");
     if (message.length > MAX_MESSAGE_CHARS) {
@@ -260,7 +313,16 @@ Deno.serve(async (req) => {
     if (profileErr) throw profileErr;
     if (!profile) return fail(403, "not_job_seeker", "Career Buddy is only available for job seekers.");
 
-    // 4. Simple rate limit -----------------------------------------------
+    // 4. Same question sent again (the app timed out): return the saved answer.
+    //    Checked before the rate limit, so this never counts as a new message.
+    let useRequestId = requestIdIn !== null;
+    if (requestIdIn) {
+      const saved = await findSavedTurn(supabase, seekerID, requestIdIn);
+      if (saved === "unsupported") useRequestId = false;
+      else if (saved) return json(saved);
+    }
+
+    // 5. Simple rate limit -----------------------------------------------
     const oneMinuteAgo = new Date(Date.now() - 60_000).toISOString();
     const { count: recentCount, error: rateErr } = await supabase
       .from("AdvisorMessage")
@@ -273,7 +335,7 @@ Deno.serve(async (req) => {
       return fail(429, "rate_limited", "You're sending messages too quickly. Please wait a moment.");
     }
 
-    // 5. Existing conversation: check ownership + load history ----------
+    // 6. Existing conversation: check ownership + load history ----------
     let history: GeminiContent[] = [];
     if (conversationIdIn) {
       // Not an ID we could have made (a bad ID would fail in the database)
@@ -305,14 +367,14 @@ Deno.serve(async (req) => {
       while (history.length && history[0].role !== "user") history.shift();
     }
 
-    // 6. Ask Gemini (nothing is saved if this fails -> use case A1) ------
+    // 7. Ask Gemini (nothing is saved if this fails -> use case A1) ------
     const systemText = `${SYSTEM_PROMPT}\n\nApplicant profile:\n${buildProfileContext(profile as ProfileRow)}`;
     const reply = await callGemini(systemText, [
       ...history,
       { role: "user", parts: [{ text: message }] },
     ]);
 
-    // 7. Create the conversation on first message -----------------------
+    // 8. Create the conversation on first message -----------------------
     let conversationID = conversationIdIn;
     if (!conversationID) {
       const title = message.length > 50 ? message.slice(0, 50).trimEnd() + "…" : message;
@@ -325,15 +387,35 @@ Deno.serve(async (req) => {
       conversationID = newConv.conversationID as string;
     }
 
-    // 8. Save both turns (explicit timestamps keep the order stable) ----
+    // 9. Save both turns (explicit timestamps keep the order stable) ----
     const now = Date.now();
-    const { data: saved, error: saveErr } = await supabase
+    const turns = (withRequestId: boolean) => [
+      {
+        conversationID, seekerID, role: "user", content: message, createdAt: new Date(now).toISOString(),
+        ...(withRequestId ? { requestID: requestIdIn } : {}),
+      },
+      { conversationID, seekerID, role: "model", content: reply, createdAt: new Date(now + 1).toISOString() },
+    ];
+    let { data: saved, error: saveErr } = await supabase
       .from("AdvisorMessage")
-      .insert([
-        { conversationID, seekerID, role: "user", content: message, createdAt: new Date(now).toISOString() },
-        { conversationID, seekerID, role: "model", content: reply, createdAt: new Date(now + 1).toISOString() },
-      ])
-      .select("messageID, conversationID, role, content, createdAt");
+      .insert(turns(useRequestId))
+      .select(MESSAGE_COLUMNS);
+    if (useRequestId && isMissingRequestColumn(saveErr)) {
+      // The column went away (or the cache is behind): save without the ID
+      ({ data: saved, error: saveErr } = await supabase
+        .from("AdvisorMessage")
+        .insert(turns(false))
+        .select(MESSAGE_COLUMNS));
+    }
+    // 23505: another attempt of this same question was saved first. Use that
+    // one, and drop the conversation this attempt created for it (if any).
+    if (saveErr?.code === "23505" && requestIdIn) {
+      if (!conversationIdIn) {
+        await supabase.from("AdvisorConversation").delete().eq("conversationID", conversationID);
+      }
+      const first = await findSavedTurn(supabase, seekerID, requestIdIn);
+      if (first && first !== "unsupported") return json(first);
+    }
     // 23503: the conversation was deleted while Gemini was answering
     if (saveErr?.code === "23503") return conversationGone();
     if (saveErr) throw saveErr;
@@ -344,8 +426,7 @@ Deno.serve(async (req) => {
       .eq("conversationID", conversationID);
     if (touchErr) console.error("updatedAt touch failed:", touchErr);
 
-    type SavedRow = { messageID: string; conversationID: string; role: string; content: string; createdAt: string };
-    const savedRows = (saved ?? []) as SavedRow[];
+    const savedRows = (saved ?? []) as SavedMessage[];
     const userMessage = savedRows.find((m) => m.role === "user");
     const modelMessage = savedRows.find((m) => m.role === "model");
 
