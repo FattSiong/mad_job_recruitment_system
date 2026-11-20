@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../chat_formatters.dart';
+import '../../../shared_widgets/button_spinner.dart';
+import '../../../core/utils/snackbar_helper.dart';
 
 /// Bottom bar: attach, text box, and send (or hold-to-record when empty).
 class ChatComposer extends StatefulWidget {
@@ -84,11 +86,7 @@ class _ChatComposerState extends State<ChatComposer> {
               onPressed: (widget.isUploading || widget.isRecording) ? null : widget.onAttach,
               tooltip: 'Send a photo or file',
               child: widget.isUploading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
-                    )
+                  ? const ButtonSpinner(size: 20, color: AppColors.primary)
                   : const Icon(Icons.add_rounded, color: AppColors.primary),
             ),
             const SizedBox(width: 8),
@@ -114,8 +112,11 @@ class _ChatComposerState extends State<ChatComposer> {
                     }
                   },
                   onLongPressCancel: widget.onRecordCancel,
-                  onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Hold the mic button to record a voice message.')),
+                  onTap: () => SnackBarHelper.showStyled(
+                    context,
+                    message: 'Hold the mic button to record a voice message.',
+                    icon: Icons.mic_none_rounded,
+                    accentColor: AppColors.primary,
                   ),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 160),

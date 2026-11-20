@@ -6,7 +6,10 @@ import '../controllers/bookmarked_controller.dart';
 import 'job_application_screen.dart';
 import 'report_job_screen.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared_widgets/bottom_action_bar.dart';
+import '../../../shared_widgets/button_spinner.dart';
 import '../../../shared_widgets/hero_icon_button.dart';
+import '../../../shared_widgets/hero_card.dart';
 
 /// Full job details with Apply, Bookmark and Report.
 /// [disableApplyButton] hides applying (e.g. opened from My Jobs > Applied).
@@ -36,6 +39,18 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
   bool _isBookmarked = false;
   bool _isBookmarkUpdating = false;
   bool _isDescriptionExpanded = false;
+
+  /// Whether the description is longer than 8 lines, worked out once per
+  /// width (not on every rebuild, e.g. when the bookmark changes).
+  double? _descriptionMeasuredWidth;
+  bool _descriptionIsLong = false;
+
+  static const TextStyle _descriptionStyle = TextStyle(
+    fontSize: 15,
+    height: 1.75,
+    color: AppColors.textDark,
+  );
+  static const int _collapsedDescriptionLines = 8;
 
   @override
   void initState() {
@@ -156,6 +171,34 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     return '$salary $period';
   }
 
+  /// "Remote (work from home)", "Hybrid (home and office)" or
+  /// "On-site (work at the office)".
+  String _formatWorkplace() {
+    switch (widget.job.workplaceType.trim().toLowerCase()) {
+      case 'remote':
+        return 'Remote (work from home)';
+      case 'hybrid':
+        return 'Hybrid (home and office)';
+      default:
+        return 'On-site (work at the office)';
+    }
+  }
+
+  /// True when the description needs "Show more" at [width].
+  bool _isDescriptionLong(double width) {
+    if (width == _descriptionMeasuredWidth) return _descriptionIsLong;
+    final painter = TextPainter(
+      text: TextSpan(text: widget.job.description, style: _descriptionStyle),
+      maxLines: _collapsedDescriptionLines,
+      textDirection: TextDirection.ltr,
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout(maxWidth: width);
+    _descriptionIsLong = painter.didExceedMaxLines;
+    painter.dispose();
+    _descriptionMeasuredWidth = width;
+    return _descriptionIsLong;
+  }
+
   /// "Posted 2 weeks ago", "Posted 3 days ago", ...
   String _formatPostedDate() {
     final createdAt = widget.job.createdAt;
@@ -187,34 +230,6 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => ReportJobScreen(job: widget.job),
-      ),
-    );
-  }
-
-  /// Small see-through chip in the header (location, job type, ...).
-  Widget _buildMetaChip(IconData icon, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: Colors.white, size: 16),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -324,39 +339,19 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
       subtitle: 'Review the responsibilities and role details before applying.',
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final textSpan = TextSpan(
-            text: widget.job.description,
-            style: const TextStyle(
-              fontSize: 15,
-              height: 1.75,
-              color: AppColors.textDark,
-            ),
-          );
-
-          final textPainter = TextPainter(
-            text: textSpan,
-            maxLines: _isDescriptionExpanded ? null : 8,
-            textDirection: TextDirection.ltr,
-          );
-          textPainter.layout(maxWidth: constraints.maxWidth);
-
-          final needsExpansion = textPainter.didExceedMaxLines;
+          final showToggle = _isDescriptionExpanded || _isDescriptionLong(constraints.maxWidth);
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 widget.job.description,
-                style: const TextStyle(
-                  fontSize: 15,
-                  height: 1.75,
-                  color: AppColors.textDark,
-                ),
-                maxLines: _isDescriptionExpanded ? null : 8,
+                style: _descriptionStyle,
+                maxLines: _isDescriptionExpanded ? null : _collapsedDescriptionLines,
                 overflow:
                 _isDescriptionExpanded ? TextOverflow.visible : TextOverflow.fade,
               ),
-              if (needsExpansion || _isDescriptionExpanded) ...[
+              if (showToggle) ...[
                 const SizedBox(height: 12),
                 TextButton.icon(
                   onPressed: () {
@@ -409,6 +404,13 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
           ),
           const SizedBox(height: 12),
           _buildInfoTile(
+            icon: Icons.home_work_outlined,
+            title: 'Workplace',
+            value: _formatWorkplace(),
+            color: AppColors.statusScheduled,
+          ),
+          const SizedBox(height: 12),
+          _buildInfoTile(
             icon: Icons.location_on_outlined,
             title: 'Location',
             value: widget.job.locationName ?? 'Location unavailable',
@@ -430,217 +432,140 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomContentSpacing = 120.0;
-
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Stack(
-        children: [
-          SafeArea(
-            child: CustomScrollView(
-              slivers: [
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      20,
-                      16,
-                      20,
-                      bottomContentSpacing,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+      bottomNavigationBar: BottomActionBar(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+        child: _buildApplyButton(),
+      ),
+      body: SafeArea(
+        bottom: false, // the Apply bar is below
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              HeroCard(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [AppColors.primary, AppColors.primaryLight],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(28),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  HeroIconButton(
-                                    icon: Icons.arrow_back_rounded,
-                                    tooltip: 'Back',
-                                    onTap: () => Navigator.pop(context),
-                                  ),
-                                  const Spacer(),
-                                  HeroIconButton(
-                                    icon: _isBookmarked
-                                        ? Icons.bookmark
-                                        : Icons.bookmark_border,
-                                    tooltip: 'Save Job',
-                                    onTap: _toggleBookmark,
-                                    isActive: _isBookmarked,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  HeroIconButton(
-                                    icon: Icons.flag_outlined,
-                                    tooltip: 'Report Job',
-                                    onTap: _handleReportJob,
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 24),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.14),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.work_outline_rounded,
-                                      size: 16,
-                                      color: Colors.white,
-                                    ),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'Job Details',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 18),
-                              Text(
-                                widget.job.title,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.bold,
-                                  height: 1.15,
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                widget.job.companyName ?? 'Unknown Company',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(height: 18),
-                              Wrap(
-                                spacing: 10,
-                                runSpacing: 10,
-                                children: [
-                                  _buildMetaChip(
-                                    Icons.location_on_outlined,
-                                    widget.job.locationName ??
-                                        'Location unavailable',
-                                  ),
-                                  _buildMetaChip(
-                                    Icons.work_outline_rounded,
-                                    widget.job.jobType,
-                                  ),
-                                  _buildMetaChip(
-                                    Icons.schedule_outlined,
-                                    _formatPostedDate(),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
+                        HeroIconButton(
+                          icon: Icons.arrow_back_rounded,
+                          tooltip: 'Back',
+                          onTap: () => Navigator.pop(context),
                         ),
-                        const SizedBox(height: 24),
-                        _buildAboutRoleSection(),
-                        const SizedBox(height: 24),
-                        _buildDescriptionSection(),
+                        const Spacer(),
+                        HeroIconButton(
+                          icon: _isBookmarked
+                              ? Icons.bookmark
+                              : Icons.bookmark_border,
+                          tooltip: 'Save Job',
+                          onTap: _toggleBookmark,
+                          isActive: _isBookmarked,
+                        ),
+                        const SizedBox(width: 12),
+                        HeroIconButton(
+                          icon: Icons.flag_outlined,
+                          tooltip: 'Report Job',
+                          onTap: _handleReportJob,
+                        ),
                       ],
                     ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    offset: const Offset(0, -4),
-                    blurRadius: 12,
-                  ),
-                ],
-              ),
-              child: SafeArea(
-                child: AnimatedSize(
-                  duration: const Duration(milliseconds: 250),
-                  curve: Curves.easeInOut,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: (_alreadyApplied || _isCheckingApplied || _isClosed)
-                              ? null
-                              : _openApplication,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                            disabledBackgroundColor: Colors.grey.shade300,
-                            disabledForegroundColor: Colors.grey.shade600,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          icon: _isCheckingApplied
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : Icon(
-                                  _withdrawn
-                                      ? Icons.undo_rounded
-                                      : (_alreadyApplied
-                                          ? Icons.check_circle_outline
-                                          : (_isClosed ? Icons.block_rounded : Icons.send_rounded)),
-                                ),
-                          label: Text(
-                            _withdrawn
-                                ? 'Application Withdrawn'
-                                : (_alreadyApplied
-                                    ? 'Already Applied'
-                                    : (_isClosed ? 'Applications Closed' : 'Apply Now')),
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
+                    const SizedBox(height: 24),
+                    const HeroPill(icon: Icons.work_outline_rounded, label: 'Job Details'),
+                    const SizedBox(height: 18),
+                    Text(
+                      widget.job.title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        height: 1.15,
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      widget.job.companyName ?? 'Unknown Company',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        HeroPill(
+                          icon: Icons.location_on_outlined,
+                          label: widget.job.locationName ?? 'Location unavailable',
+                          shrinkLabel: true,
+                        ),
+                        HeroPill(
+                          icon: Icons.work_outline_rounded,
+                          label: widget.job.jobType,
+                          shrinkLabel: true,
+                        ),
+                        HeroPill(
+                          icon: Icons.schedule_outlined,
+                          label: _formatPostedDate(),
+                          shrinkLabel: true,
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-            ),
+              const SizedBox(height: 24),
+              _buildAboutRoleSection(),
+              const SizedBox(height: 24),
+              _buildDescriptionSection(),
+            ],
           ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  /// Apply Now, or why applying isn't possible (already applied, withdrawn,
+  /// closed). Disabled while checking whether the user already applied.
+  Widget _buildApplyButton() {
+    final String label;
+    final IconData icon;
+    if (_withdrawn) {
+      label = 'Application Withdrawn';
+      icon = Icons.undo_rounded;
+    } else if (_alreadyApplied) {
+      label = 'Already Applied';
+      icon = Icons.check_circle_outline;
+    } else if (_isClosed) {
+      label = 'Applications Closed';
+      icon = Icons.block_rounded;
+    } else {
+      label = 'Apply Now';
+      icon = Icons.send_rounded;
+    }
+
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: (_alreadyApplied || _isCheckingApplied || _isClosed) ? null : _openApplication,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: Colors.grey.shade300,
+          disabledForegroundColor: Colors.grey.shade600,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
+        icon: _isCheckingApplied ? const ButtonSpinner(color: AppColors.primary) : Icon(icon),
+        label: Text(
+          label,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
       ),
     );
   }

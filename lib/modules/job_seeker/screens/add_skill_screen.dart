@@ -7,7 +7,11 @@ import '../../../models/skill_model.dart';
 import '../controllers/skill_controller.dart';
 import '../widgets/load_error_view.dart';
 import '../../../shared_widgets/confirm_dialog.dart';
+import '../../../shared_widgets/empty_hint.dart';
 import '../../../shared_widgets/surface_card.dart';
+import '../../../shared_widgets/gradient_page_header.dart';
+import '../../../core/theme/app_input_decoration.dart';
+import '../../../shared_widgets/button_spinner.dart';
 
 /// Add, update and remove the skills on the job seeker's profile.
 /// Changes are saved straight away; callers should reload skills when this screen closes.
@@ -87,9 +91,16 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
     }
   }
 
+  /// True when the profile has the most skills allowed.
+  bool get _atLimit => _skills.length >= SkillController.maxSkills;
+
   /// Adds the typed skill with the chosen level.
   Future<void> _addSkill() async {
     if (_isAdding) return;
+    if (_atLimit) {
+      _showSnack(SkillController.limitMessage, success: false);
+      return;
+    }
     FocusScope.of(context).unfocus();
     setState(() => _isAdding = true);
 
@@ -217,85 +228,60 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
   }
 
   /// Gradient header with the title and back button.
-  Widget _buildHeader() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: AppColors.headerGradient,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-          ),
-          const SizedBox(width: 8),
-          const Icon(Icons.psychology_outlined, color: Colors.white, size: 34),
-          const SizedBox(width: 14),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildHeader() => const GradientPageHeader(
+        icon: Icons.psychology_outlined,
+        title: 'My Skills',
+        subtitle: 'Skills help employers find you and improve your Skill Gap Analysis.',
+      );
+
+  /// Skill name box, level choice, suggestions and the Add button.
+  Widget _buildAddCard() {
+    // Wait for the list before allowing adds, so the limit is known
+    final atLimit = !_isLoading && _loadError == null && _atLimit;
+    final canAdd = _nameController.text.trim().isNotEmpty && !_isAdding && !_isLoading && !atLimit;
+    final suggestions =
+        atLimit ? const <String>[] : _suggestedSkills.where((s) => !_alreadyAdded(s)).toList();
+
+    return SurfaceCard(
+      children: [
+        SectionTitle(
+          'Add a Skill',
+          subtitle: 'Type a skill and choose how well you know it. Up to ${SkillController.maxSkills} skills.',
+        ),
+        if (atLimit) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.primarySoft,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Row(
               children: [
-                Text(
-                  'My Skills',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 25,
-                    fontWeight: FontWeight.bold,
+                Icon(Icons.info_outline_rounded, color: AppColors.primary, size: 20),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    SkillController.limitMessage,
+                    style: TextStyle(color: AppColors.textDark, fontSize: 13),
                   ),
-                ),
-                SizedBox(height: 6),
-                Text(
-                  'Skills help employers find you and improve your Skill Gap Analysis.',
-                  style: TextStyle(color: Colors.white70, fontSize: 14),
                 ),
               ],
             ),
           ),
+          const SizedBox(height: 12),
         ],
-      ),
-    );
-  }
-
-  /// Skill name box, level choice, suggestions and the Add button.
-  Widget _buildAddCard() {
-    final canAdd = _nameController.text.trim().isNotEmpty && !_isAdding;
-    final suggestions = _suggestedSkills.where((s) => !_alreadyAdded(s)).toList();
-
-    return SurfaceCard(
-      children: [
-        SectionTitle('Add a Skill', subtitle: 'Type a skill and choose how well you know it.'),
         TextField(
           controller: _nameController,
           focusNode: _nameFocus,
+          enabled: !atLimit,
           maxLength: SkillController.maxNameLength,
           textCapitalization: TextCapitalization.words,
           textInputAction: TextInputAction.done,
           onSubmitted: (_) {
             if (canAdd) _addSkill();
           },
-          decoration: InputDecoration(
-            hintText: 'e.g. Flutter, Public Speaking',
-            prefixIcon: const Icon(Icons.add_task_rounded, color: AppColors.primary),
-            filled: true,
-            fillColor: AppColors.surfaceAlt,
-            counterText: '',
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: AppColors.primary, width: 1.6),
-            ),
-          ),
+          decoration: filledInputDecoration(hint: 'e.g. Flutter, Public Speaking', icon: Icons.add_task_rounded, iconColor: AppColors.primary, counterText: '', contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16)),
         ),
         const SizedBox(height: 16),
         const Text(
@@ -331,11 +317,7 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
           child: ElevatedButton.icon(
             onPressed: canAdd ? _addSkill : null,
             icon: _isAdding
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
+                ? const ButtonSpinner()
                 : const Icon(Icons.add_rounded),
             label: Text(
               _isAdding ? 'Adding...' : 'Add Skill',
@@ -389,33 +371,19 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
     } else if (_loadError != null) {
       body = LoadErrorView(message: _loadError!, onRetry: _loadSkills);
     } else if (_skills.isEmpty) {
-      body = Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceAlt,
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: const Row(
-          children: [
-            Icon(Icons.inbox_outlined, color: AppColors.textMuted),
-            SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'No skills added yet. Add your first skill above.',
-                style: TextStyle(color: AppColors.textMuted, fontStyle: FontStyle.italic),
-              ),
-            ),
-          ],
-        ),
-      );
+      body = const EmptyHint(text: 'No skills added yet. Add your first skill above.');
     } else {
       body = Column(children: _skills.map(_buildSkillTile).toList());
     }
 
     return SurfaceCard(
       children: [
-        SectionTitle(_isLoading || _loadError != null ? 'Your Skills' : 'Your Skills (${_skills.length})', subtitle: 'Tap the level to change it.'),
+        SectionTitle(
+          _isLoading || _loadError != null
+              ? 'Your Skills'
+              : 'Your Skills (${_skills.length}/${SkillController.maxSkills})',
+          subtitle: 'Tap the level to change it.',
+        ),
         body,
       ],
     );
@@ -448,11 +416,7 @@ class _AddSkillScreenState extends State<AddSkillScreen> {
           if (busy)
             const Padding(
               padding: EdgeInsets.all(12),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
-              ),
+              child: ButtonSpinner(size: 20, color: AppColors.primary),
             )
           else ...[
             PopupMenuButton<String>(

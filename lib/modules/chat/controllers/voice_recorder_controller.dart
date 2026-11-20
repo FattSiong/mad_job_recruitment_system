@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
+import '../../../core/utils/safe_notifier.dart';
 
 /// A finished voice note.
 class VoiceRecording {
@@ -14,7 +15,7 @@ class VoiceRecording {
 }
 
 /// Hold-to-record voice notes for the chat composer.
-class VoiceRecorderController extends ChangeNotifier {
+class VoiceRecorderController extends ChangeNotifier with SafeNotifier {
   static const Duration minLength = Duration(milliseconds: 800);
 
   final AudioRecorder _recorder = AudioRecorder();
@@ -22,7 +23,6 @@ class VoiceRecorderController extends ChangeNotifier {
   Timer? _ticker;
   bool _busy = false;
   bool _releasedWhileStarting = false;
-  bool _disposed = false;
 
   bool get isRecording => _startedAt != null;
 
@@ -46,8 +46,8 @@ class VoiceRecorderController extends ChangeNotifier {
       );
 
       _startedAt = DateTime.now();
-      _ticker = Timer.periodic(const Duration(milliseconds: 250), (_) => _notify());
-      _notify();
+      _ticker = Timer.periodic(const Duration(milliseconds: 250), (_) => notifySafely());
+      notifySafely();
       if (_releasedWhileStarting) {
         // The button was released before the microphone was ready: too short.
         _busy = false;
@@ -107,7 +107,7 @@ class VoiceRecorderController extends ChangeNotifier {
     _startedAt = null;
     _ticker?.cancel();
     _ticker = null;
-    _notify();
+    notifySafely();
   }
 
   /// Deletes [file]; a failure is ignored (it is only a temporary file).
@@ -115,14 +115,8 @@ class VoiceRecorderController extends ChangeNotifier {
     file.delete().catchError((_) => file);
   }
 
-  /// notifyListeners, unless the controller was already disposed.
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
   @override
   void dispose() {
-    _disposed = true;
     _ticker?.cancel();
     _recorder.dispose();
     super.dispose();

@@ -5,10 +5,11 @@ import '../../../core/theme/app_colors.dart';
 import '../../../models/moderation_item_model.dart';
 import '../../community_hub/community_formatters.dart';
 import '../../community_hub/widgets/post_media_view.dart';
+import 'moderation_parts.dart';
 
 /// One post or comment in Admin > Community: who wrote it, the content and
 /// attachment, the open reports, and the Dismiss / Remove buttons.
-class ModerationCard extends StatefulWidget {
+class ModerationCard extends StatelessWidget {
   final ModerationItem item;
   final bool busy;
   final VoidCallback onRemove;
@@ -22,18 +23,7 @@ class ModerationCard extends StatefulWidget {
     this.onDismiss,
   });
 
-  @override
-  State<ModerationCard> createState() => _ModerationCardState();
-}
-
-class _ModerationCardState extends State<ModerationCard> {
-  static const int _collapsedLines = 6;
-  static const int _collapsedReports = 3;
-
-  bool _showFullText = false;
-  bool _showAllReports = false;
-
-  ModerationItem get _item => widget.item;
+  ModerationItem get _item => item;
 
   @override
   Widget build(BuildContext context) {
@@ -69,7 +59,7 @@ class _ModerationCardState extends State<ModerationCard> {
           ],
           if (flagged) ...[
             const SizedBox(height: 14),
-            _reports(),
+            ReportSummaryPanel(item: _item),
           ],
           const SizedBox(height: 14),
           _actions(),
@@ -125,36 +115,14 @@ class _ModerationCardState extends State<ModerationCard> {
   }
 
   List<Widget> _badges() => [
-        if (_item.isReported)
-          _badge(
-            Icons.report_gmailerrorred_rounded,
-            _item.reporterCount == 1 ? 'Reported by 1 user' : 'Reported by ${_item.reporterCount} users',
-            AdminColors.alertRed,
-          ),
+        if (_item.isReported) ReportedBadge(reporterCount: _item.reporterCount),
         if (_item.deletedByAuthor)
-          _badge(Icons.delete_sweep_outlined, 'Deleted by author (hidden)', AdminColors.textSecondary),
+          const ModerationBadge(
+              icon: Icons.delete_sweep_outlined, label: 'Deleted by author (hidden)', color: AdminColors.textSecondary),
         if (_item.isRemoved)
-          _badge(Icons.block_rounded, 'Already removed', AdminColors.textSecondary),
-        if (_item.isPost) _badge(_item.topic.icon, _item.topic.label, AdminColors.heroEnd),
+          const ModerationBadge(icon: Icons.block_rounded, label: 'Already removed', color: AdminColors.textSecondary),
+        if (_item.isPost) ModerationBadge(icon: _item.topic.icon, label: _item.topic.label, color: AdminColors.heroEnd),
       ];
-
-  Widget _badge(IconData icon, String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 5),
-          Text(label, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: color)),
-        ],
-      ),
-    );
-  }
 
   /// The post a comment was written on.
   Widget _postContext() {
@@ -191,161 +159,21 @@ class _ModerationCardState extends State<ModerationCard> {
         style: const TextStyle(fontSize: 14, color: AdminColors.textSecondary, fontStyle: FontStyle.italic),
       );
     }
-    return LayoutBuilder(builder: (context, constraints) {
-      const style = TextStyle(fontSize: 15, color: AdminColors.textPrimary, height: 1.4);
-      final painter = TextPainter(
-        text: TextSpan(text: text, style: style),
-        maxLines: _collapsedLines,
-        textDirection: Directionality.of(context),
-        textScaler: MediaQuery.textScalerOf(context),
-      )..layout(maxWidth: constraints.maxWidth);
-      final long = painter.didExceedMaxLines;
-      painter.dispose();
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            text,
-            maxLines: _showFullText ? null : _collapsedLines,
-            overflow: _showFullText ? TextOverflow.visible : TextOverflow.ellipsis,
-            style: style,
-          ),
-          if (long)
-            GestureDetector(
-              onTap: () => setState(() => _showFullText = !_showFullText),
-              child: Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  _showFullText ? 'Show less' : 'Show more',
-                  style: const TextStyle(fontWeight: FontWeight.w700, color: AdminColors.heroEnd),
-                ),
-              ),
-            ),
-        ],
-      );
-    });
-  }
-
-  /// Reasons, then each report (the newest few, or all).
-  Widget _reports() {
-    final reports = _item.reports;
-    final shown = _showAllReports ? reports : reports.take(_collapsedReports).toList();
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AdminColors.alertRed.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              for (final entry in _item.categoryCounts)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AdminColors.alertRed.withValues(alpha: 0.25)),
-                  ),
-                  child: Text(
-                    entry.value > 1 ? '${entry.key} ×${entry.value}' : entry.key,
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AdminColors.alertRed),
-                  ),
-                ),
-            ],
-          ),
-          for (final report in shown) ...[
-            const SizedBox(height: 10),
-            Text.rich(
-              TextSpan(children: [
-                TextSpan(
-                  text: report.reporter?.displayName ?? 'Unknown user',
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-                TextSpan(text: ' · ${report.category} · ${CommunityFormatters.relative(report.reportedAt)}'),
-              ]),
-              style: const TextStyle(fontSize: 12.5, color: AdminColors.textPrimary),
-            ),
-            if (report.details != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(
-                  '"${report.details}"',
-                  style: const TextStyle(fontSize: 12.5, color: AdminColors.textSecondary, height: 1.35),
-                ),
-              ),
-          ],
-          if (reports.length > _collapsedReports)
-            GestureDetector(
-              onTap: () => setState(() => _showAllReports = !_showAllReports),
-              child: Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: Text(
-                  _showAllReports ? 'Show fewer reports' : 'Show all ${reports.length} reports',
-                  style: const TextStyle(fontWeight: FontWeight.w700, color: AdminColors.alertRed),
-                ),
-              ),
-            ),
-        ],
-      ),
+    return ExpandableText(
+      text: text,
+      style: const TextStyle(fontSize: 15, color: AdminColors.textPrimary, height: 1.4),
     );
   }
 
-  Widget _actions() {
-    if (widget.busy) {
-      return const SizedBox(
-        height: 44,
-        child: Center(
-          child: SizedBox(
-            width: 22,
-            height: 22,
-            child: CircularProgressIndicator(strokeWidth: 2.4, color: AdminColors.heroEnd),
-          ),
-        ),
+  Widget _actions() => ModerationActions(
+        busy: busy,
+        onRemove: onRemove,
+        onDismiss: onDismiss,
+        removeIcon: _item.isRemoved ? Icons.done_all_rounded : Icons.delete_outline_rounded,
+        removeLabel: _item.isRemoved
+            ? 'Close reports'
+            : _item.deletedByAuthor
+                ? 'Confirm removal'
+                : 'Remove',
       );
-    }
-    final remove = ElevatedButton.icon(
-      onPressed: widget.onRemove,
-      icon: Icon(_item.isRemoved ? Icons.done_all_rounded : Icons.delete_outline_rounded, size: 18),
-      label: Text(_item.isRemoved
-          ? 'Close reports'
-          : _item.deletedByAuthor
-              ? 'Confirm removal'
-              : 'Remove'),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: AdminColors.alertRed,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        minimumSize: const Size(0, 44),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      ),
-    );
-    if (widget.onDismiss == null) {
-      return Align(alignment: Alignment.centerRight, child: remove);
-    }
-    return Row(
-      children: [
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: widget.onDismiss,
-            icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
-            label: const Text('Dismiss'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AdminColors.heroEnd,
-              side: BorderSide(color: AdminColors.heroEnd.withValues(alpha: 0.4)),
-              minimumSize: const Size(0, 44),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(child: remove),
-      ],
-    );
-  }
 }

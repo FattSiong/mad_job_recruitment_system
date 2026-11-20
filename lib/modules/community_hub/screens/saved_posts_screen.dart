@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../controllers/post_list_controller.dart';
-import '../widgets/community_state_card.dart';
+import '../../../shared_widgets/state_message_card.dart';
 import '../widgets/post_list_view.dart';
+import '../../../shared_widgets/plain_app_bar.dart';
 
 /// Posts the current user bookmarked.
 class SavedPostsScreen extends StatefulWidget {
@@ -29,24 +30,12 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.primary),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Saved Posts',
-          style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.textDark),
-        ),
-      ),
+      appBar: const PlainAppBar(title: 'Saved Posts'),
       body: SafeArea(
         top: false,
         child: PostListView(
           controller: _controller,
-          emptyState: const CommunityStateCard(
+          emptyState: const StateMessageCard(
             icon: Icons.bookmark_border_rounded,
             title: 'No saved posts',
             message: 'Tap Save on any post to keep it here for later.',

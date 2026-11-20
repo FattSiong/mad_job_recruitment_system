@@ -67,8 +67,19 @@ class _JobCardState extends State<JobCard> {
     }
   }
 
+  /// "No longer available" (removed) or "Applications closed" (inactive or
+  /// past its closing date); null for an open job. Search only lists open
+  /// jobs, so this shows on bookmarked ones.
+  String? get _closedLabel {
+    final status = widget.job.status.trim().toLowerCase();
+    if (status == 'deleted') return 'No longer available';
+    if (status != 'active' || widget.job.isExpired) return 'Applications closed';
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final closedLabel = _closedLabel;
     return GestureDetector(
       onTap: widget.onTap,
       child: Card(
@@ -131,6 +142,8 @@ class _JobCardState extends State<JobCard> {
                 spacing: 8,
                 runSpacing: 4,
                 children: [
+                  if (closedLabel != null)
+                    _buildChip(closedLabel, Icons.block_rounded, color: AppColors.statusInactive),
                   _buildChip(widget.job.jobType, Icons.work_outline),
                   _buildChip(_formatSalary(widget.job.salaryRange, widget.job.jobType), Icons.attach_money),
                 ],
@@ -142,22 +155,22 @@ class _JobCardState extends State<JobCard> {
     );
   }
 
-  /// Small chip with an icon (job type, salary).
-  Widget _buildChip(String label, IconData icon) {
+  /// Small chip with an icon (job type, salary, closed).
+  Widget _buildChip(String label, IconData icon, {Color color = AppColors.primary}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.primary.withValues(alpha: 0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: AppColors.primary),
+          Icon(icon, size: 14, color: color),
           const SizedBox(width: 4),
           Text(
             label,
-            style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600),
+            style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600),
           ),
         ],
       ),

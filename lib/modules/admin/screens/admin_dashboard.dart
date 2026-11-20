@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/table_constants.dart';
 import '../../../services/auth_service.dart';
 import '../../../shared_widgets/login_screen.dart';
+import 'admin_job_moderation_screen.dart';
 import '../../../shared_widgets/notification_bell_button.dart';
 import 'admin_job_details.dart';
 import 'company_verification_screen.dart';
@@ -190,13 +191,9 @@ class _AdminDashboardState extends State<AdminDashboard> with WidgetsBindingObse
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const HeroChip(icon: Icons.admin_panel_settings_rounded, text: 'Admin Control Center'),
-              const Spacer(),
-              NotificationBellButton(
-                onReturned: _loadOverviewData,
-              ),
-              const SizedBox(width: 8),
               IconButton(onPressed: _logout, icon: const Icon(Icons.logout, color: Colors.white)),
             ],
           ),

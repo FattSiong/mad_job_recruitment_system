@@ -10,6 +10,7 @@ import '../../../models/skill_model.dart';
 import '../../../services/user_directory.dart';
 import 'profile_controller.dart';
 import 'skill_controller.dart';
+import '../../../core/utils/safe_notifier.dart';
 
 /// What the user typed in the profile form.
 class ProfileEdits {
@@ -37,7 +38,7 @@ class ProfileEdits {
 ///
 /// Data access goes through [ProfileController] and [SkillController].
 /// Picking files and photos stays in the screen (it opens system UI).
-class MyProfileController extends ChangeNotifier {
+class MyProfileController extends ChangeNotifier with SafeNotifier {
   final ProfileController _profiles;
   final SkillController _skillsApi;
 
@@ -54,7 +55,6 @@ class MyProfileController extends ChangeNotifier {
   bool _isUploadingResume = false;
   File? _newPhoto;
   bool _removePhoto = false; // "Remove photo" chosen; applied on Save
-  bool _disposed = false;
 
   JobSeekerModel? get profile => _profile;
   List<SkillModel> get skills => List.unmodifiable(_skills);
@@ -126,7 +126,7 @@ class MyProfileController extends ChangeNotifier {
   Future<void> load() async {
     _isLoading = _profile == null;
     _loadError = null;
-    _notify();
+    notifySafely();
     try {
       final results = await Future.wait([
         _profiles.fetchProfile(),
@@ -139,7 +139,7 @@ class MyProfileController extends ChangeNotifier {
       _loadError = e.message;
     } finally {
       _isLoading = false;
-      _notify();
+      notifySafely();
     }
   }
 
@@ -155,7 +155,7 @@ class MyProfileController extends ChangeNotifier {
   /// After the Skills screen closes.
   Future<void> refreshSkills() async {
     _skills = await _fetchSkillsSafely();
-    _notify();
+    notifySafely();
   }
 
   // ---------------------------------------------------------------------
@@ -166,7 +166,7 @@ class MyProfileController extends ChangeNotifier {
   void startEditing() {
     if (_profile == null) return;
     _isEditing = true;
-    _notify();
+    notifySafely();
   }
 
   /// Leaves edit mode and forgets an unsaved photo change.
@@ -174,21 +174,21 @@ class MyProfileController extends ChangeNotifier {
     _isEditing = false;
     _newPhoto = null;
     _removePhoto = false;
-    _notify();
+    notifySafely();
   }
 
   /// A new photo to upload on Save.
   void setNewPhoto(File file) {
     _newPhoto = file;
     _removePhoto = false;
-    _notify();
+    notifySafely();
   }
 
   /// Removes the photo on Save.
   void removePhoto() {
     _newPhoto = null;
     _removePhoto = true;
-    _notify();
+    notifySafely();
   }
 
   /// Saves the form (and the new or removed photo).
@@ -199,7 +199,7 @@ class MyProfileController extends ChangeNotifier {
     if (edits.fullName.trim().isEmpty) return 'Name cannot be empty.';
 
     _isSaving = true;
-    _notify();
+    notifySafely();
     try {
       final oldPictureUrl = current.profilePictureURL;
       String? pictureUrl = _removePhoto ? null : oldPictureUrl;
@@ -226,13 +226,13 @@ class MyProfileController extends ChangeNotifier {
         workExperience: current.workExperience,
       );
 
-      if (!await _profiles.updateProfileBasics(updated)) {
-        // Not saved: the photo just uploaded isn't used (Save uploads it again)
-        if (pictureUrl != null && pictureUrl != oldPictureUrl) {
-          _profiles.deleteProfilePictureFile(pictureUrl);
-        }
-        return 'Failed to update profile.';
+      var saved = await _profiles.updateProfileBasics(updated);
+      if (!saved && pictureUrl != null && pictureUrl != oldPictureUrl) {
+        // The save may have gone through with only its reply lost (the new
+        // photo link tells). If not, that photo is deleted (Save uploads it again).
+        saved = await _profiles.profilePictureSavedAnyway(pictureUrl);
       }
+      if (!saved) return 'Failed to update profile.';
 
       _profile = updated;
       _isEditing = false;
@@ -247,7 +247,7 @@ class MyProfileController extends ChangeNotifier {
       return null;
     } finally {
       _isSaving = false;
-      _notify();
+      notifySafely();
     }
   }
 
@@ -265,7 +265,7 @@ class MyProfileController extends ChangeNotifier {
     if (sizeError != null) return sizeError;
 
     _isUploadingResume = true;
-    _notify();
+    notifySafely();
     try {
       final url = await _profiles.uploadResume(file);
       if (url == null) return 'Failed to upload resume.';
@@ -273,21 +273,10 @@ class MyProfileController extends ChangeNotifier {
       return null;
     } finally {
       _isUploadingResume = false;
-      _notify();
+      notifySafely();
     }
   }
 
   /// Logs out (see [ProfileController.signOut]).
   Future<void> signOut() => _profiles.signOut();
-
-  /// notifyListeners, unless the controller was already disposed.
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
-  }
 }

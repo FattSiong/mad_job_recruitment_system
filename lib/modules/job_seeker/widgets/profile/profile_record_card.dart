@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../models/education_model.dart';
+import '../../../../models/work_experience_model.dart';
+import 'profile_sheet_helpers.dart';
 
-/// One work-experience or education entry on the profile screen.
+/// One work-experience or education entry (profile, public profile,
+/// manage screens and the resume builder).
 /// Shows edit/delete buttons when [onEdit] / [onDelete] are given.
 class ProfileRecordCard extends StatelessWidget {
   final IconData icon;
@@ -25,6 +29,42 @@ class ProfileRecordCard extends StatelessWidget {
     this.onEdit,
     this.onDelete,
   });
+
+  /// "Job title", company, dates and description.
+  ProfileRecordCard.experience(
+    WorkExperienceModel exp, {
+    Key? key,
+    VoidCallback? onEdit,
+    VoidCallback? onDelete,
+  }) : this(
+          key: key,
+          icon: Icons.work_outline_rounded,
+          iconColor: AppColors.primary,
+          title: exp.jobTitle,
+          subtitle: exp.companyName,
+          dateRange: formatProfileDateRange(exp.startDate, exp.endDate, exp.isCurrent),
+          description: exp.description,
+          onEdit: onEdit,
+          onDelete: onDelete,
+        );
+
+  /// "Degree - field of study", institution, dates and description.
+  ProfileRecordCard.education(
+    EducationModel edu, {
+    Key? key,
+    VoidCallback? onEdit,
+    VoidCallback? onDelete,
+  }) : this(
+          key: key,
+          icon: Icons.school_outlined,
+          iconColor: AppColors.warning,
+          title: (edu.fieldOfStudy?.isNotEmpty ?? false) ? '${edu.degree} - ${edu.fieldOfStudy}' : edu.degree,
+          subtitle: edu.institutionName,
+          dateRange: formatProfileDateRange(edu.startDate, edu.endDate, edu.isCurrent),
+          description: edu.description,
+          onEdit: onEdit,
+          onDelete: onDelete,
+        );
 
   @override
   Widget build(BuildContext context) {

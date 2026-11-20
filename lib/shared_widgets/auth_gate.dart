@@ -4,6 +4,7 @@ import '../../../core/constants/table_constants.dart';
 
 // Import your screens here
 import '../modules/job_seeker/screens/seeker_dashboard.dart';
+import '../services/auth_service.dart';
 import 'login_screen.dart';
 import 'reset_password_screen.dart';
 import '../services/password_recovery_service.dart';
@@ -18,10 +19,27 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
+  /// Logged in, but the role couldn't be read because there is no
+  /// connection: show "Try again" instead of sending them to log in again.
+  bool _offline = false;
+
   @override
   void initState() {
     super.initState();
     _redirectUser();
+  }
+
+  Future<void> _retry() async {
+    setState(() => _offline = false);
+    await _redirectUser();
+  }
+
+  Future<void> _logOut() async {
+    try {
+      await AuthService().signOut();
+    } catch (_) {}
+    if (!mounted) return;
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
   }
 
   Future<void> _redirectUser() async {
@@ -62,9 +80,9 @@ class _AuthGateState extends State<AuthGate> {
           .from(TableConstants.user)
           .select('role')
           .eq('userID', userId)
-          .single();
+          .maybeSingle();
 
-      final String? role = userData['role'] as String?;
+      final String? role = userData?['role'] as String?;
 
       if (!mounted) return;
 
@@ -83,8 +101,13 @@ class _AuthGateState extends State<AuthGate> {
         );
       }
     } catch (e) {
-      // If the database check fails (e.g., no internet), send them to login safely
       if (!mounted) return;
+      // No connection: keep them logged in and let them try again
+      if (AuthService.isNetworkError(e)) {
+        setState(() => _offline = true);
+        return;
+      }
+      // Anything else: log in again
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -96,9 +119,40 @@ class _AuthGateState extends State<AuthGate> {
   Widget build(BuildContext context) {
     // This is what the user sees for a split second when they open the app.
     // You can customize this to show your App Logo instead of just a spinner!
-    return const Scaffold(
-      body: Center(
-        child: CircularProgressIndicator(),
+    if (!_offline) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.wifi_off_rounded, size: 56, color: Colors.grey.shade500),
+                const SizedBox(height: 16),
+                const Text(
+                  'No internet connection',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Check your connection, then try again. You are still logged in.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey.shade700, height: 1.4),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: _retry,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Try again'),
+                ),
+                TextButton(onPressed: _logOut, child: const Text('Log out')),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

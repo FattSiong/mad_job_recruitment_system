@@ -3,14 +3,15 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:open_filex/open_filex.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/pdf_file_helper.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../controllers/resume_builder_controller.dart';
+import '../widgets/pdf_preview_frame.dart';
+import '../../../core/theme/app_button_styles.dart';
+import '../../../shared_widgets/button_spinner.dart';
+import '../../../shared_widgets/plain_app_bar.dart';
 
 /// PDF preview of the built resume: share, download, open, and optionally
 /// use it as the profile resume for job applications.
@@ -46,9 +47,7 @@ class _ResumePreviewScreenState extends State<ResumePreviewScreen> {
     });
     try {
       final bytes = await _controller.buildPdf();
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/${_controller.pdfFileName}');
-      await file.writeAsBytes(bytes, flush: true);
+      final file = await PdfFileHelper.saveTemp(bytes, _controller.pdfFileName);
       if (!mounted) return;
       setState(() {
         _bytes = bytes;
@@ -92,11 +91,7 @@ class _ResumePreviewScreenState extends State<ResumePreviewScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              elevation: 0,
-            ),
+            style: AppButtonStyles.filled(),
             child: const Text('Use as resume'),
           ),
         ],
@@ -125,13 +120,7 @@ class _ResumePreviewScreenState extends State<ResumePreviewScreen> {
   /// Opens the phone's share sheet with the PDF.
   Future<void> _share() async {
     final file = _file;
-    if (file == null) return;
-    await SharePlus.instance.share(
-      ShareParams(
-        files: [XFile(file.path, mimeType: 'application/pdf')],
-        subject: 'My Resume',
-      ),
-    );
+    if (file != null) await PdfFileHelper.share(file, subject: 'My Resume');
   }
 
   /// Lets the user save the PDF where they choose.
@@ -157,13 +146,8 @@ class _ResumePreviewScreenState extends State<ResumePreviewScreen> {
   Future<void> _openExternally() async {
     final file = _file;
     if (file == null) return;
-    final result = await OpenFilex.open(file.path, type: 'application/pdf');
-    if (result.type != ResultType.done) {
-      _toast(
-        result.type == ResultType.noAppToOpen ? 'No PDF app found on this device.' : 'Unable to open the PDF.',
-        success: false,
-      );
-    }
+    final error = await PdfFileHelper.openExternally(file);
+    if (error != null) _toast(error, success: false);
   }
 
   // ---------------------------------------------------------------------
@@ -176,66 +160,34 @@ class _ResumePreviewScreenState extends State<ResumePreviewScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        titleSpacing: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.primary),
-          tooltip: 'Back to editing',
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Resume Preview',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textDark),
-            ),
-            Text('Go back to make changes', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
-          ],
-        ),
+      appBar: PlainAppBar(
+        title: 'Resume Preview',
+        subtitle: 'Go back to make changes',
+        backTooltip: 'Back to editing',
         actions: [
           IconButton(
             tooltip: 'Download',
             onPressed: ready ? _download : null,
-            icon: const Icon(Icons.download_rounded, color: AppColors.primary),
+            icon: Icon(Icons.download_rounded, color: ready ? AppColors.primary : AppColors.iconDisabled),
           ),
           IconButton(
             tooltip: 'Share',
             onPressed: ready ? _share : null,
-            icon: const Icon(Icons.ios_share_rounded, color: AppColors.primary),
+            icon: Icon(Icons.ios_share_rounded, color: ready ? AppColors.primary : AppColors.iconDisabled),
           ),
           IconButton(
             tooltip: 'Open in another app',
             onPressed: ready ? _openExternally : null,
-            icon: const Icon(Icons.open_in_new_rounded, color: AppColors.primary),
+            icon: Icon(Icons.open_in_new_rounded, color: ready ? AppColors.primary : AppColors.iconDisabled),
           ),
           const SizedBox(width: 4),
         ],
       ),
-      body: Container(
-        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: _error != null
-            ? _buildError()
-            : !ready
-                ? const Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CircularProgressIndicator(color: AppColors.primary),
-                        SizedBox(height: 16),
-                        Text('Creating your resume…', style: TextStyle(color: AppColors.textMuted)),
-                      ],
-                    ),
-                  )
-                : SfPdfViewer.memory(_bytes!, canShowScrollHead: true, pageSpacing: 6),
+      body: PdfPreviewFrame(
+        bytes: _bytes,
+        error: _error,
+        loadingText: 'Creating your resume…',
+        onRetry: _generate,
       ),
       bottomNavigationBar: ready
           ? SafeArea(
@@ -245,11 +197,7 @@ class _ResumePreviewScreenState extends State<ResumePreviewScreen> {
                 child: ElevatedButton.icon(
                   onPressed: (_setAsResume || _isSettingResume) ? null : _useAsResume,
                   icon: _isSettingResume
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
+                      ? const ButtonSpinner()
                       : Icon(_setAsResume ? Icons.check_circle_rounded : Icons.badge_outlined),
                   label: Text(
                     _setAsResume
@@ -269,34 +217,6 @@ class _ResumePreviewScreenState extends State<ResumePreviewScreen> {
               ),
             )
           : null,
-    );
-  }
-
-  /// Shown when the PDF couldn't be made, with Try Again.
-  Widget _buildError() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.picture_as_pdf_outlined, size: 44, color: AppColors.errorRed),
-            const SizedBox(height: 12),
-            Text(_error!, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: _generate,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Try Again'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                elevation: 0,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

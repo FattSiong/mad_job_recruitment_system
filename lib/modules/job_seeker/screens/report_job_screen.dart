@@ -4,6 +4,11 @@ import '../../../core/utils/snackbar_helper.dart';
 import '../controllers/report_controller.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared_widgets/hero_icon_button.dart';
+import '../../../shared_widgets/hero_card.dart';
+import '../../../shared_widgets/bottom_action_bar.dart';
+import '../../../core/theme/app_button_styles.dart';
+import '../../../core/theme/app_input_decoration.dart';
+import '../../../shared_widgets/button_spinner.dart';
 
 /// Report a job post to the admins (reason + optional details).
 class ReportJobScreen extends StatefulWidget {
@@ -157,18 +162,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
                       child: Column(
                         children: [
                           // Header
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(24),
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [AppColors.primary, AppColors.primaryLight],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              borderRadius: BorderRadius.circular(28),
-                            ),
-                            child: Column(
+                          HeroCard(child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
@@ -179,34 +173,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
                                       onTap: () => Navigator.pop(context),
                                     ),
                                     const Spacer(),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 8,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withValues(alpha: 0.14),
-                                        borderRadius: BorderRadius.circular(999),
-                                      ),
-                                      child: const Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.flag_outlined,
-                                            size: 16,
-                                            color: Colors.white,
-                                          ),
-                                          SizedBox(width: 8),
-                                          Text(
-                                            'Report Issue',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
+                                    const HeroPill(icon: Icons.flag_outlined, label: 'Report Issue'),
                                   ],
                                 ),
                                 const SizedBox(height: 24),
@@ -286,23 +253,7 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
                                   controller: _detailsController,
                                   maxLines: 4,
                                   maxLength: ReportController.maxDetailsLength,
-                                  decoration: InputDecoration(
-                                    hintText: 'Describe your problem below...',
-                                    filled: true,
-                                    fillColor: AppColors.surfaceAlt,
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(16),
-                                      borderSide: BorderSide(color: Colors.grey.shade300),
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(16),
-                                      borderSide: BorderSide(color: Colors.grey.shade300),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(16),
-                                      borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-                                    ),
-                                  ),
+                                  decoration: filledInputDecoration(hint: 'Describe your problem below...'),
                                 ),
                               ],
                             ),
@@ -316,40 +267,18 @@ class _ReportJobScreenState extends State<ReportJobScreen> {
             ),
 
             // Submit bar (stays at the bottom)
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 12,
-                    offset: const Offset(0, -4),
-                  ),
-                ],
-              ),
-              child: SafeArea(
-                top: false,
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _isSubmitting ? null : _submitReport,
-                    icon: _isSubmitting
-                        ? const SizedBox.shrink()
-                        : const Icon(Icons.send_rounded),
-                    label: _isSubmitting
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : const Text('Submit Report', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                  ),
+            BottomActionBar(
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _isSubmitting ? null : _submitReport,
+                  icon: _isSubmitting
+                      ? const SizedBox.shrink()
+                      : const Icon(Icons.send_rounded),
+                  label: _isSubmitting
+                      ? const ButtonSpinner(size: 20)
+                      : const Text('Submit Report', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  style: AppButtonStyles.filled(),
                 ),
               ),
             ),

@@ -15,12 +15,13 @@ import '../../../models/skill_model.dart';
 import '../../../models/work_experience_model.dart';
 import 'profile_controller.dart';
 import 'skill_controller.dart';
+import '../../../core/utils/safe_notifier.dart';
 
 /// Data for the in-app resume builder.
 ///
 /// The resume is saved as a separate copy ("Resume" table): it is pre-filled
 /// from the profile the first time, but edits here never change the profile.
-class ResumeBuilderController extends ChangeNotifier {
+class ResumeBuilderController extends ChangeNotifier with SafeNotifier {
   final _supabase = Supabase.instance.client;
   final ProfileController _profileController = ProfileController();
   final SkillController _skillController = SkillController();
@@ -32,7 +33,6 @@ class ResumeBuilderController extends ChangeNotifier {
   int _changeCount = 0; // goes up on every edit
   bool _prefilledFromProfile = false;
   String? _error;
-  bool _disposed = false;
 
   ResumeModel get resume => _resume;
   bool get isLoading => _isLoading;
@@ -49,7 +49,7 @@ class ResumeBuilderController extends ChangeNotifier {
   Future<void> load() async {
     _isLoading = true;
     _error = null;
-    _notify();
+    notifySafely();
     try {
       final userId = SessionHelper.requireUserId();
       final row = await _supabase
@@ -76,7 +76,7 @@ class ResumeBuilderController extends ChangeNotifier {
           : 'Unable to load your resume. Please check your connection and try again.';
     } finally {
       _isLoading = false;
-      _notify();
+      notifySafely();
     }
   }
 
@@ -97,7 +97,10 @@ class ResumeBuilderController extends ChangeNotifier {
       address: profile.location ?? '',
       education: [...profile.education]..sort(_newestEducationFirst),
       experience: [...profile.workExperience]..sort(_newestExperienceFirst),
-      skills: skills.map((s) => ResumeSkill(s.skillName, s.proficiency)).toList(),
+      skills: skills
+          .take(maxSkills)
+          .map((s) => ResumeSkill(s.skillName, s.proficiency))
+          .toList(),
     );
   }
 
@@ -106,7 +109,7 @@ class ResumeBuilderController extends ChangeNotifier {
     if (!_hasUnsavedChanges) return true;
     final savedChange = _changeCount;
     _isSaving = true;
-    _notify();
+    notifySafely();
     try {
       await _supabase.from(TableConstants.resume).upsert({
         'seekerID': SessionHelper.requireUserId(),
@@ -120,7 +123,7 @@ class ResumeBuilderController extends ChangeNotifier {
       return false;
     } finally {
       _isSaving = false;
-      _notify();
+      notifySafely();
     }
   }
 
@@ -129,7 +132,7 @@ class ResumeBuilderController extends ChangeNotifier {
     _resume = next;
     _hasUnsavedChanges = true;
     _changeCount++;
-    _notify();
+    notifySafely();
   }
 
   // ---------------------------------------------------------------------
@@ -176,9 +179,16 @@ class ResumeBuilderController extends ChangeNotifier {
   void removeExperience(int index) =>
       _update(_resume.copyWith(experience: [..._resume.experience]..removeAt(index)));
 
-  /// Adds a skill with an optional level (no duplicates, up to 50 characters).
-  /// Returns an error message, or null when added.
+  /// Most skills on the resume (same as the profile).
+  static const int maxSkills = SkillController.maxSkills;
+
+  /// True when the resume has [maxSkills] skills.
+  bool get skillsFull => _resume.skills.length >= maxSkills;
+
+  /// Adds a skill with an optional level (no duplicates, up to 50 characters,
+  /// at most [maxSkills]). Returns an error message, or null when added.
   String? addSkill(String name, String? level) {
+    if (skillsFull) return SkillController.limitMessage;
     final clean = name.trim().replaceAll(RegExp(r'\s+'), ' ');
     if (clean.isEmpty) return 'Please enter a skill.';
     if (clean.length > 50) return 'Skill names can be up to 50 characters.';
@@ -284,16 +294,5 @@ class ResumeBuilderController extends ChangeNotifier {
       debugPrint('Error setting profile resume: $e');
       return false;
     }
-  }
-
-  /// notifyListeners, unless the controller was already disposed.
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
   }
 }

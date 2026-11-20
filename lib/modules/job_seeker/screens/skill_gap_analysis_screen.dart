@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/data_load_exception.dart';
@@ -13,6 +12,9 @@ import 'work_experience_screen.dart';
 import '../widgets/load_error_view.dart';
 import '../../../shared_widgets/confirm_dialog.dart';
 import '../../../shared_widgets/surface_card.dart';
+import '../../../shared_widgets/gradient_page_header.dart';
+import '../widgets/career_tools/career_tool_widgets.dart';
+import '../../../core/utils/app_date_format.dart';
 
 /// Use Case 4.60: choose a target role and run the skill gap analysis.
 class SkillGapAnalysisScreen extends StatefulWidget {
@@ -223,109 +225,22 @@ class _SkillGapAnalysisScreenState extends State<SkillGapAnalysisScreen> {
   }
 
   /// Gradient header with the title and back button.
-  Widget _buildHeader() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.primary, AppColors.primaryLight],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-          ),
-          const SizedBox(width: 8),
-          const Icon(Icons.insights_outlined, color: Colors.white, size: 34),
-          const SizedBox(width: 14),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Skill Gap Analysis',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 25,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 6),
-                Text(
-                  'Compare your profile and resume with what employers want.',
-                  style: TextStyle(color: Colors.white70, fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildHeader() => const GradientPageHeader(
+        icon: Icons.insights_outlined,
+        title: 'Skill Gap Analysis',
+        subtitle: 'Compare your profile and resume with what employers want.',
+      );
 
   /// Target job role box with suggested roles.
-  Widget _buildRoleCard() {
-    return SurfaceCard(
-      children: [
-        SectionTitle('Target Job Role', subtitle: 'Which job do you want to be ready for?'),
-        TextField(
-          controller: _roleController,
-          enabled: !_isAnalysing,
-          maxLength: 100,
-          textCapitalization: TextCapitalization.words,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) => _analyse(),
-          decoration: InputDecoration(
-            hintText: 'e.g. Junior Data Analyst',
-            counterText: '',
-            prefixIcon: const Icon(Icons.work_outline, color: AppColors.primary),
-            filled: true,
-            fillColor: AppColors.surfaceAlt,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: AppColors.primary, width: 1.2),
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _suggestedRoles.map((role) {
-            final selected = _roleController.text.trim() == role;
-            return ChoiceChip(
-              label: Text(role),
-              selected: selected,
-              onSelected: _isAnalysing ? null : (_) => _setRole(role),
-              selectedColor: AppColors.primarySoft,
-              backgroundColor: AppColors.surfaceAlt,
-              side: BorderSide(color: selected ? AppColors.primary : AppColors.border),
-              labelStyle: TextStyle(
-                color: selected ? AppColors.primary : AppColors.textDark,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              ),
-              showCheckmark: false,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
+  Widget _buildRoleCard() => TargetRoleField(
+        title: 'Target Job Role',
+        subtitle: 'Which job do you want to be ready for?',
+        controller: _roleController,
+        enabled: !_isAnalysing,
+        suggestions: _suggestedRoles,
+        onSuggestionTap: _setRole,
+        onSubmitted: (_) => _analyse(),
+      );
 
   /// What the analysis can use: resume, skills, education, experience.
   Widget _buildReadinessCard() {
@@ -378,26 +293,9 @@ class _SkillGapAnalysisScreenState extends State<SkillGapAnalysisScreen> {
           onTap: () => _openProfileScreen(const WorkExperienceScreen()),
         ),
         if (!r.canAnalyse)
-          Container(
-            margin: const EdgeInsets.only(top: 4),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppColors.errorRed.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.info_outline_rounded, color: AppColors.errorRed),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Please complete your profile (education, work experience or a PDF/DOCX resume) '
-                    'before running an analysis.',
-                    style: TextStyle(color: AppColors.errorRed, height: 1.35),
-                  ),
-                ),
-              ],
-            ),
+          const CareerToolNotice(
+            'Please complete your profile (education, work experience or a PDF/DOCX resume) '
+            'before running an analysis.',
           ),
       ],
     );
@@ -467,115 +365,32 @@ class _SkillGapAnalysisScreenState extends State<SkillGapAnalysisScreen> {
     return SurfaceCard(
       children: [
         SectionTitle('Past Analyses', subtitle: 'Tap to view a previous report.'),
-        ..._history.map((h) {
-          final color = AppColors.forScore(h.matchScore);
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Material(
-              color: AppColors.surfaceAlt,
-              borderRadius: BorderRadius.circular(18),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(18),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => SkillGapResultScreen(analysis: h)),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 46,
-                        height: 46,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Text('${h.matchScore}%',
-                            style: TextStyle(
-                                color: color, fontWeight: FontWeight.w800, fontSize: 13)),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(h.targetJobRole,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold, color: AppColors.textDark)),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${DateFormat('d MMM yyyy').format(h.createdAt)} · '
-                              '${h.missing.length} skill gap${h.missing.length == 1 ? '' : 's'}',
-                              style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Delete',
-                        icon: const Icon(Icons.delete_outline_rounded, color: AppColors.errorRed),
-                        onPressed: () => _confirmDelete(h),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+        for (final h in _history)
+          CareerToolHistoryTile(
+            score: '${h.matchScore}%',
+            scoreColor: AppColors.forScore(h.matchScore),
+            scoreFontSize: 13,
+            title: h.targetJobRole,
+            subtitle: '${AppDateFormat.day.format(h.createdAt)} · '
+                '${h.missing.length} skill gap${h.missing.length == 1 ? '' : 's'}',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => SkillGapResultScreen(analysis: h)),
             ),
-          );
-        }),
+            onDelete: () => _confirmDelete(h),
+          ),
       ],
     );
   }
 
   /// "Analyse Skill Gap" button (with a progress note while running).
-  Widget _buildBottomButton() {
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (_isAnalysing)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 10),
-                child: Text(
-                  'Analysing your profile against market demand… this can take up to a minute.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.textMuted, fontSize: 13),
-                ),
-              ),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _canAnalyse ? _analyse : null,
-                icon: _isAnalysing
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Icons.analytics_outlined),
-                label: Text(_isAnalysing ? 'Analysing…' : 'Analyse Skill Gap'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: AppColors.disabled,
-                  disabledForegroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _buildBottomButton() => CareerToolRunBar(
+        busy: _isAnalysing,
+        enabled: _canAnalyse,
+        onPressed: _analyse,
+        icon: Icons.analytics_outlined,
+        label: 'Analyse Skill Gap',
+        busyLabel: 'Analysing…',
+        busyHint: 'Analysing your profile against market demand… this can take up to a minute.',
+      );
 }

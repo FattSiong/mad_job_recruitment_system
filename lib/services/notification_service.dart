@@ -247,9 +247,9 @@ class NotificationService {
       return;
     }
 
-    // Post / comment removed by an admin: the whole message is already in
-    // the list, and there is nothing to open.
-    if (item.isCommunityNotice) return;
+    // Post, comment or job post removed by an admin: the whole message is
+    // already in the list, and there is nothing to open.
+    if (item.isModerationNotice) return;
 
     if (item.isAdminCompanyEvent) {
       await Navigator.of(context).push(
@@ -356,9 +356,9 @@ class NotificationService {
       createdAt: DateTime.now(),
     );
 
-    // Community notice from a push banner: show the bell list, where the
+    // Moderation notice from a push banner: show the bell list, where the
     // full message can be read.
-    if (model.isCommunityNotice) {
+    if (model.isModerationNotice) {
       await Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const NotificationsScreen()),
       );

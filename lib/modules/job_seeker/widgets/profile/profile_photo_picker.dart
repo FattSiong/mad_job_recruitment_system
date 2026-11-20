@@ -3,10 +3,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/file_picker_helper.dart';
 import '../../../../core/utils/snackbar_helper.dart';
 import '../../screens/profile_photo_crop_screen.dart';
+import '../../../../shared_widgets/action_sheet.dart';
 
 /// What the user chose in the profile photo sheet.
 sealed class ProfilePhotoResult {}
@@ -24,52 +24,14 @@ class ProfilePhotoRemoved extends ProfilePhotoResult {}
 /// (512 x 512, shown as a circle).
 /// Returns null if cancelled. Problems are shown as snackbars.
 Future<ProfilePhotoResult?> pickProfilePhoto(BuildContext context, {required bool hasPhoto}) async {
-  final choice = await showModalBottomSheet<String>(
-    context: context,
-    backgroundColor: Colors.white,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-    ),
-    builder: (sheetContext) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 42,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.border,
-                borderRadius: BorderRadius.circular(999),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Profile Photo',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textDark),
-            ),
-            const SizedBox(height: 8),
-            ListTile(
-              leading: const Icon(Icons.photo_camera_outlined, color: AppColors.primary),
-              title: const Text('Take photo'),
-              onTap: () => Navigator.pop(sheetContext, 'camera'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined, color: AppColors.primary),
-              title: const Text('Choose from library'),
-              onTap: () => Navigator.pop(sheetContext, 'gallery'),
-            ),
-            if (hasPhoto)
-              ListTile(
-                leading: const Icon(Icons.delete_outline_rounded, color: AppColors.errorRed),
-                title: const Text('Remove photo', style: TextStyle(color: AppColors.errorRed)),
-                onTap: () => Navigator.pop(sheetContext, 'remove'),
-              ),
-          ],
-        ),
-      ),
-    ),
+  final choice = await showActionSheet<String>(
+    context,
+    title: 'Profile Photo',
+    actions: [
+      const SheetAction('camera', 'Take photo', icon: Icons.photo_camera_outlined),
+      const SheetAction('gallery', 'Choose from library', icon: Icons.photo_library_outlined),
+      if (hasPhoto) const SheetAction('remove', 'Remove photo', icon: Icons.delete_outline_rounded, destructive: true),
+    ],
   );
 
   if (choice == null || !context.mounted) return null;

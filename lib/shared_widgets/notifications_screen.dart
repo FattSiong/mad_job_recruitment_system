@@ -499,6 +499,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           color: Color(0xFFB91C1C),
           stageLabel: 'COMMUNITY GUIDELINES',
         );
+      case 'job_removed':
+        return const _NotificationTypeStyle(
+          icon: Icons.gpp_maybe_rounded,
+          color: Color(0xFFB91C1C),
+          stageLabel: 'JOB POST REMOVED',
+        );
+      case 'applied_job_removed':
+        return const _NotificationTypeStyle(
+          icon: Icons.work_off_outlined,
+          color: Color(0xFF64748B),
+          stageLabel: 'JOB NO LONGER AVAILABLE',
+        );
       default:
         return const _NotificationTypeStyle(
           icon: Icons.notifications_active_rounded,

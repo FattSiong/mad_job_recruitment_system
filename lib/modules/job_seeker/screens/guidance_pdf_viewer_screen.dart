@@ -2,14 +2,13 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:open_filex/open_filex.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/pdf_file_helper.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../controllers/guidance_report_controller.dart';
+import '../widgets/pdf_preview_frame.dart';
+import '../../../shared_widgets/plain_app_bar.dart';
 
 /// Shows a generated Guidance Report PDF inside the app, with Share and Open options.
 class GuidancePdfViewerScreen extends StatefulWidget {
@@ -49,9 +48,7 @@ class _GuidancePdfViewerScreenState extends State<GuidancePdfViewerScreen> {
     });
     try {
       final bytes = await widget.buildPdf();
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/${widget.fileName}');
-      await file.writeAsBytes(bytes, flush: true);
+      final file = await PdfFileHelper.saveTemp(bytes, widget.fileName);
       if (!mounted) return;
       setState(() {
         _bytes = bytes;
@@ -69,45 +66,15 @@ class _GuidancePdfViewerScreenState extends State<GuidancePdfViewerScreen> {
   /// Opens the phone's share sheet with the PDF.
   Future<void> _share() async {
     final file = _file;
-    if (file == null) return;
-    await SharePlus.instance.share(
-      ShareParams(
-        files: [XFile(file.path, mimeType: 'application/pdf')],
-        subject: widget.title,
-      ),
-    );
+    if (file != null) await PdfFileHelper.share(file, subject: widget.title);
   }
 
   /// Opens the PDF in another app (says so if there is none).
   Future<void> _openExternally() async {
     final file = _file;
     if (file == null) return;
-    final result = await OpenFilex.open(file.path, type: 'application/pdf');
-    if (result.type != ResultType.done && mounted) {
-      SnackBarHelper.showError(
-        context,
-        result.type == ResultType.noAppToOpen
-            ? 'No PDF app found on this device.'
-            : 'Unable to open the PDF.',
-      );
-    }
-  }
-
-  /// Small white icon button in the app bar.
-  Widget _actionButton(IconData icon, String tooltip, VoidCallback? onPressed) {
-    return Container(
-      margin: const EdgeInsets.only(left: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.borderSoft),
-      ),
-      child: IconButton(
-        icon: Icon(icon, color: onPressed == null ? AppColors.iconDisabled : AppColors.primary),
-        tooltip: tooltip,
-        onPressed: onPressed,
-      ),
-    );
+    final error = await PdfFileHelper.openExternally(file);
+    if (error != null && mounted) SnackBarHelper.showError(context, error);
   }
 
   @override
@@ -116,89 +83,28 @@ class _GuidancePdfViewerScreenState extends State<GuidancePdfViewerScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        titleSpacing: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.primary),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textDark),
-            ),
-            const Text('PDF preview', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
-          ],
-        ),
+      appBar: PlainAppBar(
+        title: widget.title,
+        subtitle: 'PDF preview',
         actions: [
-          _actionButton(Icons.ios_share_rounded, 'Share or save', ready ? _share : null),
-          _actionButton(Icons.open_in_new_rounded, 'Open in another app', ready ? _openExternally : null),
-          const SizedBox(width: 8),
+          IconButton(
+            tooltip: 'Share or save',
+            onPressed: ready ? _share : null,
+            icon: Icon(Icons.ios_share_rounded, color: ready ? AppColors.primary : AppColors.iconDisabled),
+          ),
+          IconButton(
+            tooltip: 'Open in another app',
+            onPressed: ready ? _openExternally : null,
+            icon: Icon(Icons.open_in_new_rounded, color: ready ? AppColors.primary : AppColors.iconDisabled),
+          ),
+          const SizedBox(width: 4),
         ],
       ),
-      body: Container(
-        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: _error != null
-            ? _buildError()
-            : !ready
-                ? const Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CircularProgressIndicator(color: AppColors.primary),
-                        SizedBox(height: 16),
-                        Text('Preparing your PDF…', style: TextStyle(color: AppColors.textMuted)),
-                      ],
-                    ),
-                  )
-                : SfPdfViewer.memory(
-                    _bytes!,
-                    canShowScrollHead: true,
-                    pageSpacing: 6,
-                  ),
-      ),
-    );
-  }
-
-  /// Shown when the PDF couldn't be made, with Try Again.
-  Widget _buildError() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.picture_as_pdf_outlined, size: 44, color: AppColors.errorRed),
-            const SizedBox(height: 12),
-            Text(_error!, textAlign: TextAlign.center,
-                style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textDark)),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: _generate,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Try Again'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              ),
-            ),
-          ],
-        ),
+      body: PdfPreviewFrame(
+        bytes: _bytes,
+        error: _error,
+        loadingText: 'Preparing your PDF…',
+        onRetry: _generate,
       ),
     );
   }

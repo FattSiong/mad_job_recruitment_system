@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -8,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/table_constants.dart';
 import '../../../core/utils/data_load_exception.dart';
 import '../../../core/utils/file_picker_helper.dart';
+import '../../../core/utils/id_helper.dart';
 import '../../../core/utils/session_helper.dart';
 import '../../../core/utils/storage_url_helper.dart';
 import '../../../models/call_model.dart';
@@ -17,6 +17,7 @@ import '../../../services/call_service.dart';
 import '../../../services/push_service.dart';
 import '../../../services/user_directory.dart';
 import '../chat_outbox.dart';
+import '../../../core/utils/safe_notifier.dart';
 
 /// Who has blocked whom in this chat.
 enum ChatBlockState {
@@ -38,7 +39,7 @@ enum ChatBlockState {
 ///
 /// Push notifications are NOT sent from here: a database trigger calls the
 /// send-push Edge Function (FCM) when a Message row is inserted.
-class ChatRoomController extends ChangeNotifier {
+class ChatRoomController extends ChangeNotifier with SafeNotifier {
   static const String attachmentsBucket = 'chat_attachments';
   static const int maxAttachmentMB = 10;
 
@@ -72,7 +73,6 @@ class ChatRoomController extends ChangeNotifier {
   bool _isChangingBlock = false;
   StreamSubscription<List<MessageModel>>? _subscription;
   Timer? _readDebounce;
-  bool _disposed = false;
 
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -140,7 +140,7 @@ class ChatRoomController extends ChangeNotifier {
     _subscription?.cancel();
     _isLoading = _messages.isEmpty;
     _error = null;
-    _notify();
+    notifySafely();
 
     _subscription = _supabase
         .from(TableConstants.message)
@@ -158,7 +158,7 @@ class ChatRoomController extends ChangeNotifier {
             _outbox.removeConfirmed(rows.map((m) => m.messageID));
             _isLoading = false;
             _error = null;
-            _notify();
+            notifySafely();
             _scheduleMarkAsRead();
             // Messages arriving again: the connection works, so resend soon.
             if (_outbox.hasFailed) _scheduleResend(const Duration(seconds: 1));
@@ -167,7 +167,7 @@ class ChatRoomController extends ChangeNotifier {
             debugPrint('Chat stream error: $e');
             _isLoading = false;
             _error = 'Unable to load messages. Please check your connection.';
-            _notify();
+            notifySafely();
           },
         );
   }
@@ -199,7 +199,7 @@ class ChatRoomController extends ChangeNotifier {
 
     _isLoadingOlder = true;
     _olderError = null;
-    _notify();
+    notifySafely();
     try {
       final rows = await _supabase
           .from(TableConstants.message)
@@ -217,7 +217,7 @@ class ChatRoomController extends ChangeNotifier {
       _olderError = 'Unable to load older messages.';
     } finally {
       _isLoadingOlder = false;
-      _notify();
+      notifySafely();
     }
   }
 
@@ -259,7 +259,7 @@ class ChatRoomController extends ChangeNotifier {
 
     final item = OutboxItem(_newMessage(content: content, mediaType: 'text'));
     _outbox.add(item);
-    _notify();
+    notifySafely();
     return _deliver(item.id);
   }
 
@@ -278,7 +278,7 @@ class ChatRoomController extends ChangeNotifier {
       fileName: fileName,
     );
     _outbox.add(item);
-    _notify();
+    notifySafely();
     return _deliver(item.id);
   }
 
@@ -294,7 +294,7 @@ class ChatRoomController extends ChangeNotifier {
       deleteFileWhenSent: true,
     );
     _outbox.add(item);
-    _notify();
+    notifySafely();
     return _deliver(item.id);
   }
 
@@ -306,11 +306,11 @@ class ChatRoomController extends ChangeNotifier {
     final item = _outbox[id];
     if (item == null || !_inFlight.add(id)) return null;
     item.status = OutboxStatus.sending;
-    _notify();
+    notifySafely();
     try {
       if (item.hasFile && item.uploadedURL == null) {
         item.markUploaded(await _upload(item.file!, item.fileName ?? 'file'));
-        _notify();
+        notifySafely();
       }
       try {
         await _insert(item.message);
@@ -341,7 +341,7 @@ class ChatRoomController extends ChangeNotifier {
       return null;
     } finally {
       _inFlight.remove(id);
-      _notify();
+      notifySafely();
     }
   }
 
@@ -359,7 +359,7 @@ class ChatRoomController extends ChangeNotifier {
     final item = _outbox[message.messageID];
     if (item == null || item.status != OutboxStatus.failed) return;
     await _discard(item);
-    _notify();
+    notifySafely();
   }
 
   /// Takes [item] out of the chat; an upload it no longer needs is deleted.
@@ -374,18 +374,18 @@ class ChatRoomController extends ChangeNotifier {
   /// comes back to the foreground. Stops at the first one that still fails.
   Future<void> resendFailed() async {
     _retryTimer?.cancel();
-    if (_disposed || _resending || isBlocked || !_outbox.hasFailed) return;
+    if (isDisposed || _resending || isBlocked || !_outbox.hasFailed) return;
     _resending = true;
     try {
       for (final item in _outbox.failed) {
-        if (_disposed || isBlocked) return;
+        if (isDisposed || isBlocked) return;
         await _deliver(item.id);
         if (_outbox.isFailed(item.id)) break; // still no connection
       }
     } finally {
       _resending = false;
     }
-    if (_outbox.hasFailed && !_disposed) {
+    if (_outbox.hasFailed && !isDisposed) {
       _retryRound++;
       _scheduleResend(ChatOutbox.retryDelay(_retryRound));
     }
@@ -393,7 +393,7 @@ class ChatRoomController extends ChangeNotifier {
 
   /// Runs [resendFailed] after [delay], unless a resend is already due sooner.
   void _scheduleResend(Duration delay) {
-    if (_disposed) return;
+    if (isDisposed) return;
     final at = DateTime.now().add(delay);
     if ((_retryTimer?.isActive ?? false) && !_retryAt!.isAfter(at)) return;
     _retryTimer?.cancel();
@@ -429,7 +429,8 @@ class ChatRoomController extends ChangeNotifier {
     String? mediaURL,
   }) {
     return MessageModel(
-      messageID: _newMessageId(),
+      // Made here, so the message can be shown before the server confirms it.
+      messageID: IdHelper.uuidV4(),
       roomID: roomID,
       senderID: currentUserID,
       content: content,
@@ -438,17 +439,6 @@ class ChatRoomController extends ChangeNotifier {
       mediaType: mediaType,
       mediaURL: mediaURL,
     );
-  }
-
-  /// Client-side UUID v4, so the message can be shown before the server confirms it.
-  static String _newMessageId() {
-    final random = Random.secure();
-    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-'
-        '${hex.substring(16, 20)}-${hex.substring(20)}';
   }
 
   // ---------------------------------------------------------------------
@@ -537,7 +527,7 @@ class ChatRoomController extends ChangeNotifier {
       _older[j] = change(_older[j]);
       changed = true;
     }
-    if (changed) _notify();
+    if (changed) notifySafely();
   }
 
   /// Removes a chat file from storage. Failure is only logged: the message is
@@ -598,7 +588,7 @@ class ChatRoomController extends ChangeNotifier {
         'blocked_you' => ChatBlockState.blockedMe,
         _ => ChatBlockState.none,
       };
-      _notify();
+      notifySafely();
     } catch (e) {
       debugPrint('Error checking block status: $e');
     }
@@ -616,7 +606,7 @@ class ChatRoomController extends ChangeNotifier {
   Future<String?> block() async {
     if (_isChangingBlock) return null;
     _isChangingBlock = true;
-    _notify();
+    notifySafely();
     try {
       await _supabase.from(TableConstants.userBlock).insert({
         'blockerID': currentUserID,
@@ -636,7 +626,7 @@ class ChatRoomController extends ChangeNotifier {
       return 'Unable to block ${otherUser.displayName}. Please try again.';
     } finally {
       _isChangingBlock = false;
-      _notify();
+      notifySafely();
     }
   }
 
@@ -644,7 +634,7 @@ class ChatRoomController extends ChangeNotifier {
   Future<String?> unblock() async {
     if (_isChangingBlock) return null;
     _isChangingBlock = true;
-    _notify();
+    notifySafely();
     try {
       await _supabase
           .from(TableConstants.userBlock)
@@ -659,7 +649,7 @@ class ChatRoomController extends ChangeNotifier {
       return 'Unable to unblock ${otherUser.displayName}. Please try again.';
     } finally {
       _isChangingBlock = false;
-      _notify();
+      notifySafely();
     }
   }
 
@@ -707,14 +697,8 @@ class ChatRoomController extends ChangeNotifier {
   // Helpers
   // ---------------------------------------------------------------------
 
-  /// notifyListeners, unless the controller was already disposed.
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
   @override
   void dispose() {
-    _disposed = true;
     if (PushService.activeChatRoomID == roomID) PushService.activeChatRoomID = null;
     _readDebounce?.cancel();
     _retryTimer?.cancel();

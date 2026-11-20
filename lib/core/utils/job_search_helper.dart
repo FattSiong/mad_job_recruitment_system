@@ -36,18 +36,30 @@ class JobSearchHelper {
   static bool isJobTypeFilter(String? jobType) =>
       jobType != null && jobType != 'All' && jobType != 'Any';
 
+  static String? _lastKeyword;
+  static List<String> _lastCompanyIds = const [];
+  static DateTime _lastLookup = DateTime(2000);
+
   /// IDs of companies whose name contains [keyword], so a keyword search can
-  /// also match company names.
+  /// also match company names. The last answer is reused for a minute, so
+  /// "load more", filter changes and map moves don't ask again.
   static Future<List<String>> companyIdsMatching(SupabaseClient supabase, String keyword) async {
     if (keyword.isEmpty) return [];
+    final key = keyword.toLowerCase();
+    if (key == _lastKeyword && DateTime.now().difference(_lastLookup).inSeconds < 60) {
+      return _lastCompanyIds;
+    }
     final rows = await supabase
         .from(TableConstants.company)
         .select('companyID')
         .ilike('name', '%$keyword%')
         .limit(50);
-    return (rows as List<dynamic>)
-        .map((r) => (r as Map<String, dynamic>)['companyID'].toString())
-        .toList();
+    final ids = List<String>.unmodifiable((rows as List<dynamic>)
+        .map((r) => (r as Map<String, dynamic>)['companyID'].toString()));
+    _lastKeyword = key;
+    _lastCompanyIds = ids;
+    _lastLookup = DateTime.now();
+    return ids;
   }
 
   /// One filter for `.or(...)`: not expired AND (keyword in title, description

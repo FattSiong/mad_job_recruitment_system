@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/guidance_pdf_builder.dart';
@@ -11,6 +10,10 @@ import '../controllers/mock_interview_controller.dart';
 import 'guidance_pdf_viewer_screen.dart';
 import 'mock_interview_setup_screen.dart';
 import '../../../shared_widgets/surface_card.dart';
+import '../../../shared_widgets/gradient_page_header.dart';
+import '../widgets/career_tools/career_tool_widgets.dart';
+import '../../../core/theme/app_button_styles.dart';
+import '../../../core/utils/app_date_format.dart';
 
 /// Interview scorecard (end of Use Case 4.59). Also reusable from Guidance Reports.
 class MockInterviewResultScreen extends StatefulWidget {
@@ -126,49 +129,12 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
   /// Gradient header with the role and date.
   Widget _buildHeader(MockInterviewRecordModel? record) {
     final date = record?.completedAt ?? record?.createdAt;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.primary, AppColors.primaryLight],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Interview Scorecard',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 25,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  [
-                    if (record != null) record.targetJobRole,
-                    if (date != null) DateFormat('d MMM yyyy').format(date),
-                  ].join(' · '),
-                  style: const TextStyle(color: Colors.white70, fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+    return GradientPageHeader(
+      title: 'Interview Scorecard',
+      subtitle: [
+        if (record != null) record.targetJobRole,
+        if (date != null) AppDateFormat.day.format(date),
+      ].join(' · '),
     );
   }
 
@@ -181,38 +147,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
       children: [
         Row(
           children: [
-            SizedBox(
-              width: 104,
-              height: 104,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  CircularProgressIndicator(
-                    value: overall / 100,
-                    strokeWidth: 10,
-                    backgroundColor: AppColors.progressTrack,
-                    valueColor: AlwaysStoppedAnimation(color),
-                    strokeCap: StrokeCap.round,
-                  ),
-                  Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '$overall',
-                          style: TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.w800,
-                            color: color,
-                          ),
-                        ),
-                        const Text('/ 100', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            ScoreRing(score: overall, color: color),
             const SizedBox(width: 20),
             Expanded(
               child: Column(
@@ -615,7 +550,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
             builder: (_) => GuidancePdfViewerScreen(
               title: 'Interview Scorecard',
               fileName:
-                  'interview_scorecard_${DateFormat('yyyyMMdd_HHmm').format(record.completedAt ?? record.createdAt)}.pdf',
+                  'interview_scorecard_${AppDateFormat.fileStamp.format(record.completedAt ?? record.createdAt)}.pdf',
               buildPdf: () async => GuidancePdfBuilder.interviewReport(
                 record,
                 applicantName: await GuidanceReportController().fetchApplicantName(),
@@ -625,13 +560,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
         ),
         icon: const Icon(Icons.picture_as_pdf_outlined),
         label: const Text('View as PDF'),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.primary,
-          backgroundColor: Colors.white,
-          side: const BorderSide(color: AppColors.borderActive),
-          padding: const EdgeInsets.symmetric(vertical: 15),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        ),
+        style: AppButtonStyles.outlined(radius: 18),
       ),
     );
   }
@@ -647,12 +576,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
             Expanded(
               child: OutlinedButton(
                 onPressed: () => Navigator.pop(context),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  side: const BorderSide(color: AppColors.borderActive),
-                  padding: const EdgeInsets.symmetric(vertical: 15),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                ),
+                style: AppButtonStyles.outlined(radius: 18),
                 child: const Text('Done'),
               ),
             ),
@@ -665,13 +589,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
                 ),
                 icon: const Icon(Icons.replay_rounded),
                 label: const Text('Practise Again'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 15),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                ),
+                style: AppButtonStyles.filled(radius: 18),
               ),
             ),
           ],

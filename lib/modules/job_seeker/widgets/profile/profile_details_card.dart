@@ -211,55 +211,11 @@ class _ProfileField extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!isEditing) {
       final value = controller.text.trim();
-      final isLink = onOpenLink != null && value.isNotEmpty;
-
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 20),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: AppColors.surfaceAlt,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Center(child: icon),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textMuted,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  InkWell(
-                    onTap: isLink ? () => onOpenLink!(value) : null,
-                    borderRadius: BorderRadius.circular(8),
-                    child: Text(
-                      value.isEmpty ? '-' : controller.text,
-                      style: TextStyle(
-                        fontSize: 15,
-                        height: 1.45,
-                        color: isLink ? AppColors.primary : AppColors.textDark,
-                        fontWeight: isLink ? FontWeight.w600 : FontWeight.w500,
-                        decoration: isLink ? TextDecoration.underline : TextDecoration.none,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+      return ProfileInfoRow(
+        label: label,
+        value: value.isEmpty ? '-' : controller.text,
+        icon: icon,
+        onTap: onOpenLink != null && value.isNotEmpty ? () => onOpenLink!(value) : null,
       );
     }
 
@@ -287,6 +243,66 @@ class _ProfileField extends StatelessWidget {
             borderSide: const BorderSide(color: AppColors.primary, width: 1.6),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Icon, label and value of a profile detail (view mode). With [onTap]
+/// the value is shown as a link.
+class ProfileInfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Widget icon;
+  final VoidCallback? onTap;
+
+  const ProfileInfoRow({super.key, required this.label, required this.value, required this.icon, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final isLink = onTap != null;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.surfaceAlt,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Center(child: icon),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(fontSize: 13, color: AppColors.textMuted, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 6),
+                InkWell(
+                  onTap: onTap,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Text(
+                    value,
+                    style: TextStyle(
+                      fontSize: 15,
+                      height: 1.45,
+                      color: isLink ? AppColors.primary : AppColors.textDark,
+                      fontWeight: isLink ? FontWeight.w600 : FontWeight.w500,
+                      decoration: isLink ? TextDecoration.underline : TextDecoration.none,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

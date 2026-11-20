@@ -4,6 +4,7 @@ import '../widgets/my_jobs/applied_jobs_tab.dart';
 import '../widgets/my_jobs/bookmarked_jobs_tab.dart';
 import '../widgets/my_jobs/interviews_tab.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared_widgets/hero_card.dart';
 
 /// My Jobs: Bookmarked / Applied / Interviews tabs.
 /// Each tab lives in widgets/my_jobs/.
@@ -32,18 +33,7 @@ class MyJobsScreen extends StatelessWidget {
                     padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
                     child: Column(
                       children: [
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [AppColors.primary, AppColors.primaryLight],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(28),
-                          ),
-                          child: Column(
+                        HeroCard(child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
@@ -67,34 +57,7 @@ class MyJobsScreen extends StatelessWidget {
                                     ),
                                     const SizedBox(width: 10),
                                   ],
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 8,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withValues(alpha: 0.14),
-                                      borderRadius: BorderRadius.circular(999),
-                                    ),
-                                    child: const Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.work_outline_rounded,
-                                          size: 16,
-                                          color: Colors.white,
-                                        ),
-                                        SizedBox(width: 8),
-                                        Text(
-                                          'My Jobs Workspace',
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
+                                  const HeroPill(icon: Icons.work_outline_rounded, label: 'My Jobs Workspace'),
                                 ],
                               ),
                               const SizedBox(height: 20),

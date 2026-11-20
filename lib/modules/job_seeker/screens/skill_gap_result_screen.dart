@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/guidance_pdf_builder.dart';
@@ -7,6 +6,10 @@ import '../../../models/skill_gap_model.dart';
 import '../controllers/guidance_report_controller.dart';
 import 'guidance_pdf_viewer_screen.dart';
 import '../../../shared_widgets/surface_card.dart';
+import '../../../shared_widgets/gradient_page_header.dart';
+import '../widgets/career_tools/career_tool_widgets.dart';
+import '../../../core/theme/app_button_styles.dart';
+import '../../../core/utils/app_date_format.dart';
 
 /// Skill Gap Report (end of Use Case 4.60). Also reusable from Guidance Reports.
 class SkillGapResultScreen extends StatelessWidget {
@@ -101,7 +104,7 @@ class SkillGapResultScreen extends StatelessWidget {
                       builder: (_) => GuidancePdfViewerScreen(
                         title: 'Skill Gap Report',
                         fileName:
-                            'skill_gap_report_${DateFormat('yyyyMMdd_HHmm').format(analysis.createdAt)}.pdf',
+                            'skill_gap_report_${AppDateFormat.fileStamp.format(analysis.createdAt)}.pdf',
                         buildPdf: () async => GuidancePdfBuilder.skillGapReport(
                           analysis,
                           applicantName: await GuidanceReportController().fetchApplicantName(),
@@ -111,26 +114,14 @@ class SkillGapResultScreen extends StatelessWidget {
                   ),
                   icon: const Icon(Icons.picture_as_pdf_outlined),
                   label: const Text('View as PDF'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.primary,
-                    side: const BorderSide(color: AppColors.borderActive),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                  ),
+                  style: AppButtonStyles.outlined(radius: 18),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
             child: ElevatedButton(
               onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-              ),
+              style: AppButtonStyles.filled(radius: 18, textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               child: const Text('Done'),
             ),
               ),
@@ -142,45 +133,10 @@ class SkillGapResultScreen extends StatelessWidget {
   }
 
   /// Gradient header with the role, the date and a back button.
-  Widget _buildHeader(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.primary, AppColors.primaryLight],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Skill Gap Report',
-                  style: TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '${analysis.targetJobRole} · ${DateFormat('d MMM yyyy').format(analysis.createdAt)}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildHeader(BuildContext context) => GradientPageHeader(
+        title: 'Skill Gap Report',
+        subtitle: '${analysis.targetJobRole} · ${AppDateFormat.day.format(analysis.createdAt)}',
+      );
 
   /// Match % ring, what it was based on, and skill counts.
   Widget _buildScoreCard() {
@@ -198,32 +154,7 @@ class SkillGapResultScreen extends StatelessWidget {
       children: [
         Row(
           children: [
-            SizedBox(
-              width: 104,
-              height: 104,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  CircularProgressIndicator(
-                    value: a.matchScore / 100,
-                    strokeWidth: 10,
-                    backgroundColor: AppColors.progressTrack,
-                    valueColor: AlwaysStoppedAnimation(color),
-                    strokeCap: StrokeCap.round,
-                  ),
-                  Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('${a.matchScore}%',
-                            style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: color)),
-                        const Text('match', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            ScoreRing(score: a.matchScore, color: color, valueText: '${a.matchScore}%', caption: 'match'),
             const SizedBox(width: 20),
             Expanded(
               child: Column(

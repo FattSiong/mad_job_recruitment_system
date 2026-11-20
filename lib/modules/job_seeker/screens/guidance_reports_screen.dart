@@ -16,6 +16,12 @@ import 'mock_interview_setup_screen.dart';
 import 'skill_gap_analysis_screen.dart';
 import 'skill_gap_result_screen.dart';
 import '../../../shared_widgets/surface_card.dart';
+import '../../../shared_widgets/gradient_page_header.dart';
+import '../../../shared_widgets/button_spinner.dart';
+import '../../../shared_widgets/state_message_card.dart';
+import '../../../core/theme/app_button_styles.dart';
+import '../widgets/load_error_view.dart';
+import '../../../core/utils/app_date_format.dart';
 
 /// Which reports the timeline shows.
 enum _Filter { all, interviews, skillGaps }
@@ -128,7 +134,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
       MaterialPageRoute(
         builder: (_) => GuidancePdfViewerScreen(
           title: title,
-          fileName: 'guidance_report_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf',
+          fileName: 'guidance_report_${AppDateFormat.fileStamp.format(DateTime.now())}.pdf',
           buildPdf: () async {
             final results = await Future.wait<Object>([
               _controller.fetchApplicantName(),
@@ -218,99 +224,41 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
   }
 
   /// Gradient header with the title and back button.
-  Widget _buildHeader() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.primary, AppColors.primaryLight],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Row(
+  Widget _buildHeader() => const GradientPageHeader(
+        icon: Icons.assignment_outlined,
+        title: 'My Guidance Reports',
+        subtitle: 'Track your mock interviews and skill gap results over time.',
+      );
+
+  // ---- Use case A1: no reports yet ------------------------------------
+
+  /// No reports yet: buttons to start a mock interview or a skill gap analysis.
+  Widget _buildEmptyState() {
+    return StateMessageCard(
+      icon: Icons.assignment_outlined,
+      title: 'No guidance reports yet',
+      message: 'Complete a mock interview or a skill gap analysis and your results will appear here.',
+      action: Column(
         children: [
-          IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+          _startButton(
+            Icons.record_voice_over_outlined,
+            'Start a Mock Interview',
+            () => _startActivity(const MockInterviewSetupScreen()),
+            filled: true,
           ),
-          const SizedBox(width: 8),
-          const Icon(Icons.assignment_outlined, color: Colors.white, size: 34),
-          const SizedBox(width: 14),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'My Guidance Reports',
-                  style: TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.bold),
-                ),
-                SizedBox(height: 6),
-                Text(
-                  'Track your mock interviews and skill gap results over time.',
-                  style: TextStyle(color: Colors.white70, fontSize: 14),
-                ),
-              ],
-            ),
+          const SizedBox(height: 10),
+          _startButton(
+            Icons.insights_outlined,
+            'Run a Skill Gap Analysis',
+            () => _startActivity(const SkillGapAnalysisScreen()),
           ),
         ],
       ),
     );
   }
 
-  // ---- Use case A1: no reports yet ------------------------------------
-
-  /// No reports yet: buttons to start a mock interview or a skill gap analysis.
-  Widget _buildEmptyState() {
-    return SurfaceCard(
-      children: [
-        Center(
-          child: Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: AppColors.primarySoft,
-              borderRadius: BorderRadius.circular(22),
-            ),
-            child: const Icon(Icons.assignment_outlined, size: 34, color: AppColors.primary),
-          ),
-        ),
-        const SizedBox(height: 18),
-        const Center(
-          child: Text(
-            'No guidance reports yet',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textDark),
-          ),
-        ),
-        const SizedBox(height: 10),
-        const Text(
-          'Complete a mock interview or a skill gap analysis and your results will appear here.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: AppColors.textMuted, height: 1.45),
-        ),
-        const SizedBox(height: 20),
-        _startButton(
-          Icons.record_voice_over_outlined,
-          'Start a Mock Interview',
-          () => _startActivity(const MockInterviewSetupScreen()),
-          filled: true,
-        ),
-        const SizedBox(height: 10),
-        _startButton(
-          Icons.insights_outlined,
-          'Run a Skill Gap Analysis',
-          () => _startActivity(const SkillGapAnalysisScreen()),
-        ),
-      ],
-    );
-  }
-
   /// Full-width button (filled or outlined) on the empty state.
   Widget _startButton(IconData icon, String label, VoidCallback onPressed, {bool filled = false}) {
-    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(18));
-    const padding = EdgeInsets.symmetric(vertical: 15);
     return SizedBox(
       width: double.infinity,
       child: filled
@@ -318,24 +266,13 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
               onPressed: onPressed,
               icon: Icon(icon),
               label: Text(label),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: padding,
-                shape: shape,
-              ),
+              style: AppButtonStyles.filled(radius: 18),
             )
           : OutlinedButton.icon(
               onPressed: onPressed,
               icon: Icon(icon),
               label: Text(label),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.primary,
-                side: const BorderSide(color: AppColors.borderActive),
-                padding: padding,
-                shape: shape,
-              ),
+              style: AppButtonStyles.outlined(radius: 18),
             ),
     );
   }
@@ -343,25 +280,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
   // ---- Use case A2: database error ------------------------------------
 
   /// Shown when the reports couldn't be loaded, with Try Again.
-  Widget _buildErrorState() {
-    return SurfaceCard(
-      children: [
-        const Center(
-          child: Icon(Icons.cloud_off_rounded, size: 44, color: AppColors.errorRed),
-        ),
-        const SizedBox(height: 14),
-        Center(
-          child: Text(
-            _error ?? 'Unable to load reports.',
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textDark),
-          ),
-        ),
-        const SizedBox(height: 16),
-        _startButton(Icons.refresh_rounded, 'Try Again', _load, filled: true),
-      ],
-    );
-  }
+  Widget _buildErrorState() => LoadErrorView(message: _error ?? 'Unable to load reports.', onRetry: _load);
 
   // ---- Summary --------------------------------------------------------
 
@@ -645,18 +564,14 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
                           style: const TextStyle(
                               fontWeight: FontWeight.bold, color: AppColors.textDark, fontSize: 15)),
                       const SizedBox(height: 3),
-                      Text(DateFormat('d MMM yyyy, h:mm a').format(item.createdAt),
+                      Text(AppDateFormat.dayTime.format(item.createdAt),
                           style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
                     ],
                   ),
                 ),
                 const SizedBox(width: 10),
                 if (opening)
-                  const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
-                  )
+                  const ButtonSpinner(size: 24, color: AppColors.primary)
                 else
                   Column(
                     children: [

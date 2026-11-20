@@ -1,4 +1,4 @@
-import 'package:intl/intl.dart';
+import '../../core/utils/app_date_format.dart';
 
 /// Time labels used by the Community Hub.
 class CommunityFormatters {
@@ -12,7 +12,7 @@ class CommunityFormatters {
     if (diff.inHours < 24) return '${diff.inHours}h';
     if (diff.inDays < 7) return '${diff.inDays}d';
     if (diff.inDays < 30) return '${diff.inDays ~/ 7}w';
-    return DateFormat('d MMM yyyy').format(time.toLocal());
+    return AppDateFormat.day.format(time.toLocal());
   }
 
   /// "1.2k" for big counts.

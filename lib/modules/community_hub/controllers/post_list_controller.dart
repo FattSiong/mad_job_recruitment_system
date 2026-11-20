@@ -7,6 +7,7 @@ import '../../../models/chat_room_model.dart';
 import '../../../models/feed_post_model.dart';
 import '../../../models/post_filter.dart';
 import '../../../services/user_directory.dart';
+import '../../../core/utils/safe_notifier.dart';
 
 /// Which posts a [PostListController] shows.
 enum PostListMode {
@@ -21,8 +22,8 @@ enum PostListMode {
 }
 
 /// Loads a list of community posts and handles like / save / delete on them.
-/// Used by the Feed tab, the My Posts tab and the Saved Posts screen.
-class PostListController extends ChangeNotifier {
+/// Used by the Community Hub feed, My Posts and Saved Posts.
+class PostListController extends ChangeNotifier with SafeNotifier {
   final PostListMode mode;
   final String currentUserID;
 
@@ -55,9 +56,10 @@ class PostListController extends ChangeNotifier {
   List<FeedPostModel> _posts = [];
   bool _isLoading = true;
   bool _isLoadingMore = false;
+  bool _loadMoreFailed = false;
   bool _hasMore = false;
   String? _error;
-  bool _disposed = false;
+  ChatParticipant? _currentUser;
   PostFilter _filter = PostFilter.none; // feed only
   MyPostsStatus _status = MyPostsStatus.all; // My Posts only
   int _loadToken = 0; // a newer load makes older results obsolete
@@ -79,8 +81,16 @@ class PostListController extends ChangeNotifier {
 
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
+
+  /// Loading the next page failed; the list shows "Tap to retry" instead of
+  /// trying again on every scroll.
+  bool get loadMoreFailed => _loadMoreFailed;
   bool get hasMore => _hasMore;
   String? get error => _error;
+
+  /// The signed-in user's name and photo (the My Posts avatar in the hub);
+  /// null until the first load gets it.
+  ChatParticipant? get currentUser => _currentUser;
   bool get isEmpty => posts.isEmpty;
 
   PostFilter get filter => _filter;
@@ -117,20 +127,31 @@ class PostListController extends ChangeNotifier {
   void setStatusFilter(MyPostsStatus status) {
     if (status == _status) return;
     _status = status;
-    _notify();
+    notifySafely();
   }
 
   // ---------------------------------------------------------------------
   // Loading
   // ---------------------------------------------------------------------
 
+  /// Updates [currentUser]. Cached by [UserDirectory], so this only goes to
+  /// the database the first time or after the user changed their profile.
+  Future<void> _refreshCurrentUser() async {
+    final me = await UserDirectory.fetchOne(currentUserID);
+    if (isDisposed) return;
+    _currentUser = me;
+    notifySafely();
+  }
+
   /// Loads the first page again (pull to refresh, new filter, or after a change).
   Future<void> load() async {
     final token = ++_loadToken;
     _isLoading = _posts.isEmpty;
     _isLoadingMore = false;
+    _loadMoreFailed = false;
     _error = null;
-    _notify();
+    notifySafely();
+    _refreshCurrentUser();
     try {
       final page = await _fetch(offset: 0);
       final models = await _toModels(page.rows);
@@ -145,17 +166,17 @@ class PostListController extends ChangeNotifier {
     } finally {
       if (token == _loadToken) {
         _isLoading = false;
-        _notify();
+        notifySafely();
       }
     }
   }
 
   /// Next page of the feed (called near the end of the list).
   Future<void> loadMore() async {
-    if (!_hasMore || _isLoadingMore || _isLoading) return;
+    if (!_hasMore || _isLoadingMore || _isLoading || _loadMoreFailed) return;
     final token = _loadToken;
     _isLoadingMore = true;
-    _notify();
+    notifySafely();
     try {
       final page = await _fetch(offset: _nextOffset);
       final models = await _toModels(page.rows);
@@ -166,12 +187,19 @@ class PostListController extends ChangeNotifier {
       _hasMore = page.full;
     } catch (e) {
       debugPrint('PostListController loadMore failed: $e');
+      if (token == _loadToken) _loadMoreFailed = true;
     } finally {
       if (token == _loadToken) {
         _isLoadingMore = false;
-        _notify();
+        notifySafely();
       }
     }
+  }
+
+  /// "Tap to retry" after loading the next page failed.
+  void retryLoadMore() {
+    _loadMoreFailed = false;
+    loadMore();
   }
 
   /// One page of rows. [count] is how many results the page used up (for the
@@ -321,7 +349,7 @@ class PostListController extends ChangeNotifier {
 
     if (mode == PostListMode.saved && !saved) {
       _posts.removeWhere((p) => p.postID == post.postID); // unsaved: leave the list
-      _notify();
+      notifySafely();
     } else {
       _replace(post.copyWith(isSaved: saved, savedCount: post.savedCount + (saved ? 1 : -1)));
     }
@@ -340,7 +368,7 @@ class PostListController extends ChangeNotifier {
       debugPrint('toggleSave failed: $e');
       if (mode == PostListMode.saved && !saved && index >= 0) {
         _posts.insert(index.clamp(0, _posts.length), post);
-        _notify();
+        notifySafely();
       } else {
         _replace(post);
       }
@@ -378,7 +406,7 @@ class PostListController extends ChangeNotifier {
     if (_posts.length == before) return;
     // The feed's next page starts one earlier: the server no longer counts it
     if (mode == PostListMode.feed && _nextOffset > 0) _nextOffset--;
-    _notify();
+    notifySafely();
   }
 
   /// Adds the user's like / save. One that already exists (e.g. made on
@@ -400,7 +428,7 @@ class PostListController extends ChangeNotifier {
     try {
       await _supabase.rpc('delete_my_post', params: {'p_post_id': post.postID});
       _posts.removeWhere((p) => p.postID == post.postID);
-      _notify();
+      notifySafely();
       // The post is gone, so its photo / PDF is no longer needed
       await StorageUrlHelper.removeOwnFile(post.mediaURL, bucket: 'post_media', userId: currentUserID);
       return null;
@@ -419,7 +447,7 @@ class PostListController extends ChangeNotifier {
     final i = _posts.indexWhere((p) => p.postID == postID);
     if (i == -1 || _posts[i].commentCount == count) return;
     _posts[i] = _posts[i].copyWith(commentCount: count);
-    _notify();
+    notifySafely();
   }
 
   /// Puts the updated [post] in place of the old one in the list.
@@ -427,17 +455,6 @@ class PostListController extends ChangeNotifier {
     final i = _posts.indexWhere((p) => p.postID == post.postID);
     if (i == -1) return;
     _posts[i] = post;
-    _notify();
-  }
-
-  /// notifyListeners, unless the controller was already disposed.
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
+    notifySafely();
   }
 }

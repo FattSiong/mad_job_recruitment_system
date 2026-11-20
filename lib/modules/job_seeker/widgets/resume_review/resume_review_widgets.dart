@@ -26,60 +26,6 @@ String _priorityLabel(String priority) => switch (priority) {
       _ => 'Medium priority',
     };
 
-/// Round score with a coloured progress ring.
-class ResumeScoreRing extends StatelessWidget {
-  final int score;
-  final double size;
-
-  const ResumeScoreRing({super.key, required this.score, this.size = 96});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = resumeScoreColor(score);
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: score / 100),
-            duration: const Duration(milliseconds: 900),
-            curve: Curves.easeOutCubic,
-            builder: (context, value, _) => CircularProgressIndicator(
-              value: value,
-              strokeWidth: size * 0.09,
-              strokeCap: StrokeCap.round,
-              backgroundColor: color.withValues(alpha: 0.12),
-              valueColor: AlwaysStoppedAnimation(color),
-            ),
-          ),
-          Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '$score',
-                  style: TextStyle(
-                    fontSize: size * 0.3,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textDark,
-                    height: 1,
-                  ),
-                ),
-                Text(
-                  '/ 100',
-                  style: TextStyle(fontSize: size * 0.12, color: AppColors.textMuted),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// One scoring area with a bar and the AI's comment.
 class ReviewCategoryBar extends StatelessWidget {
   final ReviewCategoryScore category;

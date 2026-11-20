@@ -7,9 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/file_picker_helper.dart';
 import '../../../core/utils/link_helper.dart';
 import '../../../core/utils/snackbar_helper.dart';
-import '../../../models/education_model.dart';
 import '../../../models/profile_check.dart';
-import '../../../models/work_experience_model.dart';
 import '../../../shared_widgets/confirm_dialog.dart';
 import '../../../shared_widgets/login_screen.dart';
 import '../../../shared_widgets/skill_chips.dart';
@@ -26,11 +24,13 @@ import '../widgets/profile/profile_qr_dialog.dart';
 import '../widgets/profile/profile_record_card.dart';
 import '../widgets/profile/profile_resume_card.dart';
 import '../widgets/profile/profile_sections.dart';
-import '../widgets/profile/profile_sheet_helpers.dart';
 import 'add_skill_screen.dart';
 import 'education_screen.dart';
 import 'public_profile_screen.dart';
 import 'work_experience_screen.dart';
+import '../../../shared_widgets/bottom_action_bar.dart';
+import '../../../core/theme/app_button_styles.dart';
+import '../../../shared_widgets/button_spinner.dart';
 
 /// The job seeker's own Profile tab: details, resume, career tools,
 /// work experience, education and skills.
@@ -252,31 +252,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // UI
   // ---------------------------------------------------------------------
 
-  /// One work experience entry on the profile.
-  Widget _experienceCard(WorkExperienceModel exp) {
-    return ProfileRecordCard(
-      icon: Icons.work_outline_rounded,
-      iconColor: AppColors.primary,
-      title: exp.jobTitle,
-      subtitle: exp.companyName,
-      dateRange: formatProfileDateRange(exp.startDate, exp.endDate, exp.isCurrent),
-      description: exp.description,
-    );
-  }
-
-  /// One education entry on the profile.
-  Widget _educationCard(EducationModel edu) {
-    final field = edu.fieldOfStudy;
-    return ProfileRecordCard(
-      icon: Icons.school_outlined,
-      iconColor: AppColors.warning,
-      title: field != null && field.isNotEmpty ? '${edu.degree} - $field' : edu.degree,
-      subtitle: edu.institutionName,
-      dateRange: formatProfileDateRange(edu.startDate, edu.endDate, edu.isCurrent),
-      description: edu.description,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final editing = _myProfile.isEditing;
@@ -342,7 +317,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onEdit: editing && !saving ? _changePhoto : null,
                 ),
                 onViewPublic: editing ? null : _openPublicProfile,
-                onShowQr: editing ? null : () => showProfileQrDialog(context, profile.seekerID),
+                onShowQr: editing
+                    ? null
+                    : () => showProfileQrDialog(context, profile.seekerID, name: profile.fullName),
               ),
               if (!editing) ...[
                 const SizedBox(height: 16),
@@ -376,7 +353,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onManage: editing ? () => _openRecords(const WorkExperienceScreen()) : null,
               ),
               ExpandableRecordList(
-                records: profile.workExperience.map(_experienceCard).toList(),
+                records: profile.workExperience.map<Widget>(ProfileRecordCard.experience).toList(),
                 emptyMessage: 'No work experience added yet.',
               ),
 
@@ -385,7 +362,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onManage: editing ? () => _openRecords(const EducationScreen()) : null,
               ),
               ExpandableRecordList(
-                records: profile.education.map(_educationCard).toList(),
+                records: profile.education.map<Widget>(ProfileRecordCard.education).toList(),
                 emptyMessage: 'No education details added yet.',
               ),
 
@@ -403,7 +380,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onPressed: _logout,
                     icon: const Icon(Icons.logout_rounded),
                     label: const Text('Logout', style: TextStyle(fontWeight: FontWeight.bold)),
-                    style: ProfileButtonStyles.primary(),
+                    style: AppButtonStyles.filled(radius: 18),
                   ),
                 ),
               ],
@@ -416,39 +393,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   /// Cancel / Save Details bar shown while editing.
   Widget _buildEditBar(bool saving) {
-    return SafeArea(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          boxShadow: [BoxShadow(color: AppColors.shadow, blurRadius: 12, offset: Offset(0, -4))],
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: saving ? null : _cancelEditing,
-                style: ProfileButtonStyles.secondary(),
-                child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: saving ? null : _save,
-                style: ProfileButtonStyles.primary(),
-                child: saving
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Text('Save Details', style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    return BottomActionBar(
+             padding: const EdgeInsets.all(16),
+             child: Row(
+               children: [
+                 Expanded(
+                   child: OutlinedButton(
+                     onPressed: saving ? null : _cancelEditing,
+                     style: AppButtonStyles.neutral(),
+                     child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold)),
+                   ),
+                 ),
+                 const SizedBox(width: 12),
+                 Expanded(
+                   child: ElevatedButton(
+                     onPressed: saving ? null : _save,
+                     style: AppButtonStyles.filled(radius: 18),
+                     child: saving
+                         ? const ButtonSpinner(size: 20)
+                         : const Text('Save Details', style: TextStyle(fontWeight: FontWeight.bold)),
+                   ),
+                 ),
+               ],
+             ),
+           );
   }
 }

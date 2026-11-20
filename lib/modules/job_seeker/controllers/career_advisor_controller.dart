@@ -3,9 +3,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/table_constants.dart';
 import '../../../core/utils/data_load_exception.dart';
+import '../../../core/utils/id_helper.dart';
 import '../../../models/advisor_conversation_model.dart';
 import '../../../models/advisor_message_model.dart';
 import '../../../core/utils/session_helper.dart';
+import '../../../core/utils/safe_notifier.dart';
+import '../../../core/utils/text_cut.dart';
 
 /// Result of one successful question -> answer round trip.
 class AdvisorReplyResult {
@@ -22,6 +25,10 @@ class AdvisorReplyResult {
 
 /// Error with a message that is safe to show to the user.
 class AdvisorException implements Exception {
+  /// No reply arrived (timeout or lost connection). The server may still
+  /// have answered and saved it.
+  static const String noResponse = 'no_response';
+
   final String code;
   final String message;
 
@@ -33,7 +40,7 @@ class AdvisorException implements Exception {
 
 /// AI Career Advisor: the open conversation (state for the chat screen)
 /// plus loading, sending and deleting conversations.
-class CareerAdvisorController extends ChangeNotifier {
+class CareerAdvisorController extends ChangeNotifier with SafeNotifier {
   final _supabase = Supabase.instance.client;
   String get _currentSeekerID => SessionHelper.requireUserId();
 
@@ -48,11 +55,15 @@ class CareerAdvisorController extends ChangeNotifier {
   String? _conversationTitle;
   bool _isLoadingHistory = false;
   bool _isSending = false;
-  bool _disposed = false;
 
   /// Increases on every conversation switch, so a slow, older load can't
   /// show its messages under the conversation the user opened afterwards.
   int _historyRequest = 0;
+
+  /// The last question that got no reply. Sending the same question again
+  /// in the same conversation reuses its request ID, so if the server had
+  /// answered it after all, that saved answer comes back (no duplicate).
+  ({String question, String? conversationID, String requestID})? _unanswered;
 
   List<AdvisorMessageModel> get messages => List.unmodifiable(_messages);
   String? get conversationID => _conversationID;
@@ -64,13 +75,13 @@ class CareerAdvisorController extends ChangeNotifier {
   Future<String?> openConversation(String conversationID, {String? title}) async {
     // While a reply is on its way it belongs to the open conversation: switching
     // now would put that reply (and the next question) in the wrong chat.
-    if (_isSending) return 'Please wait for the advisor to reply first.';
+    if (_isSending) return 'Please wait for Career Buddy to reply first.';
     final request = ++_historyRequest;
     _isLoadingHistory = true;
     _conversationID = conversationID;
     _conversationTitle = title;
     _messages.clear();
-    _notify();
+    notifySafely();
 
     try {
       final messages = await fetchMessages(conversationID);
@@ -83,7 +94,7 @@ class CareerAdvisorController extends ChangeNotifier {
     } finally {
       if (request == _historyRequest) {
         _isLoadingHistory = false;
-        _notify();
+        notifySafely();
       }
     }
   }
@@ -96,7 +107,7 @@ class CareerAdvisorController extends ChangeNotifier {
     _conversationID = null;
     _conversationTitle = null;
     _messages.clear();
-    _notify();
+    notifySafely();
   }
 
   /// Sends [text] in the open conversation (or starts one).
@@ -107,24 +118,34 @@ class CareerAdvisorController extends ChangeNotifier {
     if (_isSending || _isLoadingHistory) return;
     final question = text.trim();
     if (question.isEmpty) {
-      throw AdvisorException('empty_message', 'Please enter a question for the advisor.');
+      throw AdvisorException('empty_message', 'Please enter a question for Career Buddy.');
     }
+
+    final previous = _unanswered;
+    final requestID = previous != null &&
+            previous.question == question &&
+            previous.conversationID == _conversationID
+        ? previous.requestID
+        : IdHelper.uuidV4();
 
     final pending = AdvisorMessageModel.pending(question);
     _messages.add(pending);
     _isSending = true;
-    _notify();
+    notifySafely();
 
     try {
-      final result = await sendMessage(message: question, conversationID: _conversationID);
+      final result = await _sendOrRecover(question, requestID);
+      _unanswered = null;
       final index = _messages.indexOf(pending);
       if (index != -1) _messages[index] = result.userMessage;
       _messages.add(result.reply);
-      _conversationTitle ??=
-          question.length > 50 ? '${question.substring(0, 50)}…' : question;
+      _conversationTitle ??= TextCut.withEllipsis(question, 50);
       _conversationID = result.conversationID;
     } on AdvisorException catch (e) {
       _messages.remove(pending);
+      _unanswered = e.code == AdvisorException.noResponse
+          ? (question: question, conversationID: _conversationID, requestID: requestID)
+          : null;
       if (e.code == 'conversation_not_found') {
         _isSending = false;
         startNewConversation();
@@ -132,19 +153,26 @@ class CareerAdvisorController extends ChangeNotifier {
       rethrow;
     } finally {
       _isSending = false;
-      _notify();
+      notifySafely();
     }
   }
 
-  /// notifyListeners, unless the controller was already disposed.
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
+  /// Sends [question]. When no reply arrives, waits a moment and checks
+  /// once whether the server saved an answer anyway before giving up.
+  Future<AdvisorReplyResult> _sendOrRecover(String question, String requestID) async {
+    try {
+      return await sendMessage(
+        message: question,
+        conversationID: _conversationID,
+        requestID: requestID,
+      );
+    } on AdvisorException catch (e) {
+      if (e.code != AdvisorException.noResponse) rethrow;
+      await Future<void>.delayed(const Duration(seconds: 3));
+      final saved = await findSavedReply(requestID);
+      if (saved == null) rethrow;
+      return saved;
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -152,10 +180,12 @@ class CareerAdvisorController extends ChangeNotifier {
   // ---------------------------------------------------------------------
 
   /// Sends a question to the `career-advisor` Edge Function.
-  /// Pass [conversationID] = null to start a new conversation.
+  /// Pass [conversationID] = null to start a new conversation. [requestID]
+  /// identifies the question, so sending it again can't save it twice.
   Future<AdvisorReplyResult> sendMessage({
     required String message,
     String? conversationID,
+    String? requestID,
   }) async {
     final text = message.trim();
 
@@ -163,7 +193,7 @@ class CareerAdvisorController extends ChangeNotifier {
     if (text.isEmpty) {
       throw AdvisorException(
         'empty_message',
-        'Please enter a question for the advisor.',
+        'Please enter a question for Career Buddy.',
       );
     }
     if (text.length > maxMessageLength) {
@@ -177,7 +207,11 @@ class CareerAdvisorController extends ChangeNotifier {
       final response = await _supabase.functions
           .invoke(
             'career-advisor',
-            body: {'message': text, 'conversationId': conversationID},
+            body: {
+              'message': text,
+              'conversationId': conversationID,
+              if (requestID != null) 'requestId': requestID,
+            },
           )
           .timeout(const Duration(seconds: 35));
 
@@ -200,17 +234,56 @@ class CareerAdvisorController extends ChangeNotifier {
           details['message'] as String,
         );
       }
+      // No reply of ours (e.g. the gateway timed out): the outcome is unknown
       debugPrint('career-advisor FunctionException: ${e.status} ${e.details}');
-      throw AdvisorException('ai_unavailable', _unavailableMessage);
+      throw AdvisorException(AdvisorException.noResponse, _unavailableMessage);
     } catch (e) {
-      // Use case A1: timeout / no internet / unexpected response
+      // Use case A1: timeout / no internet / unexpected response. The server
+      // may still have answered, so the caller can look for a saved reply.
       debugPrint('career-advisor error: $e');
-      throw AdvisorException('ai_unavailable', _unavailableMessage);
+      throw AdvisorException(AdvisorException.noResponse, _unavailableMessage);
+    }
+  }
+
+  /// The answer saved for the question with [requestID], or null when there
+  /// is none (or it can't be checked, e.g. before the database update).
+  Future<AdvisorReplyResult?> findSavedReply(String requestID) async {
+    const columns = 'messageID, conversationID, role, content, createdAt';
+    try {
+      final question = await _supabase
+          .from(TableConstants.advisorMessage)
+          .select(columns)
+          .eq('seekerID', _currentSeekerID)
+          .eq('requestID', requestID)
+          .eq('role', 'user')
+          .maybeSingle();
+      if (question == null) return null;
+
+      final answer = await _supabase
+          .from(TableConstants.advisorMessage)
+          .select(columns)
+          .eq('conversationID', question['conversationID'] as String)
+          .eq('role', 'model')
+          .gt('createdAt', question['createdAt'] as String)
+          .order('createdAt', ascending: true)
+          .limit(1)
+          .maybeSingle();
+      if (answer == null) return null;
+
+      final userMessage = AdvisorMessageModel.fromJson(question);
+      return AdvisorReplyResult(
+        conversationID: userMessage.conversationID,
+        userMessage: userMessage,
+        reply: AdvisorMessageModel.fromJson(answer),
+      );
+    } catch (e) {
+      debugPrint('Checking for a saved Career Buddy reply failed: $e');
+      return null;
     }
   }
 
   static const String _unavailableMessage =
-      'The AI Advisor is currently unavailable. Please try again later.';
+      'Career Buddy is currently unavailable. Please try again later.';
 
   /// Past conversations, newest first. Throws [DataLoadException].
   Future<List<AdvisorConversationModel>> fetchConversations() async {
