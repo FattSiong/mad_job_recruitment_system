@@ -47,6 +47,8 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
   List<Map<String, dynamic>> _answers = [];
   bool _isLoadingAnswers = true;
   bool _isAutoGradingAnswers = false;
+  bool _isPreScreeningExpanded = false;
+  final Set<int> _collapsedQuestionIndices = <int>{};
   final Set<String> _savingAnswerIds = <String>{};
   bool _isUpdating = false;
   bool _isDownloadingFile = false;
@@ -1562,6 +1564,16 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
               title: 'Pre-Screening Answers',
               subtitle:
                   'Read and grade each candidate response out of 5 marks (employer-only).',
+              headerTrailing: (!_isLoadingAnswers && _answers.isNotEmpty)
+                  ? _buildPreScreeningHeaderToggle()
+                  : null,
+              onHeaderTap: (!_isLoadingAnswers && _answers.isNotEmpty)
+                  ? () {
+                      setState(() {
+                        _isPreScreeningExpanded = !_isPreScreeningExpanded;
+                      });
+                    }
+                  : null,
               child: _buildAnswersSection(),
             ),
             const SizedBox(height: 18),
@@ -2792,6 +2804,49 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
     );
   }
 
+  Widget _buildPreScreeningHeaderToggle() {
+    final count = _answers.length;
+    final label = count == 1 ? '1 Question' : '$count Questions';
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEFF4FB),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: const Color(0xFFD6E3F3)),
+          ),
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF163B65),
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1F5FA),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(
+            _isPreScreeningExpanded
+                ? Icons.keyboard_arrow_up_rounded
+                : Icons.keyboard_arrow_down_rounded,
+            size: 20,
+            color: const Color(0xFF163B65),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildAnswersSection() {
     if (_isLoadingAnswers) {
       return const Center(child: CircularProgressIndicator());
@@ -2839,8 +2894,11 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
         ? '? / $maxTotalMarks'
         : '$earnedTotal / $maxTotalMarks';
     final String summarySubText = gradedCount == 0
-        ? '0 of $totalQuestions reviewed • Tap 0–5 below to grade'
+        ? '0 of $totalQuestions reviewed • Expand below to grade'
         : '$gradedCount of $totalQuestions reviewed • Avg ${(earnedTotal / gradedCount).toStringAsFixed(1)}/5';
+
+    final bool allIndividualCollapsed =
+        _collapsedQuestionIndices.length >= totalQuestions;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2961,202 +3019,348 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
                   ),
                 ),
               ],
+              const SizedBox(height: 10),
+              const Divider(height: 1, color: Color(0xFFDCE4EE)),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: () {
+                        setState(() {
+                          _isPreScreeningExpanded = !_isPreScreeningExpanded;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 9,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFD6E1EE)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              _isPreScreeningExpanded
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.quiz_outlined,
+                              size: 16,
+                              color: const Color(0xFF163B65),
+                            ),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                _isPreScreeningExpanded
+                                    ? 'Hide'
+                                    : 'Show $totalQuestions ${totalQuestions == 1 ? 'Question & Answer' : 'Questions & Answers'}',
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF163B65),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(
+                              _isPreScreeningExpanded
+                                  ? Icons.keyboard_arrow_up_rounded
+                                  : Icons.keyboard_arrow_down_rounded,
+                              size: 18,
+                              color: const Color(0xFF163B65),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (_isPreScreeningExpanded && totalQuestions > 1) ...[
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: () {
+                        setState(() {
+                          if (allIndividualCollapsed) {
+                            _collapsedQuestionIndices.clear();
+                          } else {
+                            for (int i = 0; i < totalQuestions; i++) {
+                              _collapsedQuestionIndices.add(i);
+                            }
+                          }
+                        });
+                      },
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFF163B65),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                      ),
+                      child: Text(
+                        allIndividualCollapsed ? 'Expand All' : 'Collapse All',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ],
           ),
         ),
-        const SizedBox(height: 14),
-        ListView.separated(
-          padding: EdgeInsets.zero,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: _answers.length,
-          separatorBuilder: (context, index) => const SizedBox(height: 12),
-          itemBuilder: (context, index) {
-            final ans = _answers[index];
-            final question = ans['PreScreeningQuestion'] ?? {};
-            final qText = question['questionText'] ?? 'Unknown Question';
-            final isFile = question['questionType'] == 'File';
-            final answerFileUrl = ans['answerFileURL'];
-            final String answerId = (ans['answerID'] ?? '').toString().trim();
-            final int? score = (ans['score'] as num?)?.toInt();
-            final bool isSaving = _savingAnswerIds.contains(answerId);
+        AnimatedSize(
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeInOut,
+          alignment: Alignment.topCenter,
+          child: !_isPreScreeningExpanded
+              ? const SizedBox.shrink()
+              : Padding(
+                  padding: const EdgeInsets.only(top: 14),
+                  child: ListView.separated(
+                    padding: EdgeInsets.zero,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _answers.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final ans = _answers[index];
+                      final question = ans['PreScreeningQuestion'] ?? {};
+                      final qText =
+                          question['questionText'] ?? 'Unknown Question';
+                      final isFile = question['questionType'] == 'File';
+                      final answerFileUrl = ans['answerFileURL'];
+                      final String answerId =
+                          (ans['answerID'] ?? '').toString().trim();
+                      final int? score = (ans['score'] as num?)?.toInt();
+                      final bool isSaving =
+                          _savingAnswerIds.contains(answerId);
+                      final bool isItemCollapsed =
+                          _collapsedQuestionIndices.contains(index);
 
-            Color scoreBadgeBg = const Color(0xFFEFF3F8);
-            Color scoreBadgeFg = const Color(0xFF687588);
-            if (score != null) {
-              if (score >= 4) {
-                scoreBadgeBg = const Color(0xFFE5F6ED);
-                scoreBadgeFg = const Color(0xFF2D8A5D);
-              } else if (score >= 2) {
-                scoreBadgeBg = const Color(0xFFFEF3DC);
-                scoreBadgeFg = const Color(0xFF9A640C);
-              } else {
-                scoreBadgeBg = const Color(0xFFFCE9E9);
-                scoreBadgeFg = const Color(0xFFC24E4E);
-              }
-            }
+                      Color scoreBadgeBg = const Color(0xFFEFF3F8);
+                      Color scoreBadgeFg = const Color(0xFF687588);
+                      if (score != null) {
+                        if (score >= 4) {
+                          scoreBadgeBg = const Color(0xFFE5F6ED);
+                          scoreBadgeFg = const Color(0xFF2D8A5D);
+                        } else if (score >= 2) {
+                          scoreBadgeBg = const Color(0xFFFEF3DC);
+                          scoreBadgeFg = const Color(0xFF9A640C);
+                        } else {
+                          scoreBadgeBg = const Color(0xFFFCE9E9);
+                          scoreBadgeFg = const Color(0xFFC24E4E);
+                        }
+                      }
 
-            return Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF7F9FC),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
+                      return Container(
+                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFDCEBFB),
-                          borderRadius: BorderRadius.circular(12),
+                          color: const Color(0xFFF7F9FC),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFFE5ECF4)),
                         ),
-                        child: const Icon(
-                          Icons.quiz_outlined,
-                          size: 18,
-                          color: Color(0xFF163B65),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          qText,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF1B2433),
-                            height: 1.4,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: scoreBadgeBg,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          score == null ? '?/5' : '$score/5',
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w800,
-                            color: scoreBadgeFg,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  if (isFile && answerFileUrl != null)
-                    OutlinedButton.icon(
-                      onPressed: _isDownloadingFile
-                          ? null
-                          : () => _downloadAndOpenFile(
-                                answerFileUrl,
-                                'applicant_answer_${index + 1}.pdf',
-                              ),
-                      icon: const Icon(Icons.download_rounded),
-                      label: const Text('Download Uploaded File'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF163B65),
-                        side: const BorderSide(color: Color(0xFF163B65)),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 14,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                    )
-                  else
-                    Text(
-                      ans['answerText'] ?? 'No answer provided.',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        height: 1.5,
-                        color: Color(0xFF4F5C6C),
-                      ),
-                    ),
-                  const SizedBox(height: 14),
-                  const Divider(height: 1, color: Color(0xFFE5ECF4)),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.grade_outlined,
-                            size: 16,
-                            color: Color(0xFF687588),
-                          ),
-                          SizedBox(width: 5),
-                          Text(
-                            'Marks:',
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF687588),
-                            ),
-                          ),
-                        ],
-                      ),
-                      for (int mark = 0; mark <= 5; mark++)
-                        _buildMarkOptionPill(
-                          mark: mark,
-                          isSelected: score == mark,
-                          isDisabled: _isJobDeleted ||
-                              _isAutoGradingAnswers ||
-                              isSaving ||
-                              answerId.isEmpty,
-                          onTap: () => _setAnswerScore(index, mark),
-                        ),
-                      if (isSaving)
-                        const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      else if (score != null &&
-                          !_isJobDeleted &&
-                          !_isAutoGradingAnswers)
-                        InkWell(
-                          onTap: () => _setAnswerScore(index, null),
-                          borderRadius: BorderRadius.circular(999),
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 4,
-                            ),
-                            child: Text(
-                              'Reset',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF687588),
-                                decoration: TextDecoration.underline,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            InkWell(
+                              onTap: () {
+                                setState(() {
+                                  if (isItemCollapsed) {
+                                    _collapsedQuestionIndices.remove(index);
+                                  } else {
+                                    _collapsedQuestionIndices.add(index);
+                                  }
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(12),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    width: 36,
+                                    height: 36,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFDCEBFB),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      'Q${index + 1}',
+                                      style: const TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF163B65),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      qText,
+                                      maxLines: isItemCollapsed ? 1 : null,
+                                      overflow: isItemCollapsed
+                                          ? TextOverflow.ellipsis
+                                          : null,
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF1B2433),
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 5,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: scoreBadgeBg,
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      score == null ? '?/5' : '$score/5',
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w800,
+                                        color: scoreBadgeFg,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Icon(
+                                    isItemCollapsed
+                                        ? Icons.keyboard_arrow_down_rounded
+                                        : Icons.keyboard_arrow_up_rounded,
+                                    size: 20,
+                                    color: const Color(0xFF687588),
+                                  ),
+                                ],
                               ),
                             ),
-                          ),
+                            if (!isItemCollapsed) ...[
+                              const SizedBox(height: 14),
+                              if (isFile && answerFileUrl != null)
+                                OutlinedButton.icon(
+                                  onPressed: _isDownloadingFile
+                                      ? null
+                                      : () => _downloadAndOpenFile(
+                                            answerFileUrl,
+                                            'applicant_answer_${index + 1}.pdf',
+                                          ),
+                                  icon: const Icon(Icons.download_rounded),
+                                  label: const Text('Download Uploaded File'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFF163B65),
+                                    side: const BorderSide(
+                                      color: Color(0xFF163B65),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 14,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                  ),
+                                )
+                              else
+                                Text(
+                                  ans['answerText'] ?? 'No answer provided.',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    height: 1.5,
+                                    color: Color(0xFF4F5C6C),
+                                  ),
+                                ),
+                              const SizedBox(height: 14),
+                              const Divider(
+                                height: 1,
+                                color: Color(0xFFE5ECF4),
+                              ),
+                              const SizedBox(height: 12),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.grade_outlined,
+                                        size: 16,
+                                        color: Color(0xFF687588),
+                                      ),
+                                      SizedBox(width: 5),
+                                      Text(
+                                        'Marks:',
+                                        style: TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF687588),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  for (int mark = 0; mark <= 5; mark++)
+                                    _buildMarkOptionPill(
+                                      mark: mark,
+                                      isSelected: score == mark,
+                                      isDisabled: _isJobDeleted ||
+                                          _isAutoGradingAnswers ||
+                                          isSaving ||
+                                          answerId.isEmpty,
+                                      onTap: () => _setAnswerScore(index, mark),
+                                    ),
+                                  if (isSaving)
+                                    const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  else if (score != null &&
+                                      !_isJobDeleted &&
+                                      !_isAutoGradingAnswers)
+                                    InkWell(
+                                      onTap: () => _setAnswerScore(index, null),
+                                      borderRadius: BorderRadius.circular(999),
+                                      child: const Padding(
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 4,
+                                        ),
+                                        child: Text(
+                                          'Reset',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF687588),
+                                            decoration:
+                                                TextDecoration.underline,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ],
                         ),
-                    ],
+                      );
+                    },
                   ),
-                ],
-              ),
-            );
-          },
+                ),
         ),
       ],
     );
@@ -3210,7 +3414,43 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
     required String title,
     required String subtitle,
     required Widget child,
+    Widget? headerTrailing,
+    VoidCallback? onHeaderTap,
   }) {
+    final headerContent = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1B2433),
+                ),
+              ),
+            ),
+            if (headerTrailing != null) ...[
+              const SizedBox(width: 10),
+              headerTrailing,
+            ],
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          subtitle,
+          style: const TextStyle(
+            fontSize: 13,
+            height: 1.4,
+            color: Color(0xFF687588),
+          ),
+        ),
+      ],
+    );
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -3221,23 +3461,14 @@ class _ApplicantDetailScreenState extends State<ApplicantDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF1B2433),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            style: const TextStyle(
-              fontSize: 13,
-              height: 1.4,
-              color: Color(0xFF687588),
-            ),
-          ),
+          if (onHeaderTap != null)
+            InkWell(
+              onTap: onHeaderTap,
+              borderRadius: BorderRadius.circular(14),
+              child: headerContent,
+            )
+          else
+            headerContent,
           const SizedBox(height: 18),
           child,
         ],
