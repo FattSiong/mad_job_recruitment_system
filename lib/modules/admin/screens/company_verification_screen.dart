@@ -295,9 +295,11 @@ class _CompanyVerificationScreenState extends State<CompanyVerificationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final canPop = Navigator.of(context).canPop();
     return Scaffold(
       backgroundColor: _bgColor,
-      body: StreamBuilder<List<Map<String, dynamic>>>(
+      body: SafeArea(
+        child: StreamBuilder<List<Map<String, dynamic>>>(
         stream: supabase.from('Company').stream(primaryKey: ['companyID']),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
@@ -340,9 +342,32 @@ class _CompanyVerificationScreenState extends State<CompanyVerificationScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildHeaderChip(
-                        Icons.business_center_rounded,
-                        'Business Verification',
+                      Row(
+                        children: [
+                          if (canPop) ...[
+                            Material(
+                              color: Colors.white.withValues(alpha: 0.16),
+                              borderRadius: BorderRadius.circular(12),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(12),
+                                onTap: () => Navigator.of(context).pop(),
+                                child: const Padding(
+                                  padding: EdgeInsets.all(8),
+                                  child: Icon(
+                                    Icons.arrow_back_rounded,
+                                    size: 18,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                          ],
+                          _buildHeaderChip(
+                            Icons.business_center_rounded,
+                            'Business Verification',
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 18),
                       const Text(
@@ -469,6 +494,7 @@ class _CompanyVerificationScreenState extends State<CompanyVerificationScreen> {
             ],
           );
         },
+      ),
       ),
     );
   }

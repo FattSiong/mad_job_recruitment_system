@@ -4,6 +4,7 @@ class NotificationModel {
   final String type;
   final String title;
   final String body;
+  final String? companyID;
   final String? jobID;
   final String? applicantID;
   final String? scheduleID;
@@ -16,6 +17,7 @@ class NotificationModel {
     required this.type,
     required this.title,
     required this.body,
+    this.companyID,
     this.jobID,
     this.applicantID,
     this.scheduleID,
@@ -24,6 +26,7 @@ class NotificationModel {
   });
 
   factory NotificationModel.fromJson(Map<String, dynamic> json) {
+    final rawCompanyId = json['companyID']?.toString().trim();
     final rawJobId = json['jobID']?.toString().trim();
     final rawApplicantId = json['applicantID']?.toString().trim();
     final rawScheduleId = json['scheduleID']?.toString().trim();
@@ -35,6 +38,10 @@ class NotificationModel {
       type: (json['type'] ?? 'recruitment_update').toString(),
       title: (json['title'] ?? 'Recruitment Update').toString(),
       body: (json['body'] ?? '').toString(),
+      companyID:
+          (rawCompanyId != null && rawCompanyId.isNotEmpty)
+              ? rawCompanyId
+              : null,
       jobID: (rawJobId != null && rawJobId.isNotEmpty) ? rawJobId : null,
       applicantID:
           (rawApplicantId != null && rawApplicantId.isNotEmpty)
@@ -57,12 +64,28 @@ class NotificationModel {
       type: type,
       title: title,
       body: body,
+      companyID: companyID,
       jobID: jobID,
       applicantID: applicantID,
       scheduleID: scheduleID,
       isRead: isRead ?? this.isRead,
       createdAt: createdAt,
     );
+  }
+
+  /// True when the notification targets an Admin for a new company registration.
+  bool get isAdminCompanyEvent => type == 'company_registered_admin';
+
+  /// True when the notification targets an Employer about their company registration/verification.
+  bool get isEmployerCompanyEvent {
+    switch (type) {
+      case 'company_submitted':
+      case 'company_verified':
+      case 'company_rejected':
+        return true;
+      default:
+        return false;
+    }
   }
 
   /// An admin removed the user's community post or comment.

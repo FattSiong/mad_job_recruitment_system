@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/notification_model.dart';
+import '../modules/admin/screens/company_verification_screen.dart';
 import '../modules/employer/screens/applicant_detail_screen.dart';
+import '../modules/employer/screens/company_detail_screen.dart';
+import '../modules/employer/screens/company_list_screen.dart';
 import '../modules/employer/screens/subscription_screen.dart';
 import '../modules/job_seeker/controllers/applied_jobs_controller.dart';
 import '../modules/job_seeker/screens/my_jobs_screen.dart';
@@ -103,6 +106,7 @@ class NotificationService {
                   'eventType': item.type,
                   'title': item.title,
                   'body': item.body,
+                  'companyID': item.companyID ?? '',
                   'jobID': item.jobID ?? '',
                   'applicantID': item.applicantID ?? '',
                   'scheduleID': item.scheduleID ?? '',
@@ -247,6 +251,37 @@ class NotificationService {
     // already in the list, and there is nothing to open.
     if (item.isModerationNotice) return;
 
+    if (item.isAdminCompanyEvent) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const CompanyVerificationScreen(),
+        ),
+      );
+      return;
+    }
+
+    if (item.isEmployerCompanyEvent) {
+      final companyId = item.companyID?.trim() ?? '';
+      if (companyId.isNotEmpty) {
+        final company = await EmployerService().getCompanyById(companyId);
+        if (company != null && context.mounted) {
+          await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => CompanyDetailScreen(company: company),
+            ),
+          );
+          return;
+        }
+      }
+      if (!context.mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const CompanyListScreen(userRole: 'employer'),
+        ),
+      );
+      return;
+    }
+
     if (item.isEmployerEvent) {
       final applicantId = item.applicantID?.trim() ?? '';
       if (applicantId.isEmpty) return;
@@ -305,6 +340,9 @@ class NotificationService {
           .toString(),
       title: (data['title'] ?? 'Recruitment Update').toString(),
       body: (data['body'] ?? '').toString(),
+      companyID: (data['companyID'] ?? '').toString().trim().isEmpty
+          ? null
+          : data['companyID'].toString().trim(),
       jobID: (data['jobID'] ?? '').toString().trim().isEmpty
           ? null
           : data['jobID'].toString().trim(),
