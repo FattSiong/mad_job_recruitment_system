@@ -20,7 +20,7 @@
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are provided automatically.
 // =====================================================================
 
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 const CHAT_CHANNEL_ID = "chat_messages";             // must match PushService in the app
 const RECRUITMENT_CHANNEL_ID = "recruitment_updates"; // must match PushService in the app
@@ -326,12 +326,13 @@ interface RecruitmentPushPayload {
   eventType?: string;
   title?: string;
   body?: string;
+  companyID?: string;
   jobID?: string;
   applicantID?: string;
   scheduleID?: string;
 }
 
-/** Recruitment pipeline notification (Apply -> Schedule -> Interview -> Offer -> Decision). */
+/** Recruitment pipeline notification (Apply -> Schedule -> Interview -> Offer -> Decision, plus Company Verification). */
 async function handleRecruitmentEvent(
   admin: SupabaseClient,
   sa: ServiceAccount,
@@ -353,6 +354,7 @@ async function handleRecruitmentEvent(
       eventType,
       title,
       body,
+      companyID: (payload.companyID ?? "").toString(),
       jobID: (payload.jobID ?? "").toString(),
       applicantID: (payload.applicantID ?? "").toString(),
       scheduleID: (payload.scheduleID ?? "").toString(),
