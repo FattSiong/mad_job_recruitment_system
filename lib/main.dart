@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -12,9 +11,6 @@ import 'shared_widgets/auth_gate.dart';
 Future<void> main() async {
   // 1. Mandatory line for plugin initialization
   WidgetsFlutterBinding.ensureInitialized();
-
-  // 2. Load environment variables
-  await dotenv.load(fileName: ".env");
 
   Stripe.publishableKey =
   'pk_test_51TPT4D8sWAvwhsmDNXUbF8LCTGtSuW7jRjuiAKqtMz0EYa0dNcG1cLXRzDP7LHAPKqtYfx0PuxLt3gl2erO0ttb000Wt76CdRo';

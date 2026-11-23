@@ -9,13 +9,40 @@ import 'dart:typed_data';
 import '../core/constants/table_constants.dart';
 import '../core/utils/storage_url_helper.dart';
 import 'dart:convert';
-import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:http/http.dart' as http;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 class EmployerService {
   // Get the single instance of our Supabase client
   final _supabase = Supabase.instance.client;
+
+  /// Calls the `employer-ai` Supabase Edge Function so `GEMINI_API_KEY` stays
+  /// strictly on the server (never bundled in the Flutter app).
+  Future<String?> _invokeEmployerAi({
+    required String prompt,
+    List<Map<String, String>> inlineParts = const [],
+    String? responseMimeType,
+    double? temperature,
+    Duration timeout = const Duration(seconds: 60),
+  }) async {
+    final response = await _supabase.functions
+        .invoke(
+          'employer-ai',
+          body: {
+            'prompt': prompt,
+            if (inlineParts.isNotEmpty) 'inlineParts': inlineParts,
+            if (responseMimeType != null) 'responseMimeType': responseMimeType,
+            if (temperature != null) 'temperature': temperature,
+          },
+        )
+        .timeout(timeout);
+
+    final data = response.data;
+    if (data is Map && data['text'] != null) {
+      return data['text'].toString().trim();
+    }
+    return null;
+  }
 
   Future<Map<String, dynamic>?> getEmployerProfile(String employerId) async {
     try {
@@ -362,18 +389,6 @@ class EmployerService {
     String? locationName,
   }) async {
     try {
-      // 1. Retrieve the hidden API key
-      const apiKey = 'AIzaSyCPF5BiUdWIoroAWm42IhiUfxDMkQzFJ6U';
-
-      // 2. Initialize the Flash model with JSON response mime type
-      final model = GenerativeModel(
-        model: 'gemini-3-flash-preview',
-        apiKey: apiKey,
-        generationConfig: GenerationConfig(
-          responseMimeType: 'application/json',
-        ),
-      );
-
       final locationContext =
           (locationName != null && locationName.trim().isNotEmpty)
               ? locationName.trim()
@@ -425,9 +440,11 @@ Example: {"min": "4000", "max": "5200"}
 ''';
       }
 
-      // 4. Send to Gemini
-      final response = await model.generateContent([Content.text(prompt)]);
-      final String? responseText = response.text;
+      // Send to server-side employer-ai Edge Function
+      final String? responseText = await _invokeEmployerAi(
+        prompt: prompt,
+        responseMimeType: 'application/json',
+      );
 
       if (responseText != null && responseText.isNotEmpty) {
         final cleanedJson = responseText
@@ -613,13 +630,6 @@ Example: {"min": "4000", "max": "5200"}
     List<String> existingQuestions = const [],
   }) async {
     try {
-      // 1. Initialize the Model
-      const apiKey = 'AIzaSyCPF5BiUdWIoroAWm42IhiUfxDMkQzFJ6U';
-      final model = GenerativeModel(
-        model: 'gemini-3-flash-preview',
-        apiKey: apiKey,
-      );
-
       final descContext =
           jobDesc.trim().isEmpty ? 'Not provided' : jobDesc.trim();
       final seniorityNote = minExperience == 0
@@ -671,13 +681,12 @@ You MUST generate a completely different question covering a distinct topic or c
 CRITICAL INSTRUCTION: Output ONLY the question/request text itself. Do not use quotation marks, numbering, bullet points, or introductory filler.
 ''';
 
-      // 4. Send to Gemini
-      final content = [Content.text(prompt)];
-      final response = await model.generateContent(content);
+      // 4. Send to server-side employer-ai Edge Function
+      final responseText = await _invokeEmployerAi(prompt: prompt);
 
       // 5. Clean and return the result
-      if (response.text != null && response.text!.isNotEmpty) {
-        return response.text!.trim().replaceAll('"', '');
+      if (responseText != null && responseText.isNotEmpty) {
+        return responseText.trim().replaceAll('"', '');
       }
 
       return '';
@@ -1004,12 +1013,6 @@ CRITICAL INSTRUCTION: Output ONLY the question/request text itself. Do not use q
       final applicantId = (applicantData['applicantID'] ?? '').toString();
       if (applicantId.isEmpty) return false;
 
-      const apiKey = 'AIzaSyCPF5BiUdWIoroAWm42IhiUfxDMkQzFJ6U';
-      final model = GenerativeModel(
-        model: 'gemini-3-flash-preview',
-        apiKey: apiKey,
-      );
-
       final seeker =
           (applicantData['JobSeeker'] as Map<String, dynamic>?) ?? {};
       final fullName = (seeker['fullName'] ?? 'Candidate').toString();
@@ -1125,14 +1128,22 @@ Return ONLY a valid JSON object with the exact following keys (no markdown fence
 }
 ''';
 
-      final List<Part> parts = [TextPart(promptText)];
+      final List<Map<String, String>> inlineParts = [];
       if (resumePdfBytes != null &&
           resumeUrl.toLowerCase().split('?').first.endsWith('.pdf')) {
-        parts.add(DataPart('application/pdf', resumePdfBytes));
+        inlineParts.add({
+          'mimeType': 'application/pdf',
+          'data': base64Encode(resumePdfBytes),
+        });
       }
 
-      final aiResponse = await model.generateContent([Content.multi(parts)]);
-      final rawText = aiResponse.text?.trim() ?? '';
+      final rawText =
+          (await _invokeEmployerAi(
+                prompt: promptText,
+                inlineParts: inlineParts,
+              ))
+              ?.trim() ??
+          '';
       if (rawText.isEmpty) return false;
 
       // Clean potential markdown code fences around JSON
@@ -1286,13 +1297,7 @@ Return ONLY a valid JSON object with the exact following keys (no markdown fence
         } catch (_) {}
       }
 
-      const apiKey = 'AIzaSyCPF5BiUdWIoroAWm42IhiUfxDMkQzFJ6U';
-      final model = GenerativeModel(
-        model: 'gemini-3-flash-preview',
-        apiKey: apiKey,
-      );
-
-      final List<Part> attachmentParts = [];
+      final List<Map<String, String>> attachmentParts = [];
       final List<String> questionBlocks = [];
 
       for (int i = 0; i < targetAnswers.length; i++) {
@@ -1321,9 +1326,10 @@ Return ONLY a valid JSON object with the exact following keys (no markdown fence
                 if (resp.statusCode == 200 && resp.bodyBytes.isNotEmpty) {
                   extractedFileText = _extractPdfTextFallback(resp.bodyBytes);
                   if (fileUrl.toLowerCase().split('?').first.endsWith('.pdf')) {
-                    attachmentParts.add(
-                      DataPart('application/pdf', resp.bodyBytes),
-                    );
+                    attachmentParts.add({
+                      'mimeType': 'application/pdf',
+                      'data': base64Encode(resp.bodyBytes),
+                    });
                   }
                 }
               }
@@ -1389,9 +1395,13 @@ Return ONLY a valid JSON object in this exact format (no markdown fences, no ext
 }
 ''';
 
-      final List<Part> parts = [TextPart(promptText), ...attachmentParts];
-      final aiResponse = await model.generateContent([Content.multi(parts)]);
-      final rawText = aiResponse.text?.trim() ?? '';
+      final rawText =
+          (await _invokeEmployerAi(
+                prompt: promptText,
+                inlineParts: attachmentParts,
+              ))
+              ?.trim() ??
+          '';
       if (rawText.isEmpty) return {};
 
       String cleanedJson = rawText
@@ -1551,12 +1561,6 @@ Return ONLY a valid JSON object in this exact format (no markdown fences, no ext
     String? companyName,
   }) async {
     try {
-      const apiKey = 'AIzaSyCPF5BiUdWIoroAWm42IhiUfxDMkQzFJ6U';
-      final model = GenerativeModel(
-        model: 'gemini-3-flash-preview',
-        apiKey: apiKey,
-      );
-
       final startStr = offerStartDate.toIso8601String().split('T').first;
       final org = (companyName != null && companyName.trim().isNotEmpty)
           ? companyName.trim()
@@ -1572,8 +1576,7 @@ Key offer details to include naturally:
 Return ONLY the plain text of the offer letter body (no markdown code blocks, no subject line, no placeholders like [Your Name]). Sign off warmly from the Hiring Team at $org.
 ''';
 
-      final response = await model.generateContent([Content.text(prompt)]);
-      final text = response.text?.trim();
+      final text = (await _invokeEmployerAi(prompt: prompt))?.trim();
       return (text != null && text.isNotEmpty) ? text : null;
     } catch (e) {
       debugPrint('Generate AI offer letter error: $e');
@@ -2060,17 +2063,7 @@ Return ONLY the plain text of the offer letter body (no markdown code blocks, no
       } catch (_) {}
     }
 
-    // 2. Analyze mixed interview audio with Gemini Multimodal
-    const apiKey = 'AIzaSyCPF5BiUdWIoroAWm42IhiUfxDMkQzFJ6U';
-    final model = GenerativeModel(
-      model: 'gemini-3-flash-preview',
-      apiKey: apiKey,
-      generationConfig: GenerationConfig(
-        responseMimeType: 'application/json',
-        temperature: 0.3,
-      ),
-    );
-
+    // 2. Analyze mixed interview audio with Gemini Multimodal via employer-ai Edge Function
     final prompt = '''
 You are an objective, professional AI Recruitment & Post-Interview Analyst.
 You are given the mixed audio recording (${durationSeconds}s) of a live video job interview between an Interviewer (Employer at $companyName) and a Candidate ($candidateName), along with the Job Requirements and Candidate Profile.
@@ -2145,16 +2138,21 @@ Return ONLY a valid JSON object matching this exact structure:
 
     Map<String, dynamic> decoded;
     try {
-      final aiResponse = await model
-          .generateContent([
-            Content.multi([
-              TextPart(prompt),
-              DataPart('audio/aac', audioBytes),
-            ]),
-          ])
-          .timeout(const Duration(seconds: 90));
-
-      final rawText = aiResponse.text?.trim() ?? '';
+      final rawText =
+          (await _invokeEmployerAi(
+                prompt: prompt,
+                inlineParts: [
+                  {
+                    'mimeType': 'audio/aac',
+                    'data': base64Encode(audioBytes),
+                  },
+                ],
+                responseMimeType: 'application/json',
+                temperature: 0.3,
+                timeout: const Duration(seconds: 90),
+              ))
+              ?.trim() ??
+          '';
       if (rawText.isEmpty) {
         throw const PostInterviewReportException(
           'ai_empty',
