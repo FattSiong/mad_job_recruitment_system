@@ -95,27 +95,28 @@ class AdminJobModerationController extends ModerationListController<JobModeratio
   /// One page of jobs that are not removed, by time (newest or oldest
   /// first), older / newer than [before].
   @override
-  Future<ModerationPage<JobModerationItem>> loadPage({DateTime? before}) async {
+  Future<ModerationPage<JobModerationItem>> loadPage({ModerationCursor? before}) async {
     final text = cleanModerationSearch(search);
-    var query = supabase.from(TableConstants.job).select(_jobColumns).neq('status', 'deleted');
+    final query = supabase.from(TableConstants.job).select(_jobColumns).neq('status', 'deleted');
 
+    String? searchOr;
     if (text.isNotEmpty) {
       // Title, description or place, or the company / employer name
       final names = await _namesMatching(text);
-      query = query.or([
+      searchOr = [
         'title.ilike.*$text*',
         'description.ilike.*$text*',
         'locationName.ilike.*$text*',
         if (names.companies.isNotEmpty) 'companyID.in.(${names.companies.join(',')})',
         if (names.employers.isNotEmpty) 'employerID.in.(${names.employers.join(',')})',
-      ].join(','));
+      ].join(',');
     }
-    final rows = await readPage(query, before);
+    final rows = await readPage(query, before, idColumn: 'jobID', searchOr: searchOr);
     if (rows.isEmpty) return ModerationPage<JobModerationItem>(const []);
 
     final ids = rows.map((r) => r['jobID'].toString()).toList();
     final reportRows = await openReportsFor(TableConstants.reportedJob, _reportColumns, 'jobID', ids);
-    return pageOf(await _build(rows, reportRows), rows);
+    return pageOf(await _build(rows, reportRows), rows, idColumn: 'jobID');
   }
 
   /// Turns job rows into items, with employer / reporter names and the

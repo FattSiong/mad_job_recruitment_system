@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+// Lengths are counted like the text box counts them (an emoji is one character)
+import 'package:flutter/widgets.dart' show StringCharacters;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/table_constants.dart';
@@ -80,8 +82,9 @@ class ChatRoomController extends ChangeNotifier with SafeNotifier {
   /// A photo, file or voice note is being uploaded.
   bool get isUploading => _outbox.isUploading;
 
-  /// Messages that could not be sent and are waiting to be resent.
-  int get unsentCount => _outbox.failed.length;
+  /// Messages not saved yet: "Not sent" ones and ones still sending
+  /// (e.g. a photo still uploading). Leaving the chat discards them.
+  int get unsentCount => _outbox.items.where((i) => i.status != OutboxStatus.sent).length;
 
   /// While either person has blocked the other, nobody can send or call.
   ChatBlockState get blockState => _blockState;
@@ -255,7 +258,7 @@ class ChatRoomController extends ChangeNotifier with SafeNotifier {
     final content = text.trim();
     if (content.isEmpty) return null;
     if (isBlocked) return blockedMessage;
-    if (content.length > 4000) return 'Messages can be up to 4000 characters.';
+    if (content.characters.length > 4000) return 'Messages can be up to 4000 characters.';
 
     final item = OutboxItem(_newMessage(content: content, mediaType: 'text'));
     _outbox.add(item);
@@ -312,6 +315,11 @@ class ChatRoomController extends ChangeNotifier with SafeNotifier {
         item.markUploaded(await _upload(item.file!, item.fileName ?? 'file'));
         notifySafely();
       }
+      if (isDisposed) {
+        // The chat was closed while uploading and the user chose to discard it
+        await _discard(item);
+        return null;
+      }
       try {
         await _insert(item.message);
       } catch (e) {
@@ -323,6 +331,12 @@ class ChatRoomController extends ChangeNotifier with SafeNotifier {
       return null;
     } catch (e) {
       debugPrint('Send failed (${item.message.mediaType}): $e');
+      if (isDisposed) {
+        // Failed after the chat was closed: nobody can resend it, so don't
+        // leave its uploaded file behind
+        await _discard(item);
+        return null;
+      }
       if (await _blockedJustNow(e)) {
         await _discard(item);
         return blockedMessage;
@@ -483,7 +497,7 @@ class ChatRoomController extends ChangeNotifier with SafeNotifier {
     final content = text.trim();
     if (content == message.content.trim()) return null; // nothing changed
     if (content.isEmpty) return 'A message can\'t be empty.';
-    if (content.length > 4000) return 'Messages can be up to 4000 characters.';
+    if (content.characters.length > 4000) return 'Messages can be up to 4000 characters.';
     if (!canEdit(message)) return isBlocked ? blockedMessage : editClosedMessage;
     try {
       final rows = await _supabase

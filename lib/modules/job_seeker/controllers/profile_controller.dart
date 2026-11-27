@@ -12,6 +12,7 @@ import '../../../models/job_seeker_model.dart';
 import '../../../models/work_experience_model.dart';
 import '../../../core/utils/session_helper.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/user_directory.dart';
 
 /// Job seeker profile data.
 ///
@@ -79,14 +80,6 @@ class ProfileController {
     try {
       final viewerId = _supabase.auth.currentUser?.id;
 
-      final response = await _supabase
-          .from(TableConstants.jobSeeker)
-          .select('*, WorkExperience(*), Education(*)')
-          .eq('seekerID', targetSeekerId)
-          .maybeSingle();
-      if (response == null) return null;
-      final full = JobSeekerModel.fromJson(response);
-
       String? viewerRole;
       if (viewerId != null) {
         final roleRow = await _supabase
@@ -94,28 +87,36 @@ class ProfileController {
             .select('role')
             .eq('userID', viewerId)
             .maybeSingle();
-        viewerRole = roleRow?['role'] as String?;
+        viewerRole = (roleRow?['role'] as String?)?.toLowerCase();
       }
 
       final contactVisible = viewerId == targetSeekerId ||
           viewerRole == 'employer' ||
           viewerRole == 'admin';
-      if (contactVisible) return (profile: full, contactVisible: true);
+      if (contactVisible) {
+        final response = await _supabase
+            .from(TableConstants.jobSeeker)
+            .select('*, WorkExperience(*), Education(*)')
+            .eq('seekerID', targetSeekerId)
+            .maybeSingle();
+        if (response == null) return null;
+        return (profile: JobSeekerModel.fromJson(response), contactVisible: true);
+      }
 
-      final limited = JobSeekerModel(
-        seekerID: full.seekerID,
-        fullName: full.fullName,
-        profilePictureURL: full.profilePictureURL,
-        location: full.location,
-        bio: full.bio,
-        careerGoal: full.careerGoal,
-        linkedInURL: full.linkedInURL,
-        gitHubURL: full.gitHubURL,
-        education: full.education,
-        workExperience: full.workExperience,
-        // email, phoneNumber and resumeURL intentionally left out
-      );
-      return (profile: limited, contactVisible: false);
+      // Other job seekers: public fields only. Email, phone and resume
+      // aren't sent to their phone at all (the database keeps them back).
+      final results = await Future.wait<List<Map<String, dynamic>>>([
+        UserDirectory.publicSeekerRows([targetSeekerId]),
+        _supabase.from(TableConstants.education).select().eq('seekerID', targetSeekerId),
+        _supabase.from(TableConstants.workExperience).select().eq('seekerID', targetSeekerId),
+      ]);
+      if (results[0].isEmpty) return null;
+      final profile = JobSeekerModel.fromJson({
+        ...results[0].first,
+        'Education': results[1],
+        'WorkExperience': results[2],
+      });
+      return (profile: profile, contactVisible: false);
     } catch (e) {
       debugPrint('Error fetching public profile: $e');
       throw DataLoadException(

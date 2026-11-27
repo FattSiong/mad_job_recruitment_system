@@ -124,7 +124,7 @@ class AdminCommunityController extends ModerationListController<ModerationItem> 
 
   /// One page of visible posts / comments, by time, after [before].
   @override
-  Future<ModerationPage<ModerationItem>> loadPage({DateTime? before}) async {
+  Future<ModerationPage<ModerationItem>> loadPage({ModerationCursor? before}) async {
     final kind = _kind;
     final text = cleanModerationSearch(search);
     PostgrestFilterBuilder<PostgrestList> query;
@@ -142,21 +142,24 @@ class AdminCommunityController extends ModerationListController<ModerationItem> 
           .eq('status', 'active')
           .eq('CommunityPost.status', 'active');
     }
+    final target = _targetColumn(kind);
+    String? searchOr;
     if (text.isNotEmpty) {
       // The text, or written by someone whose name matches
       final authorColumn = kind == ModerationKind.post ? 'authorID' : 'userID';
       final authors = await _usersMatching(text);
-      query = authors.isEmpty
-          ? query.ilike('content', '%$text%')
-          : query.or('content.ilike.*$text*,$authorColumn.in.(${authors.join(',')})');
+      if (authors.isEmpty) {
+        query = query.ilike('content', '%$text%');
+      } else {
+        searchOr = 'content.ilike.*$text*,$authorColumn.in.(${authors.join(',')})';
+      }
     }
-    final rows = await readPage(query, before);
+    final rows = await readPage(query, before, idColumn: target, searchOr: searchOr);
     if (rows.isEmpty) return ModerationPage<ModerationItem>(const []);
 
-    final target = _targetColumn(kind);
     final ids = rows.map((r) => r[target].toString()).toList();
     final reportRows = await openReportsFor(_reportTable(kind), _reportColumns(kind), target, ids);
-    return pageOf(await _build(kind, rows, reportRows), rows);
+    return pageOf(await _build(kind, rows, reportRows), rows, idColumn: target);
   }
 
   /// The posts / comments with these IDs, whatever their status: the admin

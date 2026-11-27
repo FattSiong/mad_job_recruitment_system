@@ -37,9 +37,19 @@ class UserDirectory {
         }
       }
 
+      Future<List<Map<String, dynamic>>> seekerRows() async {
+        try {
+          return await publicSeekerRows(missing);
+        } catch (e) {
+          debugPrint('UserDirectory: job seeker lookup failed: $e');
+          lookupFailed = true;
+          return [];
+        }
+      }
+
       final results = await Future.wait([
         safeSelect(TableConstants.user, 'userID, username, role', 'userID'),
-        safeSelect(TableConstants.jobSeeker, 'seekerID, fullName, profilePictureURL', 'seekerID'),
+        seekerRows(),
         safeSelect(TableConstants.employer, 'employerID, fullName, profilePictureURL', 'employerID'),
       ]);
 
@@ -76,6 +86,28 @@ class UserDirectory {
       for (final id in ids)
         if (_cache[id] != null) id: _cache[id]! else if (temporary[id] != null) id: temporary[id]!,
     };
+  }
+
+  /// Public profile fields of job seekers (name, photo, location, bio,
+  /// career goal, links), never their email, phone or resume. Other job
+  /// seekers can't read JobSeeker rows directly (migration
+  /// 20261122000000_job_seeker_contact_privacy), so this goes through the
+  /// database function public_seeker_profiles. Before that migration is run
+  /// the function doesn't exist yet, and the same columns are read directly.
+  static Future<List<Map<String, dynamic>>> publicSeekerRows(List<String> seekerIds) async {
+    if (seekerIds.isEmpty) return [];
+    final supabase = Supabase.instance.client;
+    try {
+      final rows = await supabase.rpc('public_seeker_profiles', params: {'p_ids': seekerIds});
+      return List<Map<String, dynamic>>.from(rows as List);
+    } on PostgrestException catch (e) {
+      if (e.code != 'PGRST202') rethrow; // PGRST202: no such function
+      final rows = await supabase
+          .from(TableConstants.jobSeeker)
+          .select('seekerID, fullName, profilePictureURL, location, bio, careerGoal, linkedInURL, gitHubURL')
+          .inFilter('seekerID', seekerIds);
+      return List<Map<String, dynamic>>.from(rows);
+    }
   }
 
   /// One user, or "Unknown user" if they can't be found.

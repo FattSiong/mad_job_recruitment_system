@@ -194,8 +194,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> with WidgetsBindingObse
     }
   }
 
-  /// Back pressed: if some messages are still "Not sent", ask before leaving
-  /// (they are only kept while the chat is open).
+  /// Back pressed: if some messages are still "Not sent" or still sending
+  /// (e.g. a photo uploading), ask before leaving (they are only kept while
+  /// the chat is open).
   Future<void> _confirmLeave() async {
     final unsent = _controller.unsentCount;
     if (unsent == 0) {

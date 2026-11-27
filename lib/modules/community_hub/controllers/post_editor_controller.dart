@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+// Lengths are counted like the text box counts them (an emoji is one character)
+import 'package:flutter/widgets.dart' show StringCharacters;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/table_constants.dart';
@@ -75,7 +77,7 @@ class PostEditorController extends ChangeNotifier with SafeNotifier {
       _existingMediaURL != original!.mediaURL;
 
   bool get _valid =>
-      _content.trim().length <= maxLength && (_content.trim().isNotEmpty || hasAttachment);
+      _content.trim().characters.length <= maxLength && (_content.trim().isNotEmpty || hasAttachment);
 
   /// Post / Save button. A draft can be published even without changes.
   bool get canSave => !_isSaving && _valid && (_changed || isEditingDraft);
@@ -84,7 +86,7 @@ class PostEditorController extends ChangeNotifier with SafeNotifier {
   bool get canSaveDraft => !_isSaving && canBeDraft && _valid && _changed;
 
   /// Something typed that leaving the screen would throw away.
-  bool get hasUnsavedChanges => _valid && _changed;
+  bool get hasUnsavedChanges => _changed && (_content.trim().isNotEmpty || hasAttachment);
 
   /// The post text as the user types it.
   void setContent(String value) {
@@ -124,7 +126,7 @@ class PostEditorController extends ChangeNotifier with SafeNotifier {
     if (asDraft && !canBeDraft) return null;
     if (asDraft ? !canSaveDraft : !canSave) {
       if (_content.trim().isEmpty && !hasAttachment) return 'Please add some text or an attachment.';
-      if (_content.trim().length > maxLength) return 'Posts can be up to $maxLength characters.';
+      if (_content.trim().characters.length > maxLength) return 'Posts can be up to $maxLength characters.';
       return null;
     }
 

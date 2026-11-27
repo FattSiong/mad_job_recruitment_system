@@ -16,6 +16,14 @@ enum ModerationView {
   all,
 }
 
+/// Where the next page of the All list starts: after this row's time, and
+/// for rows with the same time (e.g. added in one go), after its ID.
+class ModerationCursor {
+  final DateTime at;
+  final String id;
+  const ModerationCursor(this.at, this.id);
+}
+
 /// One loaded list (Reported) or one page of the All list.
 class ModerationPage<T> {
   final List<T> items;
@@ -24,8 +32,8 @@ class ModerationPage<T> {
   /// True when there were more open reports than [ModerationListController.maxReports].
   final bool capped;
 
-  /// Time of the last row (All list), where the next page starts.
-  final DateTime? cursor;
+  /// The last row (All list), where the next page starts.
+  final ModerationCursor? cursor;
 
   const ModerationPage(this.items, {this.hasMore = false, this.capped = false, this.cursor});
 }
@@ -57,7 +65,7 @@ abstract class ModerationListController<T extends ReportSummary> extends ChangeN
   bool _isLoadingMore = false;
   bool _hasMore = false;
   bool _loadMoreFailed = false;
-  DateTime? _cursor; // All list: the next page starts after this time
+  ModerationCursor? _cursor; // All list: the next page starts after this row
   bool _reportsCapped = false;
   String? _error;
   final Set<String> _busy = {};
@@ -104,7 +112,7 @@ abstract class ModerationListController<T extends ReportSummary> extends ChangeN
 
   /// One page of the All list, after [before].
   @protected
-  Future<ModerationPage<T>> loadPage({DateTime? before});
+  Future<ModerationPage<T>> loadPage({ModerationCursor? before});
 
   /// Refreshes the report counts in the header (failures only logged).
   @protected
@@ -303,27 +311,43 @@ abstract class ModerationListController<T extends ReportSummary> extends ChangeN
   }
 
   /// Reads one page of the All list from [query]: by time (newest or oldest
-  /// first, as sorted), starting after [before]. Paging by time, not by
-  /// position, means removed items or new posts can't make a page skip or
-  /// repeat rows.
+  /// first, as sorted), then by [idColumn], starting after [before]. Paging
+  /// by time, not by position, means removed items or new posts can't make
+  /// a page skip or repeat rows; the ID keeps rows with the same time (e.g.
+  /// added in one go) from being skipped at the end of a page.
+  /// [searchOr] is the search's `or` filter: both go into one `or` filter.
   @protected
   Future<List<Map<String, dynamic>>> readPage(
     PostgrestFilterBuilder<PostgrestList> query,
-    DateTime? before,
-  ) async {
+    ModerationCursor? before, {
+    required String idColumn,
+    String? searchOr,
+  }) async {
     final oldestFirst = _sort == ModerationSort.oldest;
+    String? after;
     if (before != null) {
-      final at = before.toUtc().toIso8601String();
-      query = oldestFirst ? query.gt('createdAt', at) : query.lt('createdAt', at);
+      final op = oldestFirst ? 'gt' : 'lt';
+      final at = '"${before.at.toUtc().toIso8601String()}"';
+      after = 'createdAt.$op.$at,and(createdAt.eq.$at,$idColumn.$op.${before.id})';
     }
-    return List<Map<String, dynamic>>.from(
-        await query.order('createdAt', ascending: oldestFirst).limit(pageSize));
+    if (searchOr != null && after != null) {
+      query = query.or('and(or($searchOr),or($after))');
+    } else if (searchOr != null || after != null) {
+      query = query.or((searchOr ?? after)!);
+    }
+    return List<Map<String, dynamic>>.from(await query
+        .order('createdAt', ascending: oldestFirst)
+        .order(idColumn, ascending: oldestFirst)
+        .limit(pageSize));
   }
 
   /// Wraps the items built from one [rows] page of the All list.
   @protected
-  ModerationPage<T> pageOf(List<T> items, List<Map<String, dynamic>> rows) {
-    final cursor = rows.isEmpty ? null : DateTime.tryParse(rows.last['createdAt']?.toString() ?? '');
+  ModerationPage<T> pageOf(List<T> items, List<Map<String, dynamic>> rows, {required String idColumn}) {
+    final last = rows.isEmpty ? null : rows.last;
+    final at = DateTime.tryParse(last?['createdAt']?.toString() ?? '');
+    final id = last?[idColumn]?.toString();
+    final cursor = (at == null || id == null) ? null : ModerationCursor(at, id);
     return ModerationPage<T>(items, hasMore: rows.length == pageSize && cursor != null, cursor: cursor);
   }
 

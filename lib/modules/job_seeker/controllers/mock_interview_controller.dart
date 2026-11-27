@@ -171,10 +171,21 @@ class MockInterviewController {
 
   /// Ends the interview and generates the overall scorecard.
   Future<MockInterviewRecordModel> finishInterview(String sessionID) async {
-    final data = await _invoke(
-      {'action': 'finish', 'sessionId': sessionID},
-      timeout: const Duration(seconds: 60),
-    );
+    final Map<String, dynamic> data;
+    try {
+      data = await _invoke(
+        {'action': 'finish', 'sessionId': sessionID},
+        timeout: const Duration(seconds: 60),
+      );
+    } on MockInterviewException catch (e) {
+      // Tapped Finish again after the first reply was lost (e.g. timed out):
+      // the scorecard is already saved, so show that one
+      if (e.code == 'session_completed') {
+        final saved = await fetchInterview(sessionID);
+        if (saved != null) return saved;
+      }
+      rethrow;
+    }
     final basic = _read(
       () => MockInterviewRecordModel.fromJson(data['record'] as Map<String, dynamic>),
     );

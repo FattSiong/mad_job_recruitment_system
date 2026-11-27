@@ -24,6 +24,7 @@
 // Errors { error, message }:
 //   400 bad_request | consent_required | invalid_question | audio_too_large | no_speech | incomplete
 //   401 unauthorized  403 not_job_seeker  404 session_not_found  409 session_completed
+//   429 rate_limited (20 interviews a day)
 //   502/504 stt_unavailable | ai_unavailable   500 server_error
 //
 // Secrets: GEMINI_API_KEY, DEEPGRAM_API_KEY (required), GEMINI_MODEL (optional)
@@ -38,6 +39,9 @@ const DEEPGRAM_MODEL = Deno.env.get("DEEPGRAM_MODEL") ?? "nova-3";
 const GEMINI_TIMEOUT_MS = 40_000;
 const DEEPGRAM_TIMEOUT_MS = 40_000;
 const MAX_AUDIO_BYTES = 6 * 1024 * 1024; // ~25 min of 32 kbps AAC, far above the app's 3 min limit
+// Interviews a seeker can start in 24 hours (each one runs paid Deepgram +
+// Gemini calls). Counted from saved sessions, like the other AI tools.
+const DAILY_LIMIT = 20;
 
 const INTRO_QUESTION =
   "To start, please introduce yourself and tell me why you are interested in this role.";
@@ -382,6 +386,19 @@ async function startSession(supabase: SupabaseClient, seekerID: string, body: Re
   }
   const role = typeof body.targetJobRole === "string" ? body.targetJobRole.trim() : "";
   if (!role || role.length > 100) throw new HttpError(400, "bad_request", "Please choose a job role or topic.");
+  // Daily limit, counted from sessions started in the last 24 hours
+  {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { count, error } = await supabase
+      .from("MockInterviewRecord")
+      .select("sessionID", { count: "exact", head: true })
+      .eq("seekerID", seekerID)
+      .gte("createdAt", since);
+    if (error) throw error;
+    if ((count ?? 0) >= DAILY_LIMIT) {
+      throw new HttpError(429, "rate_limited", "You've reached today's mock interview limit. Please try again tomorrow.");
+    }
+  }
   const level = typeof body.experienceLevel === "string" && body.experienceLevel.trim()
     ? body.experienceLevel.trim().slice(0, 50) : null;
   const count = Math.max(1, Math.min(10, Math.round(Number(body.questionCount) || 5)));
