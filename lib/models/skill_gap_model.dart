@@ -98,7 +98,7 @@ class MarketInsights {
       );
 }
 
-/// Row of SkillGapAnalysisRecord.
+/// Row of SkillGapAnalysis.
 class SkillGapAnalysisModel {
   final String analysisID;
   final String seekerID;
@@ -140,11 +140,23 @@ class SkillGapAnalysisModel {
     required this.resumeNote,
   });
 
+  /// The required skills with [status] ('matched' | 'partial' | 'missing'),
+  /// most important first (high, medium, low; same order as the AI gave
+  /// them otherwise).
+  static List<RequiredSkillItem> withStatus(List<RequiredSkillItem> skills, String status) {
+    const rank = {'high': 0, 'medium': 1, 'low': 2};
+    final picked = skills.where((s) => s.status == status).toList();
+    final order = {for (var i = 0; i < picked.length; i++) picked[i]: i};
+    picked.sort((a, b) {
+      final byImportance = (rank[a.importance] ?? 1).compareTo(rank[b.importance] ?? 1);
+      return byImportance != 0 ? byImportance : order[a]!.compareTo(order[b]!);
+    });
+    return picked;
+  }
+
   factory SkillGapAnalysisModel.fromJson(Map<String, dynamic> json) {
-    final gaps = (json['identifiedGaps'] as Map?)?.cast<String, dynamic>() ?? const {};
-    final advice = (json['aiAdvice'] as Map?)?.cast<String, dynamic>() ?? const {};
-    List<RequiredSkillItem> items(dynamic v) =>
-        _maps(v).map(RequiredSkillItem.fromJson).toList();
+    final advice = (json['aiFeedback'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final market = _maps(json['marketRequiredSkills']).map(RequiredSkillItem.fromJson).toList();
 
     return SkillGapAnalysisModel(
       analysisID: json['analysisID'] as String,
@@ -154,10 +166,10 @@ class SkillGapAnalysisModel {
       jobSampleSize: (json['jobSampleSize'] as num?)?.round() ?? 0,
       createdAt: DateTime.parse(json['createdAt'] as String).toLocal(),
       userSkills: _maps(json['userSkills']).map(DetectedSkill.fromJson).toList(),
-      requiredSkills: items(json['marketRequiredSkills']),
-      matching: items(gaps['matching']),
-      partial: items(gaps['partial']),
-      missing: items(gaps['missing']),
+      requiredSkills: market,
+      matching: withStatus(market, 'matched'),
+      partial: withStatus(market, 'partial'),
+      missing: withStatus(market, 'missing'),
       summary: advice['summary'] as String? ?? '',
       marketInsights: MarketInsights.fromJson(
         (advice['marketInsights'] as Map?)?.cast<String, dynamic>(),

@@ -12,7 +12,7 @@
 //   - If a target role is given, active Job postings in this app with a matching
 //     title are used for keyword advice.
 //
-// Response 200 { review: <ResumeReviewRecord row> }
+// Response 200 { review: <ResumeReview row> }
 // Errors { error, message }:
 //   400 bad_request | no_resume | resume_unreadable    401 unauthorized
 //   403 not_job_seeker    422 not_a_resume    429 rate_limited
@@ -497,7 +497,7 @@ Deno.serve(async (req) => {
     // 4. Rate limit
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { count, error: countErr } = await supabase
-      .from("ResumeReviewRecord")
+      .from("ResumeReview")
       .select("reviewID", { count: "exact", head: true })
       .eq("seekerID", seekerID)
       .gte("createdAt", since);
@@ -544,14 +544,14 @@ Deno.serve(async (req) => {
 
     // 7. Save
     const { data: saved, error: saveErr } = await supabase
-      .from("ResumeReviewRecord")
+      .from("ResumeReview")
       .insert({
         seekerID,
         source,
         resumeName: resume.name,
         targetJobRole: role || null,
         overallScore: score,
-        feedback: {
+        aiFeedback: {
           scoreLabel: scoreLabel(score),
           verdict: (ai.verdict ?? "").trim(),
           summary: (ai.summary ?? "").trim(),

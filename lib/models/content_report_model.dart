@@ -35,7 +35,7 @@ class ContentReport {
     this.reporter,
   });
 
-  /// [idColumn]: 'reportPostID', 'reportCommentID' or 'reportJobID'.
+  /// [idColumn]: 'reportPostID', 'reportCommentID' or 'reportID' (job reports).
   factory ContentReport.fromJson(
     Map<String, dynamic> json, {
     required String idColumn,

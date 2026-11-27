@@ -170,7 +170,7 @@ class MockInterviewController {
   }
 
   /// Ends the interview and generates the overall scorecard.
-  Future<MockInterviewRecordModel> finishInterview(String sessionID) async {
+  Future<MockInterviewSessionModel> finishInterview(String sessionID) async {
     final Map<String, dynamic> data;
     try {
       data = await _invoke(
@@ -187,7 +187,7 @@ class MockInterviewController {
       rethrow;
     }
     final basic = _read(
-      () => MockInterviewRecordModel.fromJson(data['record'] as Map<String, dynamic>),
+      () => MockInterviewSessionModel.fromJson(data['record'] as Map<String, dynamic>),
     );
     // Load again with the answers attached (fall back to the basic record)
     try {
@@ -201,7 +201,7 @@ class MockInterviewController {
   Future<void> discardInterview(String sessionID) async {
     try {
       await _supabase
-          .from(TableConstants.mockInterviewRecord)
+          .from(TableConstants.mockInterviewSession)
           .delete()
           .eq('sessionID', sessionID)
           .eq('seekerID', _currentSeekerID)
@@ -213,15 +213,15 @@ class MockInterviewController {
 
   /// One interview with all its answers (used by the result screen / guidance reports).
   /// Returns null if it doesn't exist; throws [DataLoadException] if it can't be loaded.
-  Future<MockInterviewRecordModel?> fetchInterview(String sessionID) async {
+  Future<MockInterviewSessionModel?> fetchInterview(String sessionID) async {
     try {
       final response = await _supabase
-          .from(TableConstants.mockInterviewRecord)
+          .from(TableConstants.mockInterviewSession)
           .select('*, MockInterviewAnswer(*)')
           .eq('sessionID', sessionID)
           .eq('seekerID', _currentSeekerID)
           .maybeSingle();
-      return response == null ? null : MockInterviewRecordModel.fromJson(response);
+      return response == null ? null : MockInterviewSessionModel.fromJson(response);
     } on DataLoadException {
       rethrow;
     } catch (e) {

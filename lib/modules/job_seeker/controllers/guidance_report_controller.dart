@@ -61,17 +61,17 @@ class GuidanceReportController {
   }
 
   /// Completed mock interviews with all answers, newest first.
-  Future<List<MockInterviewRecordModel>> fetchInterviewDetails({int limit = 20}) async {
+  Future<List<MockInterviewSessionModel>> fetchInterviewDetails({int limit = 20}) async {
     try {
       final response = await _supabase
-          .from(TableConstants.mockInterviewRecord)
+          .from(TableConstants.mockInterviewSession)
           .select('*, MockInterviewAnswer(*)')
           .eq('seekerID', _currentSeekerID)
           .eq('status', 'completed')
           .order('completedAt', ascending: false)
           .limit(limit);
       return (response as List<dynamic>)
-          .map((e) => MockInterviewRecordModel.fromJson(e as Map<String, dynamic>))
+          .map((e) => MockInterviewSessionModel.fromJson(e as Map<String, dynamic>))
           .toList();
     } catch (e) {
       debugPrint('Error fetching interview details: $e');
@@ -83,7 +83,7 @@ class GuidanceReportController {
   Future<List<SkillGapAnalysisModel>> fetchSkillGapDetails({int limit = 20}) async {
     try {
       final response = await _supabase
-          .from(TableConstants.skillGapAnalysisRecord)
+          .from(TableConstants.skillGapAnalysis)
           .select()
           .eq('seekerID', _currentSeekerID)
           .order('createdAt', ascending: false)

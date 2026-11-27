@@ -10,7 +10,8 @@
 //   - Market:  active Job postings in this app whose title matches the role,
 //              plus Gemini's knowledge of the Malaysian job market
 //
-// Response 200 { analysis: <SkillGapAnalysisRecord row> }
+// Response 200 { analysis: <SkillGapAnalysis row> }
+//   (each skill in marketRequiredSkills has its status: matched / partial / missing)
 // Errors { error, message }:
 //   400 bad_request | profile_incomplete      401 unauthorized    403 not_job_seeker
 //   422 insufficient_market_data (+ suggestedRoles)               429 rate_limited
@@ -27,7 +28,6 @@ import {
   normaliseStatus,
   RequiredSkill,
   roleKeywords,
-  splitByStatus,
 } from "./scoring.ts";
 
 const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.5-flash-lite";
@@ -464,7 +464,7 @@ Deno.serve(async (req) => {
     // 4. Rate limit
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { count, error: countErr } = await supabase
-      .from("SkillGapAnalysisRecord")
+      .from("SkillGapAnalysis")
       .select("analysisID", { count: "exact", head: true })
       .eq("seekerID", seekerID)
       .gte("createdAt", since);
@@ -509,19 +509,17 @@ Deno.serve(async (req) => {
     }
 
     const matchScore = calculateMatchScore(requiredSkills);
-    const gaps = splitByStatus(requiredSkills);
 
     // 7. Save
     const { data: saved, error: saveErr } = await supabase
-      .from("SkillGapAnalysisRecord")
+      .from("SkillGapAnalysis")
       .insert({
         seekerID,
         targetJobRole: role,
         userSkills: (ai.userSkills ?? []).slice(0, 40),
         marketRequiredSkills: requiredSkills,
-        identifiedGaps: gaps,
         matchScore,
-        aiAdvice: {
+        aiFeedback: {
           normalisedRole: ai.normalisedRole || role,
           summary: ai.summary ?? "",
           marketInsights: ai.marketInsights,

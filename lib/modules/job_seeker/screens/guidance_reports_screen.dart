@@ -139,7 +139,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
             final results = await Future.wait<Object>([
               _controller.fetchApplicantName(),
               filter == _Filter.skillGaps
-                  ? Future.value(<MockInterviewRecordModel>[])
+                  ? Future.value(<MockInterviewSessionModel>[])
                   : _controller.fetchInterviewDetails(),
               filter == _Filter.interviews
                   ? Future.value(<SkillGapAnalysisModel>[])
@@ -147,7 +147,7 @@ class _GuidanceReportsScreenState extends State<GuidanceReportsScreen> {
             ]);
             return GuidancePdfBuilder.fullReport(
               applicantName: results[0] as String,
-              interviews: results[1] as List<MockInterviewRecordModel>,
+              interviews: results[1] as List<MockInterviewSessionModel>,
               skillGaps: results[2] as List<SkillGapAnalysisModel>,
             );
           },

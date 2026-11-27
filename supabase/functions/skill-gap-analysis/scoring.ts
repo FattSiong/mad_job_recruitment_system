@@ -41,16 +41,6 @@ export function calculateMatchScore(skills: RequiredSkill[]): number {
   return total === 0 ? 0 : Math.round((earned / total) * 100);
 }
 
-export function splitByStatus(skills: RequiredSkill[]) {
-  const order: Record<Importance, number> = { high: 0, medium: 1, low: 2 };
-  const byPriority = (a: RequiredSkill, b: RequiredSkill) => order[a.importance] - order[b.importance];
-  return {
-    matching: skills.filter((s) => s.status === "matched").sort(byPriority),
-    partial: skills.filter((s) => s.status === "partial").sort(byPriority),
-    missing: skills.filter((s) => s.status === "missing").sort(byPriority),
-  };
-}
-
 /** Keywords from a role title for searching Job postings, e.g. "Junior Flutter Developer" -> ["flutter","developer"]. */
 const STOP_WORDS = new Set([
   "junior", "senior", "intern", "internship", "trainee", "lead", "head", "the", "and", "for", "of",

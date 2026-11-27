@@ -11,15 +11,17 @@
 //    { sessionId, questionIndex, audioBase64, mimeType: "audio/mp4", amplitude?, face? }
 //    Deepgram transcript + word timestamps -> pace / fillers / hesitations
 //    -> Gemini feedback -> saved to MockInterviewAnswer
-//    face (camera on): eye contact / smile measured on the phone -> saved as
-//    body language feedback only, never sent to the scoring prompt (see face.ts)
+//       (numbers in "speechMetrics", the AI's text in "aiFeedback")
+//    face (camera on): eye contact / smile measured on the phone -> saved in
+//    "faceMetrics" as body language feedback only, never sent to the scoring
+//    prompt (see face.ts)
 //    -> { answer, questions? }   (questions are generated after the introduction)
 //
 // 3) action "finish"
-//    { sessionId }  -> overall scorecard saved to MockInterviewRecord
-//    -> { record }
+//    { sessionId }  -> overall scorecard saved to MockInterviewSession
+//    -> { record }   (the database works out overallScore from the two scores)
 //
-// Leaving early: the app deletes the in-progress MockInterviewRecord (RLS allows it).
+// Leaving early: the app deletes the in-progress MockInterviewSession (RLS allows it).
 //
 // Errors { error, message }:
 //   400 bad_request | consent_required | invalid_question | audio_too_large | no_speech | incomplete
@@ -32,7 +34,7 @@
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { AmplitudeTrack, calculateSpeechMetrics, DeepgramWord, SpeechMetrics } from "./metrics.ts";
-import { bodyLanguageFeedback, bodyLanguageForPrompt, parseFaceMetrics, summarizeBodyLanguage } from "./face.ts";
+import { bodyLanguageFeedback, bodyLanguageForPrompt, FaceRow, parseFaceMetrics, summarizeBodyLanguage } from "./face.ts";
 
 const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.5-flash-lite";
 const DEEPGRAM_MODEL = Deno.env.get("DEEPGRAM_MODEL") ?? "nova-3";
@@ -326,7 +328,7 @@ async function requireSeeker(supabase: SupabaseClient, req: Request): Promise<st
 async function loadSession(supabase: SupabaseClient, sessionId: unknown, seekerID: string) {
   if (typeof sessionId !== "string" || !sessionId) throw new HttpError(400, "bad_request", "Invalid request.");
   const { data, error } = await supabase
-    .from("MockInterviewRecord")
+    .from("MockInterviewSession")
     .select("*")
     .eq("sessionID", sessionId)
     .eq("seekerID", seekerID)
@@ -362,17 +364,12 @@ type AnswerRow = {
   transcriptText: string | null;
   contentScore: number | null;
   deliveryScore: number | null;
-  wordsPerMinute: number | string | null; // numeric columns may arrive as strings
-  wordCount: number | null;
-  fillerWordCount: number | null;
-  hesitationCount: number | null;
-  longPauseCount: number | null;
-  eyeContactPercent: number | null;
-  smilePercent: number | null;
-  facePresentPercent: number | null;
-  lookAwayCount: number | null;
-  feedback: AnswerFeedback | null;
+  speechMetrics: Partial<SpeechMetrics> | null;
+  faceMetrics: FaceRow | null; // null = camera off
+  aiFeedback: AnswerFeedback | null;
 };
+
+const NO_CAMERA: FaceRow = { eyeContactPercent: null, smilePercent: null, facePresentPercent: null, lookAwayCount: null };
 
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 
@@ -390,7 +387,7 @@ async function startSession(supabase: SupabaseClient, seekerID: string, body: Re
   {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { count, error } = await supabase
-      .from("MockInterviewRecord")
+      .from("MockInterviewSession")
       .select("sessionID", { count: "exact", head: true })
       .eq("seekerID", seekerID)
       .gte("createdAt", since);
@@ -405,7 +402,7 @@ async function startSession(supabase: SupabaseClient, seekerID: string, body: Re
 
   const intro: Question = { index: 0, question: INTRO_QUESTION, type: "introduction" };
   const { data, error } = await supabase
-    .from("MockInterviewRecord")
+    .from("MockInterviewSession")
     .insert({
       seekerID,
       targetJobRole: role,
@@ -491,22 +488,20 @@ async function evaluateAnswer(supabase: SupabaseClient, seekerID: string, body: 
       questionIndex,
       questionText: question.question,
       transcriptText: stt.transcript,
-      durationSeconds: metrics.durationSeconds,
-      wordsPerMinute: metrics.wordsPerMinute,
-      wordCount: metrics.wordCount,
-      fillerWordCount: metrics.fillerWordCount,
-      fillerRate: metrics.fillerRate,
-      longPauseCount: metrics.longPauseCount,
-      hesitationCount: metrics.hesitationCount,
-      responseLatencySeconds: metrics.responseLatencySeconds,
+      speechMetrics: metrics,
       contentScore: feedback.contentScore,
       deliveryScore: feedback.deliveryScore,
-      // Explicit nulls so re-recording without the camera clears the old values
-      eyeContactPercent: face?.eyeContactPercent ?? null,
-      smilePercent: face?.smilePercent ?? null,
-      facePresentPercent: face?.facePresentPercent ?? null,
-      lookAwayCount: face?.lookAwayCount ?? null,
-      feedback: { ...feedback, metrics, ...(bodyLanguage ? { bodyLanguageFeedback: bodyLanguage } : {}) },
+      // Explicit null so re-recording without the camera clears the old values
+      faceMetrics: face
+        ? {
+          facePresentPercent: face.facePresentPercent,
+          eyeContactPercent: face.eyeContactPercent,
+          smilePercent: face.smilePercent,
+          lookAwayCount: face.lookAwayCount,
+          sampleCount: face.sampleCount,
+        }
+        : null,
+      aiFeedback: { ...feedback, ...(bodyLanguage ? { bodyLanguageFeedback: bodyLanguage } : {}) },
       createdAt: new Date().toISOString(),
     }, { onConflict: "sessionID,questionIndex" })
     .select("*")
@@ -518,7 +513,7 @@ async function evaluateAnswer(supabase: SupabaseClient, seekerID: string, body: 
     const intro = session.questions.find((q) => q.index === 0)!;
     questions = [intro, ...newQuestions];
     const { error } = await supabase
-      .from("MockInterviewRecord")
+      .from("MockInterviewSession")
       .update({ questions })
       .eq("sessionID", session.sessionID);
     if (error) throw error;
@@ -544,24 +539,27 @@ async function finishSession(supabase: SupabaseClient, seekerID: string, body: R
     throw new HttpError(400, "incomplete", "Please answer every question before ending the interview.");
   }
 
-  // Deterministic scores (average of per-answer scores)
+  // Deterministic scores (average of per-answer scores). The database saves
+  // overallScore itself with the same formula (60% content, 40% delivery).
   const contentScore = Math.round(avg(answers.map((a) => a.contentScore ?? 0)));
   const deliveryScore = Math.round(avg(answers.map((a) => a.deliveryScore ?? 0)));
   const overallScore = Math.round(contentScore * 0.6 + deliveryScore * 0.4);
 
-  const totalWords = answers.reduce((s, a) => s + (a.wordCount ?? 0), 0);
-  const totalFillers = answers.reduce((s, a) => s + (a.fillerWordCount ?? 0), 0);
+  const speech = answers.map((a) => a.speechMetrics ?? {});
+  const sum = (xs: (number | undefined)[]) => xs.reduce<number>((s, x) => s + (Number(x) || 0), 0);
+  const totalWords = sum(speech.map((m) => m.wordCount));
+  const totalFillers = sum(speech.map((m) => m.fillerWordCount));
   const speechSummary = {
-    averageWordsPerMinute: Math.round(avg(answers.map((a) => Number(a.wordsPerMinute) || 0))),
+    averageWordsPerMinute: Math.round(avg(speech.map((m) => Number(m.wordsPerMinute) || 0))),
     totalFillerWords: totalFillers,
     fillerRate: totalWords + totalFillers > 0
       ? Math.round((totalFillers / (totalWords + totalFillers)) * 10000) / 100 : 0,
-    totalHesitations: answers.reduce((s, a) => s + (a.hesitationCount ?? 0), 0),
-    totalLongPauses: answers.reduce((s, a) => s + (a.longPauseCount ?? 0), 0),
+    totalHesitations: sum(speech.map((m) => m.hesitationCount)),
+    totalLongPauses: sum(speech.map((m) => m.longPauseCount)),
   };
 
   // Camera cues: averages of the answers with the camera on (not part of the scores above)
-  const bodyLanguage = summarizeBodyLanguage(answers);
+  const bodyLanguage = summarizeBodyLanguage(answers.map((a) => a.faceMetrics ?? NO_CAMERA));
 
   const transcriptText = answers
     .map((a) => `Q${a.questionIndex}: ${a.questionText}\nA: ${a.transcriptText ?? ""}`)
@@ -569,9 +567,9 @@ async function finishSession(supabase: SupabaseClient, seekerID: string, body: R
 
   const perQuestion = answers.map((a) =>
     `Q${a.questionIndex} (${session.questions.find((q) => q.index === a.questionIndex)?.type}): ${a.questionText}\n` +
-    `Content ${a.contentScore}/100, delivery ${a.deliveryScore}/100, ${a.wordsPerMinute} wpm, ` +
-    `${a.fillerWordCount} fillers, ${a.hesitationCount} hesitations\n` +
-    `Feedback: ${a.feedback?.relevance ?? ""}`
+    `Content ${a.contentScore}/100, delivery ${a.deliveryScore}/100, ${a.speechMetrics?.wordsPerMinute ?? 0} wpm, ` +
+    `${a.speechMetrics?.fillerWordCount ?? 0} fillers, ${a.speechMetrics?.hesitationCount ?? 0} hesitations\n` +
+    `Feedback: ${a.aiFeedback?.relevance ?? ""}`
   ).join("\n\n");
 
   const summary = await geminiJson<{
@@ -602,7 +600,7 @@ never guess emotions, confidence or personality from them.
     SUMMARY_SCHEMA,
   );
 
-  const aiEvaluationReport = {
+  const aiFeedback = {
     summary: summary.summary,
     readiness: summary.readiness,
     strengths: (summary.strengths ?? []).slice(0, 4),
@@ -613,15 +611,14 @@ never guess emotions, confidence or personality from them.
   };
 
   const { data: record, error: updErr } = await supabase
-    .from("MockInterviewRecord")
+    .from("MockInterviewSession")
     .update({
       status: "completed",
-      overallScore,
       contentScore,
       deliveryScore,
       eyeContactPercent: bodyLanguage?.eyeContactPercent ?? null,
       smilePercent: bodyLanguage?.smilePercent ?? null,
-      aiEvaluationReport,
+      aiFeedback,
       completedAt: new Date().toISOString(),
     })
     .eq("sessionID", session.sessionID)

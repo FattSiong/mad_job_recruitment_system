@@ -112,7 +112,7 @@ class ResumeReviewController {
   Future<List<ResumeReviewModel>> fetchHistory() async {
     try {
       final response = await _supabase
-          .from(TableConstants.resumeReviewRecord)
+          .from(TableConstants.resumeReview)
           .select()
           .eq('seekerID', _currentSeekerID)
           .order('createdAt', ascending: false);
@@ -133,7 +133,7 @@ class ResumeReviewController {
   Future<bool> deleteReview(String reviewID) async {
     try {
       await _supabase
-          .from(TableConstants.resumeReviewRecord)
+          .from(TableConstants.resumeReview)
           .delete()
           .eq('reviewID', reviewID)
           .eq('seekerID', _currentSeekerID);

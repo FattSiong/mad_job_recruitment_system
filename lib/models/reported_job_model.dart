@@ -26,7 +26,7 @@ class ReportedJobModel {
 
   factory ReportedJobModel.fromJson(Map<String, dynamic> json) {
     return ReportedJobModel(
-      reportID: json['reportJobID'] as String?, // the table's key column
+      reportID: json['reportID'] as String?,
       jobID: json['jobID'] as String,
       reporterID: json['reporterID'] as String,
       reportCategory: json['reportCategory'] as String,
@@ -41,7 +41,7 @@ class ReportedJobModel {
 
   Map<String, dynamic> toJson() {
     return {
-      if (reportID != null) 'reportJobID': reportID,
+      if (reportID != null) 'reportID': reportID,
       'jobID': jobID,
       'reporterID': reporterID,
       'reportCategory': reportCategory,

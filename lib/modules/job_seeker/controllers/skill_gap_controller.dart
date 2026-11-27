@@ -106,7 +106,7 @@ class SkillGapController {
   Future<List<SkillGapAnalysisModel>> fetchHistory() async {
     try {
       final response = await _supabase
-          .from(TableConstants.skillGapAnalysisRecord)
+          .from(TableConstants.skillGapAnalysis)
           .select()
           .eq('seekerID', _currentSeekerID)
           .order('createdAt', ascending: false);
@@ -127,7 +127,7 @@ class SkillGapController {
   Future<SkillGapAnalysisModel?> fetchAnalysis(String analysisID) async {
     try {
       final row = await _supabase
-          .from(TableConstants.skillGapAnalysisRecord)
+          .from(TableConstants.skillGapAnalysis)
           .select()
           .eq('analysisID', analysisID)
           .eq('seekerID', _currentSeekerID)
@@ -147,7 +147,7 @@ class SkillGapController {
   Future<bool> deleteAnalysis(String analysisID) async {
     try {
       await _supabase
-          .from(TableConstants.skillGapAnalysisRecord)
+          .from(TableConstants.skillGapAnalysis)
           .delete()
           .eq('analysisID', analysisID)
           .eq('seekerID', _currentSeekerID);

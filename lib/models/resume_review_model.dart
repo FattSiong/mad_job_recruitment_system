@@ -72,7 +72,7 @@ class ResumeImprovement {
       );
 }
 
-/// Row of ResumeReviewRecord.
+/// Row of ResumeReview.
 class ResumeReviewModel {
   final String reviewID;
   final String seekerID;
@@ -125,7 +125,7 @@ class ResumeReviewModel {
   int get highPriorityCount => improvements.where((i) => i.priority == 'high').length;
 
   factory ResumeReviewModel.fromJson(Map<String, dynamic> json) {
-    final f = (json['feedback'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final f = (json['aiFeedback'] as Map?)?.cast<String, dynamic>() ?? const {};
     final score = (json['overallScore'] as num?)?.round() ?? 0;
     final role = (json['targetJobRole'] as String?)?.trim();
 

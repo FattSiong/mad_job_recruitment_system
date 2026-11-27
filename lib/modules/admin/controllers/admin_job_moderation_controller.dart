@@ -18,7 +18,7 @@ class AdminJobModerationController extends ModerationListController<JobModeratio
       'minExperienceYears, locationName, expiresAt, workplaceType, workingPeriod, qualification, '
       'vacancies, latitude, longitude, Company(name)';
   static const String _reportColumns =
-      'reportJobID, jobID, reporterID, reportCategory, additionalDetails, reportedAt';
+      'reportID, jobID, reporterID, reportCategory, additionalDetails, reportedAt';
 
   final Map<String, ({List<String> companies, List<String> employers})> _nameMatches = {};
   int _reportedJobs = 0;
@@ -136,7 +136,7 @@ class AdminJobModerationController extends ModerationListController<JobModeratio
     for (final r in reportRows) {
       reportsByJob.putIfAbsent(r['jobID'].toString(), () => []).add(ContentReport.fromJson(
             r,
-            idColumn: 'reportJobID',
+            idColumn: 'reportID',
             reporter: person(r['reporterID']?.toString() ?? '', 'job_seeker'),
           ));
     }

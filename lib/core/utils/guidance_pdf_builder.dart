@@ -46,7 +46,7 @@ class GuidancePdfBuilder {
   /// The whole history: overview, summary tables and every report in detail.
   static Future<Uint8List> fullReport({
     required String applicantName,
-    required List<MockInterviewRecordModel> interviews,
+    required List<MockInterviewSessionModel> interviews,
     required List<SkillGapAnalysisModel> skillGaps,
   }) async {
     final theme = await PdfText.theme();
@@ -85,7 +85,7 @@ class GuidancePdfBuilder {
 
   /// One mock interview scorecard as a PDF.
   static Future<Uint8List> interviewReport(
-    MockInterviewRecordModel r, {
+    MockInterviewSessionModel r, {
     String? applicantName,
   }) async {
     final doc = pw.Document(theme: await PdfText.theme(), title: 'Mock Interview Scorecard');
@@ -289,7 +289,7 @@ class GuidancePdfBuilder {
   // =====================================================================
 
   static List<pw.Widget> _overview(
-    List<MockInterviewRecordModel> interviews,
+    List<MockInterviewSessionModel> interviews,
     List<SkillGapAnalysisModel> skillGaps,
   ) {
     final scores = interviews.map((r) => r.overallScore).whereType<int>().toList();
@@ -322,7 +322,7 @@ class GuidancePdfBuilder {
     ];
   }
 
-  static List<pw.Widget> _interviewTable(List<MockInterviewRecordModel> interviews) => [
+  static List<pw.Widget> _interviewTable(List<MockInterviewSessionModel> interviews) => [
         _section('Mock Interview History'),
         _table(
           headers: ['Date', 'Target role', 'Overall', 'Content', 'Delivery', 'Readiness'],
@@ -374,7 +374,7 @@ class GuidancePdfBuilder {
   // Interview detail
   // =====================================================================
 
-  static List<pw.Widget> _interviewDetail(MockInterviewRecordModel r) {
+  static List<pw.Widget> _interviewDetail(MockInterviewSessionModel r) {
     final speech = r.speech;
     String n(String k) => '${(speech[k] as num?) ?? 0}';
 
@@ -416,7 +416,7 @@ class GuidancePdfBuilder {
   }
 
   /// Camera cues (feedback only, not part of the scores).
-  static List<pw.Widget> _bodyLanguage(MockInterviewRecordModel r) {
+  static List<pw.Widget> _bodyLanguage(MockInterviewSessionModel r) {
     final withCamera = r.answersWithCamera;
     if (withCamera == 0) return const [];
     final body = r.bodyLanguage;
