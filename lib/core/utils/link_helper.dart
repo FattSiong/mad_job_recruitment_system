@@ -22,6 +22,17 @@ class LinkHelper {
     return uri;
   }
 
+  /// The link as it is saved: "linkedin.com/in/aisyah" and
+  /// "http://linkedin.com/in/aisyah" -> "https://linkedin.com/in/aisyah".
+  /// Null when empty. Text that isn't a web address is returned trimmed
+  /// (the profile form doesn't let it through).
+  static String? toSavedLink(String input) {
+    final text = input.trim();
+    if (text.isEmpty) return null;
+    if (toWebUri(text) == null) return text;
+    return 'https://${text.replaceFirst(RegExp(r'^https?://', caseSensitive: false), '')}';
+  }
+
   /// Form validator for a profile link that must be on [site]
   /// (e.g. 'linkedin.com'). Empty is allowed. "linkedin.com/in/aisyah" and
   /// "www.linkedin.com/in/aisyah" pass; "linkedin.com.fake.site" does not.

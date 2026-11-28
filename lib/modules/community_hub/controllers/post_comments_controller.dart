@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+// Lengths are counted like the text box counts them (an emoji is one character)
+import 'package:flutter/widgets.dart' show StringCharacters;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/table_constants.dart';
@@ -117,7 +119,7 @@ class PostCommentsController extends ChangeNotifier with SafeNotifier {
   Future<String?> send(String text) async {
     var content = text.trim();
     if (content.isEmpty || _isSending) return null;
-    if (content.length > maxLength) return 'Comments can be up to $maxLength characters.';
+    if (content.characters.length > maxLength) return 'Comments can be up to $maxLength characters.';
 
     final target = _replyingTo;
     String? parentID;
@@ -158,7 +160,7 @@ class PostCommentsController extends ChangeNotifier with SafeNotifier {
     final content = text.trim();
     if (!comment.isOwnedBy(currentUserID)) return 'You can only edit your own comments.';
     if (content.isEmpty) return 'Comment cannot be empty.';
-    if (content.length > maxLength) return 'Comments can be up to $maxLength characters.';
+    if (content.characters.length > maxLength) return 'Comments can be up to $maxLength characters.';
     if (content == comment.content) return null; // nothing changed: not "Edited"
     try {
       await _supabase

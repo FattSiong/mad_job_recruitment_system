@@ -164,7 +164,26 @@ class ChatListController extends ChangeNotifier with SafeNotifier {
   }
 
   /// Unread messages from the other person, per room (empty on an error).
+  /// Counted in the database (my_unread_counts), one row per room.
   Future<Map<String, int>> _fetchUnreadCounts(List<String> roomIds) async {
+    try {
+      final rows = await _supabase.rpc('my_unread_counts');
+      final wanted = roomIds.toSet();
+      return {
+        for (final row in List<Map<String, dynamic>>.from(rows as List))
+          if (wanted.contains(row['room_id'].toString()))
+            row['room_id'].toString(): (row['unread'] as num).toInt(),
+      };
+    } on PostgrestException catch (e) {
+      // PGRST202: migration 20261122030000_chat_unread_counts not run yet
+      if (e.code != 'PGRST202') {
+        debugPrint('Error counting unread messages: $e');
+        return {};
+      }
+    } catch (e) {
+      debugPrint('Error counting unread messages: $e');
+      return {};
+    }
     try {
       final rows = await _supabase
           .from(TableConstants.message)

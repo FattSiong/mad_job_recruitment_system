@@ -26,7 +26,7 @@ export type BodyLanguageSummary = {
   feedback: string;
 };
 
-/** The columns saved per answer (any of them may be null). */
+/** An answer's saved "faceMetrics" (any of them may be null). */
 export type FaceRow = {
   eyeContactPercent: number | null;
   smilePercent: number | null;

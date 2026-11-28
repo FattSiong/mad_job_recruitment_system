@@ -127,8 +127,11 @@ function previewText(m: MessageRow): string {
       return "🎤 Voice message";
     case "file":
       return `📎 ${text || "Attachment"}`;
-    default:
-      return text.length > MAX_BODY_CHARS ? `${text.slice(0, MAX_BODY_CHARS - 1)}…` : text;
+    default: {
+      // Cut by code point, never through an emoji (half of one is invalid text)
+      const chars = Array.from(text);
+      return chars.length > MAX_BODY_CHARS ? `${chars.slice(0, MAX_BODY_CHARS - 1).join("")}…` : text;
+    }
   }
 }
 

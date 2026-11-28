@@ -28,13 +28,13 @@ class TableConstants {
   static const String skill = 'Skill';
   static const String advisorConversation = 'AdvisorConversation';
   static const String advisorMessage = 'AdvisorMessage';
-  static const String mockInterviewRecord = 'MockInterviewRecord';
+  static const String mockInterviewSession = 'MockInterviewSession';
   static const String mockInterviewAnswer = 'MockInterviewAnswer';
-  static const String skillGapAnalysisRecord = 'SkillGapAnalysisRecord';
+  static const String skillGapAnalysis = 'SkillGapAnalysis';
   static const String guidanceReport = 'GuidanceReport';
   static const String postInterviewReport = 'PostInterviewReport';
   static const String resume = 'Resume';
   static const String userDevice = 'UserDevice';
-  static const String resumeReviewRecord = 'ResumeReviewRecord';
+  static const String resumeReview = 'ResumeReview';
   static const String userBlock = 'UserBlock';
 }

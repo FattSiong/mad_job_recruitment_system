@@ -426,11 +426,14 @@ class PostListController extends ChangeNotifier with SafeNotifier {
   Future<String?> deletePost(FeedPostModel post) async {
     if (!post.isOwnedBy(currentUserID)) return 'You can only delete your own posts.';
     try {
-      await _supabase.rpc('delete_my_post', params: {'p_post_id': post.postID});
+      final result = await _supabase.rpc('delete_my_post', params: {'p_post_id': post.postID});
       _posts.removeWhere((p) => p.postID == post.postID);
       notifySafely();
-      // The post is gone, so its photo / PDF is no longer needed
-      await StorageUrlHelper.removeOwnFile(post.mediaURL, bucket: 'post_media', userId: currentUserID);
+      // A post with an open report is only hidden ('hidden') and kept for the
+      // admin to review, so its photo / PDF must stay. Otherwise it's gone.
+      if (result != 'hidden') {
+        await StorageUrlHelper.removeOwnFile(post.mediaURL, bucket: 'post_media', userId: currentUserID);
+      }
       return null;
     } on PostgrestException catch (e) {
       debugPrint('deletePost failed: ${e.code} ${e.message}');

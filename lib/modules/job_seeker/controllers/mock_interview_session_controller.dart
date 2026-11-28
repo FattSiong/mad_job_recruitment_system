@@ -278,7 +278,7 @@ class MockInterviewSessionController extends ChangeNotifier with SafeNotifier {
 
   /// Ends the interview and returns the scorecard.
   /// Throws [MockInterviewException] (the session stays open to try again).
-  Future<MockInterviewRecordModel> finish() async {
+  Future<MockInterviewSessionModel> finish() async {
     _stage = InterviewStage.finishing;
     notifySafely();
     try {

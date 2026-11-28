@@ -151,10 +151,18 @@ function yearOf(date: string | null): string {
   return date ? date.slice(0, 4) : "";
 }
 
+/** First [max] characters of [text]. Cuts by code point, never through an
+ * emoji (half an emoji is invalid text, and the database rejects it). */
+function cutText(text: string, max: number): string {
+  const chars = Array.from(text);
+  return chars.length > max ? chars.slice(0, max).join("") : text;
+}
+
 function truncate(text: string | null, max: number): string {
   if (!text) return "";
   const t = text.trim();
-  return t.length > max ? t.slice(0, max) + "…" : t;
+  const cut = cutText(t, max);
+  return cut === t ? t : cut + "…";
 }
 
 function buildProfileContext(p: ProfileRow | null): string {
@@ -377,7 +385,8 @@ Deno.serve(async (req) => {
     // 8. Create the conversation on first message -----------------------
     let conversationID = conversationIdIn;
     if (!conversationID) {
-      const title = message.length > 50 ? message.slice(0, 50).trimEnd() + "…" : message;
+      const short = cutText(message, 50);
+      const title = short === message ? message : short.trimEnd() + "…";
       const { data: newConv, error: newConvErr } = await supabase
         .from("AdvisorConversation")
         .insert({ seekerID, title })

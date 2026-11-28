@@ -18,7 +18,7 @@ import '../../../core/utils/app_date_format.dart';
 /// Interview scorecard (end of Use Case 4.59). Also reusable from Guidance Reports.
 class MockInterviewResultScreen extends StatefulWidget {
   final String sessionID;
-  final MockInterviewRecordModel? initialRecord;
+  final MockInterviewSessionModel? initialRecord;
 
   const MockInterviewResultScreen({
     super.key,
@@ -32,7 +32,7 @@ class MockInterviewResultScreen extends StatefulWidget {
 
 class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
   final MockInterviewController _controller = MockInterviewController();
-  late Future<MockInterviewRecordModel?> _future;
+  late Future<MockInterviewSessionModel?> _future;
 
   @override
   void initState() {
@@ -54,7 +54,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: FutureBuilder<MockInterviewRecordModel?>(
+        child: FutureBuilder<MockInterviewSessionModel?>(
           future: _future,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
@@ -126,20 +126,22 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
     );
   }
 
-  /// Gradient header with the role and date.
-  Widget _buildHeader(MockInterviewRecordModel? record) {
+  /// Gradient header with the role, experience level and date.
+  Widget _buildHeader(MockInterviewSessionModel? record) {
     final date = record?.completedAt ?? record?.createdAt;
+    final level = record?.experienceLevel?.trim() ?? '';
     return GradientPageHeader(
       title: 'Interview Scorecard',
       subtitle: [
         if (record != null) record.targetJobRole,
+        if (level.isNotEmpty) level,
         if (date != null) AppDateFormat.day.format(date),
       ].join(' · '),
     );
   }
 
   /// Overall score ring and the score for each part.
-  Widget _buildScoreCard(MockInterviewRecordModel record) {
+  Widget _buildScoreCard(MockInterviewSessionModel record) {
     final overall = record.overallScore ?? 0;
     final color = AppColors.forScore(overall);
 
@@ -224,7 +226,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
   }
 
   /// Speaking pace, filler words and pauses.
-  Widget _buildSpeechCard(MockInterviewRecordModel record) {
+  Widget _buildSpeechCard(MockInterviewSessionModel record) {
     final speech = record.speech;
     num n(String key) => (speech[key] as num?) ?? 0;
 
@@ -254,7 +256,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
   }
 
   /// Eye contact and smiling from the camera. Feedback only (not in the score).
-  Widget _buildBodyLanguageCard(MockInterviewRecordModel record) {
+  Widget _buildBodyLanguageCard(MockInterviewSessionModel record) {
     final withCamera = record.answersWithCamera;
     if (withCamera == 0) {
       return const SurfaceCard(
@@ -355,7 +357,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
   }
 
   /// The AI's summary, strengths and things to improve.
-  Widget _buildSummaryCard(MockInterviewRecordModel record) {
+  Widget _buildSummaryCard(MockInterviewSessionModel record) {
     return SurfaceCard(
       children: [
         SectionTitle('AI Feedback'),
@@ -402,7 +404,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
   }
 
   /// Every question with the user's answer and its feedback.
-  Widget _buildQuestionsCard(MockInterviewRecordModel record) {
+  Widget _buildQuestionsCard(MockInterviewSessionModel record) {
     return SurfaceCard(
       children: [
         SectionTitle('Question-by-Question'),
@@ -540,7 +542,7 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
   }
 
   /// Opens the scorecard as a PDF.
-  Widget _buildPdfButton(MockInterviewRecordModel record) {
+  Widget _buildPdfButton(MockInterviewSessionModel record) {
     return SizedBox(
       width: double.infinity,
       child: OutlinedButton.icon(

@@ -29,13 +29,13 @@ Future<WorkExperienceModel?> showAddExperienceSheet(
       TextFormField(
         controller: titleController,
         decoration: profileSheetInputDecoration('Job Title*', Icons.work),
-        validator: requiredField,
+        validator: limitedField(profileNameMaxLength, required: true),
       ),
       const SizedBox(height: 16),
       TextFormField(
         controller: companyController,
         decoration: profileSheetInputDecoration('Company Name*', Icons.business),
-        validator: requiredField,
+        validator: limitedField(profileNameMaxLength, required: true),
       ),
       const SizedBox(height: 16),
       ProfileDateRangeFields(
@@ -66,6 +66,7 @@ Future<WorkExperienceModel?> showAddExperienceSheet(
         controller: descController,
         decoration: profileSheetInputDecoration('Description', Icons.description),
         maxLines: 4,
+        validator: limitedField(profileDescriptionMaxLength),
       ),
     ],
     onSubmit: (sheetContext, setSheetState) {

@@ -104,8 +104,11 @@ class ProfileDetailsCard extends StatelessWidget {
                 label: 'Full Name',
                 controller: fields.name,
                 icon: const Icon(Icons.person_outline_rounded, color: _iconColor, size: 20),
-                validator: (value) =>
-                    (value?.trim().isEmpty ?? true) ? 'Name cannot be empty' : null,
+                validator: (value) {
+                  final name = value?.trim() ?? '';
+                  if (name.isEmpty) return 'Name cannot be empty';
+                  return name.length > 100 ? 'Keep your name under 100 characters' : null;
+                },
               )
             else ...[
               Text(
@@ -140,6 +143,9 @@ class ProfileDetailsCard extends StatelessWidget {
               label: 'Location',
               controller: fields.location,
               icon: const Icon(Icons.location_on_outlined, color: _iconColor, size: 20),
+              validator: (value) => (value?.trim().length ?? 0) > 100
+                  ? 'Keep your location under 100 characters'
+                  : null,
             ),
             field(
               label: 'Bio / About Me',

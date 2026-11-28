@@ -54,7 +54,7 @@ Future<EducationModel?> showAddEducationSheet(
       TextFormField(
         controller: institutionController,
         decoration: profileSheetInputDecoration('Institution Name*', Icons.school),
-        validator: requiredField,
+        validator: limitedField(profileNameMaxLength, required: true),
       ),
       const SizedBox(height: 16),
       DropdownButtonFormField<String>(
@@ -74,7 +74,7 @@ Future<EducationModel?> showAddEducationSheet(
         TextFormField(
           controller: fieldOfStudyController,
           decoration: profileSheetInputDecoration('Field of Study*', Icons.menu_book),
-          validator: requiredField,
+          validator: limitedField(profileNameMaxLength, required: true),
         ),
         const SizedBox(height: 16),
       ],
@@ -106,6 +106,7 @@ Future<EducationModel?> showAddEducationSheet(
         controller: descController,
         decoration: profileSheetInputDecoration('Description / Achievements', Icons.description),
         maxLines: 4,
+        validator: limitedField(profileDescriptionMaxLength),
       ),
     ],
     onSubmit: (sheetContext, setSheetState) {

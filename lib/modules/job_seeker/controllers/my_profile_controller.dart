@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/utils/data_load_exception.dart';
 import '../../../core/utils/file_picker_helper.dart';
+import '../../../core/utils/link_helper.dart';
 import '../../../models/job_seeker_model.dart';
 import '../../../models/profile_check.dart';
 import '../../../models/skill_model.dart';
@@ -220,8 +221,8 @@ class MyProfileController extends ChangeNotifier with SafeNotifier {
         location: orNull(edits.location),
         bio: orNull(edits.bio),
         careerGoal: orNull(edits.careerGoal),
-        linkedInURL: orNull(edits.linkedIn),
-        gitHubURL: orNull(edits.gitHub),
+        linkedInURL: LinkHelper.toSavedLink(edits.linkedIn),
+        gitHubURL: LinkHelper.toSavedLink(edits.gitHub),
         education: current.education,
         workExperience: current.workExperience,
       );
