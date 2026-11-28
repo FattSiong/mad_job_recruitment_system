@@ -96,10 +96,10 @@ class ChatListController extends ChangeNotifier with SafeNotifier {
     final roomRows = await _supabase
         .from(TableConstants.chatRoom)
         .select('''
-          roomID, user1_ID, user2_ID,
+          roomID, user1ID, user2ID,
           Message(messageID, roomID, senderID, content, isRead, sentAt, mediaURL, mediaType, isDeleted)
         ''')
-        .or('user1_ID.eq.$me,user2_ID.eq.$me')
+        .or('user1ID.eq.$me,user2ID.eq.$me')
         .order('sentAt', referencedTable: 'Message', ascending: false)
         .limit(1, referencedTable: 'Message');
 
@@ -108,8 +108,8 @@ class ChatListController extends ChangeNotifier with SafeNotifier {
 
     final roomIds = rows.map((r) => r['roomID'].toString()).toList();
     final otherIds = rows.map((r) {
-      final user1 = r['user1_ID'].toString();
-      return user1 == me ? r['user2_ID'].toString() : user1;
+      final user1 = r['user1ID'].toString();
+      return user1 == me ? r['user2ID'].toString() : user1;
     }).toList();
 
     final results = await Future.wait([
@@ -246,7 +246,7 @@ class ChatListController extends ChangeNotifier with SafeNotifier {
           table: TableConstants.chatRoom,
           filter: PostgresChangeFilter(
             type: PostgresChangeFilterType.eq,
-            column: 'user2_ID',
+            column: 'user2ID',
             value: currentUserID,
           ),
           callback: (_) => _scheduleRefresh(),

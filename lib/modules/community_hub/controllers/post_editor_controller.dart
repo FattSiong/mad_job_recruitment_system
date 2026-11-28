@@ -11,7 +11,6 @@ import '../../../core/utils/safe_notifier.dart';
 import '../../../core/utils/storage_url_helper.dart';
 import '../../../models/feed_post_model.dart';
 import '../../../models/post_topic.dart';
-import 'post_list_controller.dart';
 
 /// Create a new post, or edit an existing one (topic, text and one PDF/image).
 /// A new post can be saved as a draft (only its author sees it) and published
@@ -47,7 +46,7 @@ class PostEditorController extends ChangeNotifier with SafeNotifier {
   bool get isEditingDraft => original?.isDraft ?? false;
 
   /// "Save draft" is offered for new posts and drafts.
-  bool get canBeDraft => PostListController.draftsSupported && (!isEditing || isEditingDraft);
+  bool get canBeDraft => !isEditing || isEditingDraft;
   bool get isSaving => _isSaving;
   String get content => _content;
   PostTopic get topic => _topic;
@@ -143,8 +142,8 @@ class PostEditorController extends ChangeNotifier with SafeNotifier {
             .update({
               'content': _content.trim(),
               'mediaURL': mediaURL,
-              'category': _topic.value,
-              if (isEditingDraft) 'isDraft': asDraft, // false = publish it now
+              'topic': _topic.value,
+              if (isEditingDraft) 'status': asDraft ? 'draft' : 'active', // 'active' = publish it now
             })
             .eq('postID', original!.postID)
             .eq('authorID', currentUserID)
@@ -159,9 +158,8 @@ class PostEditorController extends ChangeNotifier with SafeNotifier {
           'authorID': currentUserID,
           'content': _content.trim(),
           'mediaURL': mediaURL,
-          'category': _topic.value,
-          'status': 'active',
-          if (asDraft) 'isDraft': true, // left out otherwise (works before the drafts migration)
+          'topic': _topic.value,
+          'status': asDraft ? 'draft' : 'active',
         });
       }
       await _removeReplacedFile(mediaURL);
@@ -181,10 +179,6 @@ class PostEditorController extends ChangeNotifier with SafeNotifier {
         if (saved == false) {
           await StorageUrlHelper.removeOwnFile(uploadedURL, bucket: bucket, userId: currentUserID);
         }
-      }
-      if (asDraft && PostListController.isMissingDraftColumns(e)) {
-        PostListController.draftsSupported = false; // hides Save draft
-        return 'Drafts aren\'t available yet (database update needed). You can still post.';
       }
       if (asDraft) return 'Unable to save your draft. Please try again.';
       return isEditing && !isEditingDraft

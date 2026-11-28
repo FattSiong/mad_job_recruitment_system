@@ -31,9 +31,9 @@ class AdminCommunityController extends ModerationListController<ModerationItem> 
   static String _reportColumns(ModerationKind k) =>
       'reportID, ${_targetColumn(k)}, reporterID, reportCategory, additionalDetails, reportedAt';
 
-  static const String _postColumns = 'postID, authorID, content, mediaURL, status, category, createdAt';
+  static const String _postColumns = 'postID, authorID, content, mediaURL, status, topic, createdAt';
   static const String _commentColumns =
-      'commentID, postID, parentCommentID, userID, content, createdAt, status';
+      'commentID, postID, parentCommentID, authorID, content, createdAt, status';
 
   @override
   String get logName => 'Admin community';
@@ -131,8 +131,7 @@ class AdminCommunityController extends ModerationListController<ModerationItem> 
       query = supabase
           .from(TableConstants.communityPost)
           .select(_postColumns)
-          .eq('status', 'active')
-          .eq('isDraft', false);
+          .eq('status', 'active'); // drafts have status 'draft'
     } else {
       // Only comments on posts that are still visible
       query = supabase
@@ -145,12 +144,11 @@ class AdminCommunityController extends ModerationListController<ModerationItem> 
     String? searchOr;
     if (text.isNotEmpty) {
       // The text, or written by someone whose name matches
-      final authorColumn = kind == ModerationKind.post ? 'authorID' : 'userID';
       final authors = await _usersMatching(text);
       if (authors.isEmpty) {
         query = query.ilike('content', '%$text%');
       } else {
-        searchOr = 'content.ilike.*$text*,$authorColumn.in.(${authors.join(',')})';
+        searchOr = 'content.ilike.*$text*,authorID.in.(${authors.join(',')})';
       }
     }
     final rows = await readPage(query, before, idColumn: target, searchOr: searchOr);
@@ -186,10 +184,9 @@ class AdminCommunityController extends ModerationListController<ModerationItem> 
     List<Map<String, dynamic>> reportRows,
   ) async {
     final isPost = kind == ModerationKind.post;
-    final authorKey = isPost ? 'authorID' : 'userID';
     final target = _targetColumn(kind);
     final people = await UserDirectory.fetch([
-      ...rows.map((r) => r[authorKey]?.toString() ?? ''),
+      ...rows.map((r) => r['authorID']?.toString() ?? ''),
       ...reportRows.map((r) => r['reporterID']?.toString() ?? ''),
     ]);
 
@@ -206,7 +203,7 @@ class AdminCommunityController extends ModerationListController<ModerationItem> 
     }
 
     return rows.map((r) {
-      final author = person(r[authorKey]?.toString() ?? '');
+      final author = person(r['authorID']?.toString() ?? '');
       final reports = reportsByTarget[r[target].toString()] ?? const <ContentReport>[];
       return isPost
           ? ModerationItem.fromPostJson(r, author: author, reports: reports)

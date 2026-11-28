@@ -56,17 +56,17 @@ class PostCommentsController extends ChangeNotifier with SafeNotifier {
     try {
       final rows = List<Map<String, dynamic>>.from(await _supabase
           .from(TableConstants.postComment)
-          .select('commentID, postID, parentCommentID, userID, content, createdAt, updateAt, status')
+          .select('commentID, postID, parentCommentID, authorID, content, createdAt, editedAt, status')
           .eq('postID', postID)
           .order('createdAt', ascending: true));
 
       // Comments removed by an admin, or deleted by their author while
       // reported ('author_deleted', kept for the admin), are hidden.
       final visible = rows.where((r) => (r['status']?.toString() ?? 'active') == 'active').toList();
-      final authors = await UserDirectory.fetch(visible.map((r) => r['userID']?.toString() ?? ''));
+      final authors = await UserDirectory.fetch(visible.map((r) => r['authorID']?.toString() ?? ''));
 
       final all = visible.map((r) {
-        final id = r['userID']?.toString() ?? '';
+        final id = r['authorID']?.toString() ?? '';
         return PostCommentModel.fromJson(
           r,
           author: authors[id] ?? ChatParticipant(userID: id, displayName: 'Unknown user', role: 'member'),
@@ -136,7 +136,7 @@ class PostCommentsController extends ChangeNotifier with SafeNotifier {
     try {
       await _supabase.from(TableConstants.postComment).insert({
         'postID': postID,
-        'userID': currentUserID,
+        'authorID': currentUserID,
         'content': content,
         'parentCommentID': parentID,
         'status': 'active',
@@ -167,10 +167,10 @@ class PostCommentsController extends ChangeNotifier with SafeNotifier {
           .from(TableConstants.postComment)
           .update({'content': content})
           .eq('commentID', comment.commentID)
-          .eq('userID', currentUserID);
+          .eq('authorID', currentUserID);
       final i = _comments.indexWhere((c) => c.commentID == comment.commentID);
-      // the database sets "updateAt" too; show "Edited" straight away
-      if (i != -1) _comments[i] = _comments[i].copyWith(content: content, updateAt: DateTime.now());
+      // the database sets "editedAt" too; show "Edited" straight away
+      if (i != -1) _comments[i] = _comments[i].copyWith(content: content, editedAt: DateTime.now());
       notifySafely();
       return null;
     } catch (e) {
