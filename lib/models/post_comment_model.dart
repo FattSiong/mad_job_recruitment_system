@@ -8,27 +8,27 @@ class PostCommentModel {
   final String commentID;
   final String postID;
   final String? parentCommentID;
-  final String userID;
+  final String authorID;
   final String content;
   final DateTime createdAt;
 
   /// When the text was last changed (null = never edited). Set by the database.
-  final DateTime? updateAt;
+  final DateTime? editedAt;
   final ChatParticipant author;
 
   const PostCommentModel({
     required this.commentID,
     required this.postID,
     this.parentCommentID,
-    required this.userID,
+    required this.authorID,
     required this.content,
     required this.createdAt,
-    this.updateAt,
+    this.editedAt,
     required this.author,
   });
 
   /// The author changed the text after posting (shows "Edited").
-  bool get isEdited => updateAt != null;
+  bool get isEdited => editedAt != null;
 
   bool get isReply => parentCommentID != null && parentCommentID!.isNotEmpty;
 
@@ -36,7 +36,7 @@ class PostCommentModel {
   String get threadID => isReply ? parentCommentID! : commentID;
 
   /// True if [id] wrote this comment.
-  bool isOwnedBy(String id) => userID == id;
+  bool isOwnedBy(String id) => authorID == id;
 
   /// "@Aisyah" at the start of a reply, or null.
   String? get mention => RegExp(r'^@\S+').firstMatch(content.trimLeft())?.group(0);
@@ -50,15 +50,15 @@ class PostCommentModel {
 
   /// A copy with new text and/or edit time. [asTopLevel] drops the parent
   /// (a reply whose top-level comment is gone).
-  PostCommentModel copyWith({String? content, DateTime? updateAt, bool asTopLevel = false}) =>
+  PostCommentModel copyWith({String? content, DateTime? editedAt, bool asTopLevel = false}) =>
       PostCommentModel(
         commentID: commentID,
         postID: postID,
         parentCommentID: asTopLevel ? null : parentCommentID,
-        userID: userID,
+        authorID: authorID,
         content: content ?? this.content,
         createdAt: createdAt,
-        updateAt: updateAt ?? this.updateAt,
+        editedAt: editedAt ?? this.editedAt,
         author: author,
       );
 
@@ -68,10 +68,10 @@ class PostCommentModel {
       commentID: json['commentID'].toString(),
       postID: json['postID']?.toString() ?? '',
       parentCommentID: (parent == null || parent.isEmpty) ? null : parent,
-      userID: json['userID']?.toString() ?? '',
+      authorID: json['authorID']?.toString() ?? '',
       content: json['content']?.toString() ?? '',
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '')?.toLocal() ?? DateTime.now(),
-      updateAt: DateTime.tryParse(json['updateAt']?.toString() ?? '')?.toLocal(),
+      editedAt: DateTime.tryParse(json['editedAt']?.toString() ?? '')?.toLocal(),
       author: author,
     );
   }

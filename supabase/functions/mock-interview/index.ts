@@ -19,7 +19,7 @@
 //
 // 3) action "finish"
 //    { sessionId }  -> overall scorecard saved to MockInterviewSession
-//    -> { record }   (the database works out overallScore from the two scores)
+//    -> { record }   (overallScore = 60% content + 40% delivery)
 //
 // Leaving early: the app deletes the in-progress MockInterviewSession (RLS allows it).
 //
@@ -539,8 +539,8 @@ async function finishSession(supabase: SupabaseClient, seekerID: string, body: R
     throw new HttpError(400, "incomplete", "Please answer every question before ending the interview.");
   }
 
-  // Deterministic scores (average of per-answer scores). The database saves
-  // overallScore itself with the same formula (60% content, 40% delivery).
+  // Deterministic scores (average of per-answer scores); overall is 60%
+  // content and 40% delivery.
   const contentScore = Math.round(avg(answers.map((a) => a.contentScore ?? 0)));
   const deliveryScore = Math.round(avg(answers.map((a) => a.deliveryScore ?? 0)));
   const overallScore = Math.round(contentScore * 0.6 + deliveryScore * 0.4);
@@ -616,6 +616,7 @@ never guess emotions, confidence or personality from them.
       status: "completed",
       contentScore,
       deliveryScore,
+      overallScore,
       eyeContactPercent: bodyLanguage?.eyeContactPercent ?? null,
       smilePercent: bodyLanguage?.smilePercent ?? null,
       aiFeedback,

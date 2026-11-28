@@ -117,7 +117,7 @@ class PostFilter {
     return {
       'p_search': text.isEmpty ? null : text,
       'p_author_role': postedBy.role,
-      'p_category': topic?.value,
+      'p_topic': topic?.value,
       'p_since': date.since(now ?? DateTime.now())?.toUtc().toIso8601String(),
       'p_media': media.value,
       'p_sort': sort.value,

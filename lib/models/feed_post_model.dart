@@ -3,14 +3,14 @@ import 'post_topic.dart';
 
 /// A post in the Community Hub, as seen by the current user.
 ///
-/// Comes from "CommunityPost" plus its PostLike / PostSaved / PostComment rows.
+/// Comes from "CommunityPost" plus its PostLike / SavedPost / PostComment rows.
 /// The author's name and photo come from UserDirectory (Employer / JobSeeker).
 class FeedPostModel {
   final String postID;
   final String authorID;
   final String content;
   final String? mediaURL;
-  final String status; // 'active' or 'deleted' (removed by admin)
+  final String status; // 'draft', 'active' or 'deleted' (removed by admin)
   final PostTopic topic;
   final DateTime createdAt;
 
@@ -18,8 +18,6 @@ class FeedPostModel {
   /// (null = never edited). Set by the database.
   final DateTime? editedAt;
 
-  /// Only the author sees a draft (in My Posts) until it is published.
-  final bool isDraft;
   final ChatParticipant author;
 
   final int likeCount;
@@ -37,7 +35,6 @@ class FeedPostModel {
     this.topic = PostTopic.general,
     required this.createdAt,
     this.editedAt,
-    this.isDraft = false,
     required this.author,
     required this.likeCount,
     required this.commentCount,
@@ -50,6 +47,9 @@ class FeedPostModel {
 
   /// Removed by an admin: read-only, but the author can still delete it.
   bool get isRemoved => status.trim().toLowerCase() == 'deleted';
+
+  /// Only the author sees a draft (in My Posts) until it is published.
+  bool get isDraft => status.trim().toLowerCase() == 'draft';
 
   bool get isEdited => editedAt != null && !isDraft;
 
@@ -99,7 +99,6 @@ class FeedPostModel {
       topic: topic,
       createdAt: createdAt,
       editedAt: editedAt,
-      isDraft: isDraft,
       author: author,
       likeCount: likeCount ?? this.likeCount,
       commentCount: commentCount ?? this.commentCount,
@@ -120,7 +119,7 @@ class FeedPostModel {
         .toList();
 
     final likes = rows('PostLike');
-    final saves = rows('PostSaved');
+    final saves = rows('SavedPost');
     // Only visible comments count (not ones removed by an admin or
     // deleted by their author while reported: 'deleted' / 'author_deleted').
     final comments = rows('PostComment')
@@ -135,10 +134,9 @@ class FeedPostModel {
       content: json['content']?.toString() ?? '',
       mediaURL: json['mediaURL'] as String?,
       status: json['status']?.toString() ?? 'active',
-      topic: PostTopic.fromValue(json['category']?.toString()),
+      topic: PostTopic.fromValue(json['topic']?.toString()),
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '')?.toLocal() ?? DateTime.now(),
       editedAt: DateTime.tryParse(json['editedAt']?.toString() ?? '')?.toLocal(),
-      isDraft: json['isDraft'] == true,
       author: author,
       likeCount: likes.length,
       commentCount: comments.length,

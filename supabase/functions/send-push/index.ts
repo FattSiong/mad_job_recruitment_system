@@ -226,12 +226,12 @@ async function handleChatMessage(
 
   const { data: room } = await admin
     .from("ChatRoom")
-    .select("user1_ID, user2_ID")
+    .select("user1ID, user2ID")
     .eq("roomID", msg.roomID)
     .maybeSingle();
   if (!room) return json(200, { skipped: "room_not_found" });
 
-  const receiverId = room.user1_ID === msg.senderID ? room.user2_ID : room.user1_ID;
+  const receiverId = room.user1ID === msg.senderID ? room.user2ID : room.user1ID;
   const sender = await profileOf(admin, msg.senderID);
 
   const result = await sendToUser(admin, sa, receiverId, {

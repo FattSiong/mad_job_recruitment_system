@@ -32,26 +32,10 @@ class PostListController extends ChangeNotifier with SafeNotifier {
   final _supabase = Supabase.instance.client;
 
   static const int pageSize = 15;
-  static const String _allColumns =
-      'postID, authorID, content, mediaURL, status, category, createdAt, editedAt, isDraft, '
-      'PostLike(userID), PostSaved(userID), PostComment(commentID, status)';
-  static const String _basicColumns =
-      'postID, authorID, content, mediaURL, status, category, createdAt, '
-      'PostLike(userID), PostSaved(userID), PostComment(commentID, status)';
-
-  /// False when the database doesn't have the draft / "edited" columns yet
-  /// (migration 20261116000000 not run). Posts then load without them and
-  /// drafts are turned off, instead of the whole Community Hub failing.
-  static bool draftsSupported = true;
-
-  /// The error the database gives for those missing columns
-  /// (42703 = no such column; PGRST204 = no such column to save).
-  static bool isMissingDraftColumns(Object e) =>
-      e is PostgrestException &&
-      (e.code == '42703' || e.code == 'PGRST204') &&
-      RegExp('isDraft|editedAt').hasMatch(e.message);
-
-  String get _columns => draftsSupported ? _allColumns : _basicColumns;
+  /// A draft is a post with status 'draft' (only its author can read it).
+  static const String _columns =
+      'postID, authorID, content, mediaURL, status, topic, createdAt, editedAt, '
+      'PostLike(userID), SavedPost(userID), PostComment(commentID, status)';
 
   List<FeedPostModel> _posts = [];
   bool _isLoading = true;
@@ -207,19 +191,6 @@ class PostListController extends ChangeNotifier with SafeNotifier {
   Future<({List<Map<String, dynamic>> rows, int count, bool full})> _fetch({
     required int offset,
   }) async {
-    try {
-      return await _fetchOnce(offset: offset);
-    } catch (e) {
-      if (!draftsSupported || !isMissingDraftColumns(e)) rethrow;
-      debugPrint('Community: run migration 20261116000000 for drafts and "Edited" ($e)');
-      draftsSupported = false;
-      return _fetchOnce(offset: offset);
-    }
-  }
-
-  Future<({List<Map<String, dynamic>> rows, int count, bool full})> _fetchOnce({
-    required int offset,
-  }) async {
     switch (mode) {
       case PostListMode.feed:
         // The database function filters, sorts and pages; it returns post IDs.
@@ -256,7 +227,7 @@ class PostListController extends ChangeNotifier with SafeNotifier {
 
       case PostListMode.saved:
         final saved = await _supabase
-            .from(TableConstants.postSaved)
+            .from(TableConstants.savedPost)
             .select('postID')
             .eq('userID', currentUserID);
         final ids = List<Map<String, dynamic>>.from(saved)
@@ -267,13 +238,12 @@ class PostListController extends ChangeNotifier with SafeNotifier {
         final reported = await _reportedPostIds();
         ids.removeWhere(reported.contains);
         if (ids.isEmpty) return (rows: <Map<String, dynamic>>[], count: 0, full: false);
-        var query = _supabase
+        final rows = await _supabase
             .from(TableConstants.communityPost)
             .select(_columns)
             .inFilter('postID', ids)
-            .eq('status', 'active');
-        if (draftsSupported) query = query.eq('isDraft', false);
-        final rows = await query.order('createdAt', ascending: false);
+            .eq('status', 'active') // published and not removed (drafts are 'draft')
+            .order('createdAt', ascending: false);
         return (rows: List<Map<String, dynamic>>.from(rows), count: rows.length, full: false);
     }
   }
@@ -356,10 +326,10 @@ class PostListController extends ChangeNotifier with SafeNotifier {
 
     try {
       if (saved) {
-        await _insertOnce(TableConstants.postSaved, post.postID);
+        await _insertOnce(TableConstants.savedPost, post.postID);
       } else {
         await _supabase
-            .from(TableConstants.postSaved)
+            .from(TableConstants.savedPost)
             .delete()
             .match({'postID': post.postID, 'userID': currentUserID});
       }
@@ -385,7 +355,7 @@ class PostListController extends ChangeNotifier with SafeNotifier {
     try {
       final rows = await _supabase
           .from(TableConstants.communityPost)
-          .update({'isDraft': false})
+          .update({'status': 'active'})
           .eq('postID', post.postID)
           .eq('authorID', currentUserID)
           .select('postID');

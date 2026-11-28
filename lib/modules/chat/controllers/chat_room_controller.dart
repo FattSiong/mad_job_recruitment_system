@@ -680,14 +680,14 @@ class ChatRoomController extends ChangeNotifier with SafeNotifier {
     final existing = await supabase
         .from(TableConstants.chatRoom)
         .select('roomID')
-        .or('and(user1_ID.eq.$me,user2_ID.eq.$otherUserID),and(user1_ID.eq.$otherUserID,user2_ID.eq.$me)')
+        .or('and(user1ID.eq.$me,user2ID.eq.$otherUserID),and(user1ID.eq.$otherUserID,user2ID.eq.$me)')
         .limit(1);
     if (existing.isNotEmpty) return existing.first['roomID'].toString();
 
     try {
       final created = await supabase
           .from(TableConstants.chatRoom)
-          .insert({'user1_ID': me, 'user2_ID': otherUserID})
+          .insert({'user1ID': me, 'user2ID': otherUserID})
           .select('roomID')
           .single();
       return created['roomID'].toString();
@@ -697,7 +697,7 @@ class ChatRoomController extends ChangeNotifier with SafeNotifier {
       final again = await supabase
           .from(TableConstants.chatRoom)
           .select('roomID')
-          .or('and(user1_ID.eq.$me,user2_ID.eq.$otherUserID),and(user1_ID.eq.$otherUserID,user2_ID.eq.$me)')
+          .or('and(user1ID.eq.$me,user2ID.eq.$otherUserID),and(user1ID.eq.$otherUserID,user2ID.eq.$me)')
           .limit(1);
       return again.first['roomID'].toString();
     }

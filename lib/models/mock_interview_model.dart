@@ -152,7 +152,7 @@ class MockInterviewSessionModel {
   final String status; // in_progress | completed
   final int questionCount;
   final List<InterviewQuestion> questions;
-  /// Set by the database: 60% content + 40% delivery.
+  /// 60% content + 40% delivery (saved by the mock-interview function).
   final int? overallScore;
   final int? contentScore;
   final int? deliveryScore;

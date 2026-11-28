@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 /// Topic an author picks for a community post.
-/// [value] is what is stored in "CommunityPost"."category".
+/// [value] is what is stored in "CommunityPost"."topic".
 enum PostTopic {
   general('general', 'General', Icons.forum_outlined),
   jobTips('job_tips', 'Job Tips', Icons.lightbulb_outline_rounded),
