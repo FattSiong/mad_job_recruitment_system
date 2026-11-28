@@ -64,15 +64,12 @@ class MockInterviewAnswerModel {
   final String questionText;
   final String transcriptText;
 
-  // Speech metrics (speechMetrics, from Deepgram word timestamps)
+  // Speech metrics shown in the app (speechMetrics, from Deepgram word
+  // timestamps; the others stay in the database for the summary)
   final double? durationSeconds;
   final double? wordsPerMinute;
-  final int? wordCount;
   final int? fillerWordCount;
-  final double? fillerRate;
-  final int? longPauseCount;
   final int? hesitationCount;
-  final double? responseLatencySeconds;
 
   // Body language from the camera (faceMetrics, ML Kit on the phone).
   // Null = camera off. Feedback only: not part of contentScore / deliveryScore.
@@ -97,12 +94,8 @@ class MockInterviewAnswerModel {
     required this.transcriptText,
     this.durationSeconds,
     this.wordsPerMinute,
-    this.wordCount,
     this.fillerWordCount,
-    this.fillerRate,
-    this.longPauseCount,
     this.hesitationCount,
-    this.responseLatencySeconds,
     this.eyeContactPercent,
     this.smilePercent,
     this.facePresentPercent,
@@ -136,12 +129,8 @@ class MockInterviewAnswerModel {
       transcriptText: json['transcriptText'] as String? ?? '',
       durationSeconds: _toDouble(speech['durationSeconds']),
       wordsPerMinute: _toDouble(speech['wordsPerMinute']),
-      wordCount: _toInt(speech['wordCount']),
       fillerWordCount: _toInt(speech['fillerWordCount']),
-      fillerRate: _toDouble(speech['fillerRate']),
-      longPauseCount: _toInt(speech['longPauseCount']),
       hesitationCount: _toInt(speech['hesitationCount']),
-      responseLatencySeconds: _toDouble(speech['responseLatencySeconds']),
       eyeContactPercent: _toInt(face['eyeContactPercent']),
       smilePercent: _toInt(face['smilePercent']),
       facePresentPercent: _toInt(face['facePresentPercent']),

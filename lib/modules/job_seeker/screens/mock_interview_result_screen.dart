@@ -126,13 +126,15 @@ class _MockInterviewResultScreenState extends State<MockInterviewResultScreen> {
     );
   }
 
-  /// Gradient header with the role and date.
+  /// Gradient header with the role, experience level and date.
   Widget _buildHeader(MockInterviewSessionModel? record) {
     final date = record?.completedAt ?? record?.createdAt;
+    final level = record?.experienceLevel?.trim() ?? '';
     return GradientPageHeader(
       title: 'Interview Scorecard',
       subtitle: [
         if (record != null) record.targetJobRole,
+        if (level.isNotEmpty) level,
         if (date != null) AppDateFormat.day.format(date),
       ].join(' · '),
     );
