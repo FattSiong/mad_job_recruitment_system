@@ -143,6 +143,19 @@ Future<T?> showProfileFormSheet<T>(
 /// "Required" when the text box is empty.
 String? requiredField(String? value) => value == null || value.trim().isEmpty ? 'Required' : null;
 
+/// Longest text a profile sheet saves (the database allows twice this).
+const int profileNameMaxLength = 100; // institution, field of study, company, job title
+const int profileDescriptionMaxLength = 1000;
+
+/// Validator: at most [max] characters, and not empty when [required].
+String? Function(String?) limitedField(int max, {bool required = false}) => (value) {
+      if (required) {
+        final missing = requiredField(value);
+        if (missing != null) return missing;
+      }
+      return (value?.trim().length ?? 0) > max ? 'Keep this under $max characters' : null;
+    };
+
 /// Start date, end date and the "I'm still here" box of a profile sheet.
 /// Ticking [isCurrent] clears and disables the end date.
 class ProfileDateRangeFields extends StatelessWidget {

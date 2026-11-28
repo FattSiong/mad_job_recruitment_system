@@ -143,6 +143,9 @@ class ProfileDetailsCard extends StatelessWidget {
               label: 'Location',
               controller: fields.location,
               icon: const Icon(Icons.location_on_outlined, color: _iconColor, size: 20),
+              validator: (value) => (value?.trim().length ?? 0) > 100
+                  ? 'Keep your location under 100 characters'
+                  : null,
             ),
             field(
               label: 'Bio / About Me',

@@ -27,10 +27,9 @@ class AdminCommunityController extends ModerationListController<ModerationItem> 
 
   static String _reportTable(ModerationKind k) =>
       k == ModerationKind.post ? TableConstants.reportedPost : TableConstants.reportedComment;
-  static String _reportIdColumn(ModerationKind k) => k == ModerationKind.post ? 'reportPostID' : 'reportCommentID';
   static String _targetColumn(ModerationKind k) => k == ModerationKind.post ? 'postID' : 'commentID';
   static String _reportColumns(ModerationKind k) =>
-      '${_reportIdColumn(k)}, ${_targetColumn(k)}, reporterID, reportCategory, additionalDetails, reportedAt';
+      'reportID, ${_targetColumn(k)}, reporterID, reportCategory, additionalDetails, reportedAt';
 
   static const String _postColumns = 'postID, authorID, content, mediaURL, status, category, createdAt';
   static const String _commentColumns =
@@ -201,7 +200,7 @@ class AdminCommunityController extends ModerationListController<ModerationItem> 
     for (final r in reportRows) {
       reportsByTarget.putIfAbsent(r[target].toString(), () => []).add(ContentReport.fromJson(
             r,
-            idColumn: _reportIdColumn(kind),
+            idColumn: 'reportID',
             reporter: person(r['reporterID']?.toString() ?? ''),
           ));
     }
